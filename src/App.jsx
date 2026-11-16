@@ -632,6 +632,14 @@ function buildTemplatesForMajor(majorId) {
 
 const APP_RELEASES = [
   {
+    version: 'v1.31.0',
+    date: '2026. 11. 16.',
+    changes: [
+      'Vizsgás tárgyak érdemjegyeinek egységesítése: ha egy sima kurzus automatikus vizsgamódba kerül, és a vizsgapontszám eléri az 59,5%-ot (59,5 pontot), a rendszer ugyanúgy „Vizsgajegy: 2” (és 69,5-től 3, 79,5-től 4, 89,5-től 5) minősítést és nagy vizsgajegy jelvényt ad, mint a vizsgakurzusoknál',
+      'Konzisztens kártyanézet vizsgás tárgyaknál: vizsgás állapotban a dashboard kártya tetején már nem csak a megajánlott jegynél ugrik be a nagy jegyjelvény, hanem sikeres (≥ 59,5%) vizsgaeredménynél is „Vizsgajegy” felirattal jelenik meg, alatta pedig a vizsga 100 pontos sávjával'
+    ]
+  },
+  {
     version: 'v1.30.0',
     date: '2026. 11. 16.',
     changes: [
@@ -3648,7 +3656,7 @@ export default function App() {
     } else if (needsAutoExam) {
       if (hasAutoExamScore && autoExamScoreNum >= 59.5) {
         projectedGrade = getGradeFromScore(autoExamScoreNum);
-        progressLabel = `Jegy: ${projectedGrade}`;
+        progressLabel = `Vizsgajegy: ${projectedGrade}`;
         progressStage = 'offered';
       } else {
         progressLabel = 'Vizsga';
@@ -6286,11 +6294,9 @@ export default function App() {
                 const megajanlottMin = st.megajanlottMin;
                 const megajanlottMinZH = st.megajanlottMinZH;
 
-                const barElert = st.needsAutoExam ? st.regularOsszElert : st.osszElert;
-                const barBaseMax = st.needsAutoExam ? st.regularOsszMax : st.osszMax;
-                const barMegajanlottMin = st.needsAutoExam
-                  ? (subj.megajanlottMin !== undefined && subj.megajanlottMin !== null && subj.megajanlottMin !== '' ? Number(subj.megajanlottMin) : 60)
-                  : megajanlottMin;
+                const barElert = st.osszElert;
+                const barBaseMax = st.osszMax;
+                const barMegajanlottMin = megajanlottMin;
 
                 const barMax = Math.max(barBaseMax, alairasMin, barMegajanlottMin, megajanlottMinZH, 1);
                 const fillPct = Math.min(100, Math.max(0, (barElert / barMax) * 100));
@@ -6615,10 +6621,12 @@ export default function App() {
                             </div>
                           )}
 
-                          <div className={`mb-4 transition-opacity ${st.needsAutoExam ? 'opacity-40 grayscale' : ''}`}>
+                          <div className="mb-4">
                             <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 text-[11px] mb-1.5">
                               {st.isExamCourse ? (
                                 <span className="text-violet-400 font-semibold">Vizsgakurzus (aláírás nem szükséges)</span>
+                              ) : st.needsAutoExam ? (
+                                <span className="text-amber-500 font-semibold">Vizsgára bocsátva (aláírás megvan)</span>
                               ) : (
                                 <span className={`flex items-center gap-1 ${textMuted}`}>
                                   <span className={`inline-block w-2 h-2 rounded-full ${darkMode ? 'bg-white' : 'bg-slate-900'}`} />
@@ -6627,7 +6635,7 @@ export default function App() {
                               )}
 
                               <div className="flex items-center gap-2 sm:gap-2.5 flex-wrap">
-                                {!st.isExamCourse && megajanlottMinZH > 0 && (
+                                {!st.isExamCourse && !st.needsAutoExam && megajanlottMinZH > 0 && (
                                   <span className={`flex items-center gap-1 ${textMuted}`}>
                                     <span
                                       className={`inline-block w-2 h-2 rounded-full bg-white ${
@@ -6640,7 +6648,7 @@ export default function App() {
                                 {barMegajanlottMin > 0 && (
                                   <span className={`flex items-center gap-1 ${textMuted}`}>
                                     <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />
-                                    {st.isExamCourse ? '2-es határ:' : 'Megajánlott:'}{' '}
+                                    {(st.isExamCourse || st.needsAutoExam) ? '2-es határ:' : 'Megajánlott:'}{' '}
                                     <strong className="text-emerald-500">{formatHu(barMegajanlottMin)} p</strong>
                                   </span>
                                 )}
@@ -6655,7 +6663,7 @@ export default function App() {
                                 />
                               </div>
 
-                              {!st.isExamCourse && alairasMin > 0 && (
+                              {!st.isExamCourse && !st.needsAutoExam && alairasMin > 0 && (
                                 <div
                                   title={`Aláírás minimum: ${formatHu(alairasMin)} pont`}
                                   style={{ left: `${alairasMarkerPct}%` }}
@@ -6663,7 +6671,7 @@ export default function App() {
                                 />
                               )}
 
-                              {!st.isExamCourse && megajanlottMinZH > 0 && (
+                              {!st.isExamCourse && !st.needsAutoExam && megajanlottMinZH > 0 && (
                                 <div
                                   title={`ZH összpontszám minimum (megajánlotthoz): ${formatHu(megajanlottMinZH)} pont`}
                                   style={{ left: `${zhMinMarkerPct}%` }}
@@ -6675,11 +6683,11 @@ export default function App() {
 
                               {barMegajanlottMin > 0 && (
                                 <div
-                                  title={`${st.isExamCourse ? 'Vizsgajegy 2-es' : 'Megajánlott jegy'} minimum: ${formatHu(barMegajanlottMin)} pont`}
+                                  title={`${(st.isExamCourse || st.needsAutoExam) ? 'Vizsgajegy 2-es' : 'Megajánlott jegy'} minimum: ${formatHu(barMegajanlottMin)} pont`}
                                   style={{ left: `${megajanlottMarkerPct}%` }}
                                   className={`absolute -top-1.5 -bottom-1.5 w-[3.5px] rounded-full z-30 bg-emerald-500 ring-1 ${
                                     darkMode ? 'ring-slate-950' : 'ring-white'
-                                  } ${!st.isExamCourse && (barMegajanlottMin === megajanlottMinZH || barMegajanlottMin === alairasMin) ? 'translate-x-[4px]' : ''}`}
+                                  } ${!st.isExamCourse && !st.needsAutoExam && (barMegajanlottMin === megajanlottMinZH || barMegajanlottMin === alairasMin) ? 'translate-x-[4px]' : ''}`}
                                 />
                               )}
                             </div>
@@ -6693,18 +6701,16 @@ export default function App() {
                                 </span>
                               ) : (
                                 <>
-                                  {!st.isExamCourse && (
+                                  {!st.isExamCourse && !st.needsAutoExam && (
                                     <span className={st.alairasTeljesul ? 'text-emerald-500 font-semibold' : textMuted}>
                                       {st.alairasTeljesul
                                         ? 'Aláírás pontszám megvan'
                                         : `Aláíráshoz még ${formatHu(st.alairasHianyzik)} p kell`}
                                     </span>
                                   )}
-                                  {!st.needsAutoExam && (
-                                    <span className={ms.allMaxed || ms.targetGrade > 2 ? 'text-emerald-500 font-semibold' : textMuted}>
-                                      {nextGradeText}
-                                    </span>
-                                  )}
+                                  <span className={ms.allMaxed || ms.targetGrade > 2 ? 'text-emerald-500 font-semibold' : textMuted}>
+                                    {nextGradeText}
+                                  </span>
                                 </>
                               )}
                             </div>
@@ -9443,9 +9449,16 @@ export default function App() {
                             : 'bg-white/95 border-amber-600/60'
                         }`}>
                           <div>
-                            <p className={`text-sm font-extrabold ${textStrong}`}>Vizsgaeredmény</p>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <p className={`text-sm font-extrabold ${textStrong}`}>Vizsgaeredmény</p>
+                              {st.hasAutoExamScore && st.osszElert >= 59.5 && st.projectedGrade && (
+                                <span className="px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-emerald-500 text-white">
+                                  Vizsgajegy: {st.projectedGrade}
+                                </span>
+                              )}
+                            </div>
                             <p className={`text-[11px] ${textMuted}`}>
-                              59,5 pont alatt automatikusan „Megbuktam☹️” állapotba kerül
+                              59,5 ponttól 2-es, 69,5-től 3-as, 79,5-től 4-es, 89,5-től 5-ös • 59,5 pont alatt „Megbuktam☹️”
                             </p>
                           </div>
 

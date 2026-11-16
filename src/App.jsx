@@ -1197,6 +1197,7 @@ function JokerIcon({ className = 'w-4 h-4' }) {
     </svg>
   );
 }
+
 function TutorialSlidePreview({ slideId, darkMode }) {
   const cardBg = darkMode ? 'bg-slate-900 border-slate-700/90' : 'bg-white border-slate-200';
   const subBg = darkMode ? 'bg-slate-800/80 border-slate-700' : 'bg-slate-50 border-slate-200/80';
@@ -1815,14 +1816,13 @@ export default function App() {
   }, []);
 
   // ==========================================================================
-  // VALÓS ÖSSZES REGISZTRÁLT + JELENLEG AKTÍV FELHASZNÁLÓK SZÁMLÁLÓJA
+  // 1. SAJÁT JELENLÉT (HEARTBEAT) RÖGZÍTÉSE — CSAK ÍRÁS, OLVASÁS NÉLKÜL
   // ==========================================================================
   useEffect(() => {
     if (!user) return;
 
     const userPresenceRef = doc(db, 'appUsers', user.uid);
     const HEARTBEAT_INTERVAL_MS = 45 * 1000; // 45 mp-enkénti életjel
-    const ACTIVE_WINDOW_MS = 3 * 60 * 1000;  // 3 percen belüli aktivitás = jelenleg aktív
 
     const updatePresence = (isOnline = true) => {
       const nowMs = Date.now();
@@ -1837,7 +1837,9 @@ export default function App() {
           lastSeen: serverTimestamp()
         },
         { merge: true }
-      ).catch(() => {});
+      ).catch((err) => {
+        console.warn('Jelenlét írási hiba:', err?.code || err?.message);
+      });
     };
 
     updatePresence(true);
@@ -1860,6 +1862,23 @@ export default function App() {
 
     document.addEventListener('visibilitychange', handleVisibility);
     window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => {
+      clearInterval(heartbeatTimer);
+      document.removeEventListener('visibilitychange', handleVisibility);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      updatePresence(false);
+    };
+  }, [user]);
+
+  // ==========================================================================
+  // 2. ÉLŐ STATISZTIKA LEKÉRDEZÉSE — KIZÁRÓLAG NYITOTT STATISZTIKA ABLAKNÁL
+  // ==========================================================================
+  useEffect(() => {
+    if (!user || !isStatsModalOpen) return;
+
+    setStatsLoading(true);
+    const ACTIVE_WINDOW_MS = 3 * 60 * 1000; // 3 percen belüli aktivitás = jelenleg aktív
 
     const unsubAppUsers = onSnapshot(
       collection(db, 'appUsers'),
@@ -1895,7 +1914,8 @@ export default function App() {
         });
         setStatsLoading(false);
       },
-      () => {
+      (err) => {
+        console.error('App statisztika lekérdezési hiba (ellenőrizd a Firestore Rules-t):', err);
         setAppUsersStats(prev => ({
           totalUsers: Math.max(1, prev.totalUsers),
           activeUsers: Math.max(1, prev.activeUsers)
@@ -1905,14 +1925,9 @@ export default function App() {
     );
 
     return () => {
-      clearInterval(heartbeatTimer);
-      document.removeEventListener('visibilitychange', handleVisibility);
-      window.removeEventListener('beforeunload', handleBeforeUnload);
-      updatePresence(false);
       unsubAppUsers();
     };
-  }, [user]);
-
+  }, [user, isStatsModalOpen]);
   const fetchTemplates = async (forceRefresh = false) => {
     if (!forceRefresh) {
       const cached = readLocalCache(TEMPLATES_CACHE_KEY, TEMPLATES_CACHE_TTL_MS);
@@ -4192,7 +4207,6 @@ export default function App() {
       </div>
     );
   }
-
   const subjectsCountInDeleteTarget = semesterToDelete
     ? subjects.filter(s => s.semester === semesterToDelete).length
     : 0;
@@ -8232,6 +8246,9 @@ export default function App() {
         );
       })()}
 
+      {/* ========================================================= */}
+      {/* EGYÉNI GYŰJTŐ MODAL                                       */}
+      {/* ========================================================= */}
       {bucketModal && (
         <div
           data-top-modal="true"
@@ -8287,7 +8304,7 @@ export default function App() {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 text-sm font-semibold bg-amber-400 hover:bg-amber-300 text-slate-950 rounded-lg cursor-pointer"
+                  className="px-4 py-2 text-sm font-bold bg-amber-400 hover:bg-amber-300 text-slate-950 rounded-lg cursor-pointer"
                 >
                   Mentés
                 </button>
@@ -8299,204 +8316,11 @@ export default function App() {
 
       {/* ========================================================= */}
       {/* TÉTEL HOZZÁADÁSA / SZERKESZTÉSE MODAL                     */}
-      {/* SORREND: ELÉRT PONT / MAX PONT / TÖBBLETPONT              */}
       {/* ========================================================= */}
-      {itemModal && (() => {
-        const autoZhTitle = getNextZhTitle(activeSubject?.assessments || []);
-        const isFixedExam = Boolean(itemModal.isAutoExam || activeSubject?.courseKind === 'exam');
-        return (
-          <div
-            data-top-modal="true"
-            onClick={() => setItemModal(null)}
-            className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-2.5 sm:p-4 overscroll-none"
-          >
-            <div
-              onClick={(e) => e.stopPropagation()}
-              className={`rounded-2xl max-w-md w-full max-h-[92dvh] flex flex-col shadow-2xl overflow-hidden border ${bgCard}`}
-            >
-              <div className="px-4 sm:px-6 py-3.5 sm:py-4 bg-slate-900 text-white flex justify-between items-center border-b border-slate-800 shrink-0">
-                <h2 className="font-bold text-sm sm:text-base">
-                  {itemModal.isAutoExam
-                    ? 'Vizsgaeredmény szerkesztése'
-                    : itemModal.id
-                      ? 'Tétel szerkesztése'
-                      : (
-                        itemModal.category === 'ZH' ? 'Új ZH / Vizsga hozzáadása' :
-                        itemModal.category === 'Pluszpont' ? 'Új pluszpont hozzáadása' :
-                        `Új tétel — ${(activeSubject?.customBuckets || []).find(b => b.id === itemModal.bucketId)?.title || 'Egyéb'}`
-                      )}
-                </h2>
-                <button onClick={() => setItemModal(null)} className="text-slate-400 hover:text-white p-1 cursor-pointer">
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-              <form noValidate onSubmit={handleSaveItemModal} className="p-4 sm:p-6 overflow-y-auto overscroll-contain space-y-3 flex-1 min-h-0">
-                {!itemModal.isAutoExam && itemModal.category === 'Egyeb' && (activeSubject?.customBuckets || []).length > 0 && (
-                  <div>
-                    <label className={`block text-xs font-semibold mb-1 ${textMuted}`}>Gyűjtő</label>
-                    <select
-                      value={itemModal.bucketId || ''}
-                      onChange={e => setItemModal({ ...itemModal, bucketId: e.target.value })}
-                      className={`w-full border rounded-lg px-3 py-2.5 sm:py-2 focus:outline-none ${inputStyle}`}
-                    >
-                      <option value="">Általános (Egyéb tételek)</option>
-                      {(activeSubject?.customBuckets || []).map(b => (
-                        <option key={b.id} value={b.id}>{b.title}</option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-
-                {!itemModal.isAutoExam && (
-                  <>
-                    <div>
-                      <label className={`block text-xs font-semibold mb-1 ${textMuted}`}>
-                        {itemModal.category === 'ZH'
-                          ? `Elnevezés (opcionális — üresen hagyva: ${autoZhTitle})`
-                          : 'Elnevezés'}
-                      </label>
-                      <input
-                        type="text"
-                        required={itemModal.category !== 'ZH'}
-                        placeholder={
-                          itemModal.category === 'ZH' ? `Üresen hagyva: ${autoZhTitle}` :
-                          itemModal.category === 'Pluszpont' ? 'Pl. Előadás kahoot' :
-                          'Pl. 1. Gyakorlati feladat'
-                        }
-                        value={itemModal.title}
-                        onChange={e => setItemModal({ ...itemModal, title: e.target.value })}
-                        className={`w-full border rounded-lg px-3 py-2.5 sm:py-2 focus:outline-none ${inputStyle}`}
-                      />
-                    </div>
-                    <div>
-                      <label className={`block text-xs font-semibold mb-1 ${textMuted}`}>Dátum</label>
-                      <input
-                        type="date"
-                        value={itemModal.date}
-                        onChange={e => setItemModal({ ...itemModal, date: e.target.value })}
-                        className={`w-full border rounded-lg px-3 py-2.5 sm:py-2 focus:outline-none ${inputStyle}`}
-                      />
-                    </div>
-                  </>
-                )}
-
-                {isFixedExam ? (
-                  <div className="grid grid-cols-2 gap-2.5">
-                    <div>
-                      <label className={`block text-[11px] font-semibold mb-1 ${textMuted}`}>Elért pont</label>
-                      <input
-                        type="number"
-                        step="1"
-                        autoFocus
-                        placeholder="Üres = még nincs megírva"
-                        value={itemModal.achieved}
-                        onChange={e => setItemModal({ ...itemModal, max: 100, bonusPoints: '', achieved: e.target.value })}
-                        className={`w-full border rounded-lg px-3 py-2.5 sm:py-2 focus:outline-none ${inputStyle}`}
-                      />
-                    </div>
-                    <div>
-                      <label className={`block text-[11px] font-semibold mb-1 ${textMuted}`}>Max pont (fix)</label>
-                      <input
-                        type="number"
-                        value={100}
-                        disabled
-                        className={`w-full border rounded-lg px-3 py-2.5 sm:py-2 opacity-60 cursor-not-allowed ${inputStyle}`}
-                      />
-                    </div>
-                  </div>
-                ) : itemModal.category === 'ZH' ? (
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-2">
-                    <div>
-                      <label className={`block text-[11px] font-semibold mb-1 ${textMuted}`}>Elért pont</label>
-                      <input
-                        type="number"
-                        step="1"
-                        autoFocus
-                        placeholder="Üres = jövőbeli"
-                        value={itemModal.achieved}
-                        onChange={e => setItemModal({ ...itemModal, achieved: e.target.value })}
-                        className={`w-full border rounded-lg px-3 sm:px-2.5 py-2.5 sm:py-2 focus:outline-none ${inputStyle}`}
-                      />
-                    </div>
-                    <div>
-                      <label className={`block text-[11px] font-semibold mb-1 ${textMuted}`}>Max pont (opc.)</label>
-                      <input
-                        type="number"
-                        step="1"
-                        placeholder="Pl. 30"
-                        value={itemModal.max}
-                        onChange={e => setItemModal({ ...itemModal, max: e.target.value })}
-                        className={`w-full border rounded-lg px-3 sm:px-2.5 py-2.5 sm:py-2 focus:outline-none ${inputStyle}`}
-                      />
-                    </div>
-                    <div>
-                      <label className={`block text-[11px] font-semibold mb-1 ${textMuted}`}>Többletpont (opc.)</label>
-                      <input
-                        type="number"
-                        step="1"
-                        placeholder="Pl. 2"
-                        value={itemModal.bonusPoints ?? ''}
-                        onChange={e => setItemModal({ ...itemModal, bonusPoints: e.target.value })}
-                        className={`w-full border rounded-lg px-3 sm:px-2.5 py-2.5 sm:py-2 focus:outline-none ${inputStyle}`}
-                      />
-                    </div>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
-                    <div>
-                      <label className={`block text-xs font-semibold mb-1 ${textMuted}`}>Elért pont (üres = jövőbeli)</label>
-                      <input
-                        type="number"
-                        step="1"
-                        autoFocus
-                        placeholder="Pl. 1"
-                        value={itemModal.achieved}
-                        onChange={e => setItemModal({ ...itemModal, achieved: e.target.value })}
-                        className={`w-full border rounded-lg px-3 py-2.5 sm:py-2 focus:outline-none ${inputStyle}`}
-                      />
-                    </div>
-                    <div>
-                      <label className={`block text-xs font-semibold mb-1 ${textMuted}`}>Max pont (opcionális)</label>
-                      <input
-                        type="number"
-                        step="1"
-                        placeholder="Üres = nincs max"
-                        value={itemModal.max}
-                        onChange={e => setItemModal({ ...itemModal, max: e.target.value })}
-                        className={`w-full border rounded-lg px-3 py-2.5 sm:py-2 focus:outline-none ${inputStyle}`}
-                      />
-                    </div>
-                  </div>
-                )}
-
-                <div className="pt-3 flex justify-end gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setItemModal(null)}
-                    className={`px-4 py-2 text-sm rounded-lg cursor-pointer ${textMuted}`}
-                  >
-                    Mégse
-                  </button>
-                  <button
-                    type="submit"
-                    className="px-4 py-2 text-sm font-semibold bg-amber-400 hover:bg-amber-300 text-slate-950 rounded-lg cursor-pointer"
-                  >
-                    Mentés
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        );
-      })()}
-
-      {/* ========================================================= */}
-      {/* ÚJ FÉLÉV LÉTREHOZÁSA (KEZDÉSI ÉV + ŐSZ / TAVASZ)           */}
-      {/* ========================================================= */}
-      {isSemesterModalOpen && (
+      {itemModal && (
         <div
           data-top-modal="true"
-          onClick={() => setIsSemesterModalOpen(false)}
+          onClick={() => setItemModal(null)}
           className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-2.5 sm:p-4 overscroll-none"
         >
           <div
@@ -8504,107 +8328,175 @@ export default function App() {
             className={`rounded-2xl max-w-md w-full shadow-2xl overflow-hidden border ${bgCard}`}
           >
             <div className="px-4 sm:px-6 py-3.5 sm:py-4 bg-slate-900 text-white flex justify-between items-center border-b border-slate-800">
-              <h2 className="font-bold text-base">Új félév hozzáadása</h2>
+              <h2 className="font-bold text-base">
+                {itemModal.isAutoExam
+                  ? 'Vizsgaeredmény rögzítése'
+                  : itemModal.id
+                    ? 'Tétel szerkesztése'
+                    : itemModal.category === 'ZH'
+                      ? 'Új ZH hozzáadása'
+                      : itemModal.category === 'Pluszpont'
+                        ? 'Új pluszpont hozzáadása'
+                        : 'Új tétel hozzáadása'}
+              </h2>
+              <button onClick={() => setItemModal(null)} className="text-slate-400 hover:text-white p-1 cursor-pointer">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form noValidate onSubmit={handleSaveItemModal} className="p-4 sm:p-6 space-y-4">
+              {!itemModal.isAutoExam && activeSubject?.courseKind !== 'exam' && (
+                <div>
+                  <label className={`block text-xs font-semibold mb-1 ${textMuted}`}>
+                    Megnevezés {itemModal.category === 'ZH' && '(üresen hagyva automatikus: 1. ZH, 2. ZH...)'}
+                  </label>
+                  <input
+                    type="text"
+                    required={itemModal.category !== 'ZH'}
+                    placeholder={itemModal.category === 'ZH' ? 'Pl. 1. ZH' : 'Pl. Órai aktivitás'}
+                    value={itemModal.title}
+                    onChange={e => setItemModal({ ...itemModal, title: e.target.value })}
+                    className={`w-full border rounded-lg px-3 py-2.5 sm:py-2 focus:outline-none ${inputStyle}`}
+                  />
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={`block text-xs font-semibold mb-1 ${textMuted}`}>Elért pont</label>
+                  <input
+                    type="number"
+                    step="any"
+                    placeholder="Üres = még nincs"
+                    value={itemModal.achieved}
+                    onChange={e => setItemModal({ ...itemModal, achieved: e.target.value })}
+                    className={`w-full border rounded-lg px-3 py-2.5 sm:py-2 font-bold focus:outline-none ${inputStyle}`}
+                  />
+                </div>
+
+                {!itemModal.isAutoExam && activeSubject?.courseKind !== 'exam' && (
+                  <div>
+                    <label className={`block text-xs font-semibold mb-1 ${textMuted}`}>Max pont</label>
+                    <input
+                      type="number"
+                      step="any"
+                      min="0"
+                      placeholder="Opcionális"
+                      value={itemModal.max}
+                      onChange={e => setItemModal({ ...itemModal, max: e.target.value })}
+                      className={`w-full border rounded-lg px-3 py-2.5 sm:py-2 focus:outline-none ${inputStyle}`}
+                    />
+                  </div>
+                )}
+              </div>
+
+              {!itemModal.isAutoExam && activeSubject?.courseKind !== 'exam' && itemModal.category === 'ZH' && (
+                <div>
+                  <label className={`block text-xs font-semibold mb-1 ${textMuted}`}>Többletpont (opcionális)</label>
+                  <input
+                    type="number"
+                    step="any"
+                    placeholder="Pl. 2"
+                    value={itemModal.bonusPoints ?? ''}
+                    onChange={e => setItemModal({ ...itemModal, bonusPoints: e.target.value })}
+                    className={`w-full border rounded-lg px-3 py-2.5 sm:py-2 focus:outline-none ${inputStyle}`}
+                  />
+                </div>
+              )}
+
+              {!itemModal.isAutoExam && activeSubject?.courseKind !== 'exam' && (
+                <div>
+                  <label className={`block text-xs font-semibold mb-1 ${textMuted}`}>Dátum (opcionális)</label>
+                  <input
+                    type="date"
+                    value={itemModal.date || ''}
+                    onChange={e => setItemModal({ ...itemModal, date: e.target.value })}
+                    className={`w-full border rounded-lg px-3 py-2.5 sm:py-2 focus:outline-none ${inputStyle}`}
+                  />
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setItemModal(null)}
+                  className={`px-4 py-2 text-sm rounded-lg cursor-pointer ${textMuted}`}
+                >
+                  Mégse
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 text-sm font-bold bg-amber-400 hover:bg-amber-300 text-slate-950 rounded-lg cursor-pointer"
+                >
+                  Mentés
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* ÚJ FÉLÉV LÉTREHOZÁSA MODAL                                */}
+      {/* ========================================================= */}
+      {isSemesterModalOpen && (
+        <div
+          data-top-modal="true"
+          onClick={() => setIsSemesterModalOpen(false)}
+          className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-2.5 sm:p-4 overscroll-none"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className={`rounded-2xl max-w-md w-full shadow-2xl overflow-hidden border ${bgCard}`}
+          >
+            <div className="px-4 sm:px-6 py-3.5 sm:py-4 bg-slate-900 text-white flex justify-between items-center border-b border-slate-800">
+              <div className="flex items-center gap-2">
+                <FolderPlus className="w-5 h-5 text-amber-400" />
+                <h2 className="font-bold text-base">Új félév létrehozása</h2>
+              </div>
               <button onClick={() => setIsSemesterModalOpen(false)} className="text-slate-400 hover:text-white p-1 cursor-pointer">
                 <X className="w-5 h-5" />
               </button>
             </div>
             <form onSubmit={handleAddSemester} className="p-4 sm:p-6 space-y-4">
-              <div>
-                <p className={`text-xs mb-3 ${textMuted}`}>
-                  Add meg, <strong>mikor kezdődött (vagy kezdődik) a szemeszter</strong>, az alkalmazás pedig automatikusan kiszámolja a tanévet és a félév sorszámát:
-                </p>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className={`block text-xs font-semibold mb-1.5 ${textMuted}`}>
-                      Kezdés éve
-                    </label>
-                    <input
-                      type="number"
-                      min="2000"
-                      max="2099"
-                      step="1"
-                      required
-                      placeholder="Pl. 2026"
-                      value={newSemesterStartYear}
-                      onChange={e => setNewSemesterStartYear(e.target.value)}
-                      className={`w-full border rounded-xl px-3.5 py-2.5 font-bold focus:outline-none ${inputStyle}`}
-                    />
-                  </div>
-
-                  <div>
-                    <label className={`block text-xs font-semibold mb-1.5 ${textMuted}`}>
-                      Időszak
-                    </label>
-                    <div className={`grid grid-cols-2 gap-1.5 p-1 rounded-xl border ${
-                      darkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-100 border-slate-200'
-                    }`}>
-                      <button
-                        type="button"
-                        onClick={() => setNewSemesterSeason('osz')}
-                        className={`py-2 px-2.5 rounded-lg text-xs font-bold transition cursor-pointer ${
-                          newSemesterSeason === 'osz'
-                            ? 'bg-amber-400 text-slate-950 shadow-xs'
-                            : darkMode
-                              ? 'text-slate-300 hover:text-white'
-                              : 'text-slate-600 hover:text-slate-900'
-                        }`}
-                      >
-                        Ősz
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setNewSemesterSeason('tavasz')}
-                        className={`py-2 px-2.5 rounded-lg text-xs font-bold transition cursor-pointer ${
-                          newSemesterSeason === 'tavasz'
-                            ? 'bg-amber-400 text-slate-950 shadow-xs'
-                            : darkMode
-                              ? 'text-slate-300 hover:text-white'
-                              : 'text-slate-600 hover:text-slate-900'
-                        }`}
-                      >
-                        Tavasz
-                      </button>
-                    </div>
-                  </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={`block text-xs font-semibold mb-1 ${textMuted}`}>Év</label>
+                  <input
+                    type="number"
+                    min="2000"
+                    max="2099"
+                    required
+                    value={newSemesterStartYear}
+                    onChange={e => setNewSemesterStartYear(e.target.value)}
+                    className={`w-full border rounded-lg px-3 py-2.5 sm:py-2 font-bold focus:outline-none ${inputStyle}`}
+                  />
+                </div>
+                <div>
+                  <label className={`block text-xs font-semibold mb-1 ${textMuted}`}>Időszak</label>
+                  <select
+                    value={newSemesterSeason}
+                    onChange={e => setNewSemesterSeason(e.target.value)}
+                    className={`w-full border rounded-lg px-3 py-2.5 sm:py-2 font-bold focus:outline-none ${inputStyle}`}
+                  >
+                    <option value="osz">Ősz (/1)</option>
+                    <option value="tavasz">Tavasz (/2)</option>
+                  </select>
                 </div>
               </div>
 
-              {generatedSemesterPreview ? (
-                <div className={`p-3.5 rounded-xl border space-y-1 ${
-                  isGeneratedSemesterDuplicate
-                    ? darkMode
-                      ? 'bg-rose-500/15 border-rose-500/40'
-                      : 'bg-rose-50 border-rose-300'
-                    : darkMode
-                      ? 'bg-amber-400/10 border-amber-400/35'
-                      : 'bg-amber-50/80 border-amber-300'
-                }`}>
-                  <div className="flex items-center justify-between gap-2">
-                    <span className={`text-[11px] font-semibold uppercase ${textMuted}`}>
-                      Létrejövő félév:
-                    </span>
-                    <span className="px-2.5 py-0.5 rounded-full bg-amber-400 text-slate-950 font-extrabold text-xs">
-                      {generatedSemesterPreview.fullLabel}
-                    </span>
-                  </div>
-                  <p className={`text-xs ${textStrong}`}>
-                    {generatedSemesterPreview.description}
-                  </p>
+              {generatedSemesterPreview && (
+                <div className={`p-3.5 rounded-xl border space-y-1 ${bgSubCard}`}>
+                  <p className={`text-[11px] uppercase font-bold ${textMuted}`}>Létrejövő félév előnézete</p>
+                  <p className={`text-sm font-extrabold ${textStrong}`}>{generatedSemesterPreview.fullLabel}</p>
+                  <p className={`text-xs ${textMuted}`}>{generatedSemesterPreview.description}</p>
                   {isGeneratedSemesterDuplicate && (
-                    <p className="text-xs font-bold text-rose-500 pt-1">
-                      Ez a félév már szerepel a listádban!
-                    </p>
+                    <p className="text-xs font-bold text-rose-500 pt-1">Ez a félév már létezik a listádban!</p>
                   )}
                 </div>
-              ) : (
-                <p className="text-xs text-rose-500 font-medium">
-                  Adj meg egy érvényes évszámot (2000–2099 között).
-                </p>
               )}
 
-              <div className="flex justify-end gap-2 pt-1">
+              <div className="flex justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => setIsSemesterModalOpen(false)}
@@ -8615,7 +8507,7 @@ export default function App() {
                 <button
                   type="submit"
                   disabled={!generatedSemesterPreview || isGeneratedSemesterDuplicate}
-                  className="px-4 py-2 text-sm font-bold bg-amber-400 hover:bg-amber-300 disabled:opacity-45 disabled:cursor-not-allowed text-slate-950 rounded-lg cursor-pointer"
+                  className="px-4 py-2 text-sm font-bold bg-amber-400 hover:bg-amber-300 disabled:opacity-45 text-slate-950 rounded-lg cursor-pointer"
                 >
                   Félév létrehozása
                 </button>
@@ -8626,130 +8518,67 @@ export default function App() {
       )}
 
       {/* ========================================================= */}
-      {/* MEGLÉVŐ FÉLÉV ÉVÉNEK / IDŐSZAKÁNAK MÓDOSÍTÁSA              */}
+      {/* MEGLÉVŐ FÉLÉV MÓDOSÍTÁSA MODAL                            */}
       {/* ========================================================= */}
       {editingSemesterOldName && (
         <div
           data-top-modal="true"
           onClick={() => !isUpdatingSemester && setEditingSemesterOldName(null)}
-          className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-2.5 sm:p-4 overscroll-none"
+          className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-2.5 sm:p-4 overscroll-none"
         >
           <div
             onClick={(e) => e.stopPropagation()}
             className={`rounded-2xl max-w-md w-full shadow-2xl overflow-hidden border ${bgCard}`}
           >
             <div className="px-4 sm:px-6 py-3.5 sm:py-4 bg-slate-900 text-white flex justify-between items-center border-b border-slate-800">
-              <div>
-                <h2 className="font-bold text-base">Félév módosítása</h2>
-                <p className="text-[11px] text-slate-400">
-                  Jelenlegi: <strong className="text-amber-400">{formatSemesterLabel(editingSemesterOldName)}</strong>
-                </p>
-              </div>
+              <h2 className="font-bold text-base">Félév módosítása</h2>
               <button
                 type="button"
                 disabled={isUpdatingSemester}
                 onClick={() => setEditingSemesterOldName(null)}
-                className="text-slate-400 hover:text-white p-1 cursor-pointer disabled:opacity-50"
+                className="text-slate-400 hover:text-white p-1 cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
             <form onSubmit={handleUpdateSemester} className="p-4 sm:p-6 space-y-4">
-              <div>
-                <p className={`text-xs mb-3 ${textMuted}`}>
-                  Módosítsd a szemeszter kezdési évét vagy időszakát — a félévben lévő összes tantárgy automatikusan átkerül az új megnevezés alá.
-                </p>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className={`block text-xs font-semibold mb-1.5 ${textMuted}`}>
-                      Kezdés éve
-                    </label>
-                    <input
-                      type="number"
-                      min="2000"
-                      max="2099"
-                      step="1"
-                      required
-                      placeholder="Pl. 2026"
-                      value={editSemesterStartYear}
-                      onChange={e => setEditSemesterStartYear(e.target.value)}
-                      className={`w-full border rounded-xl px-3.5 py-2.5 font-bold focus:outline-none ${inputStyle}`}
-                    />
-                  </div>
-
-                  <div>
-                    <label className={`block text-xs font-semibold mb-1.5 ${textMuted}`}>
-                      Időszak
-                    </label>
-                    <div className={`grid grid-cols-2 gap-1.5 p-1 rounded-xl border ${
-                      darkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-100 border-slate-200'
-                    }`}>
-                      <button
-                        type="button"
-                        onClick={() => setEditSemesterSeason('osz')}
-                        className={`py-2 px-2.5 rounded-lg text-xs font-bold transition cursor-pointer ${
-                          editSemesterSeason === 'osz'
-                            ? 'bg-amber-400 text-slate-950 shadow-xs'
-                            : darkMode
-                              ? 'text-slate-300 hover:text-white'
-                              : 'text-slate-600 hover:text-slate-900'
-                        }`}
-                      >
-                        Ősz
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setEditSemesterSeason('tavasz')}
-                        className={`py-2 px-2.5 rounded-lg text-xs font-bold transition cursor-pointer ${
-                          editSemesterSeason === 'tavasz'
-                            ? 'bg-amber-400 text-slate-950 shadow-xs'
-                            : darkMode
-                              ? 'text-slate-300 hover:text-white'
-                              : 'text-slate-600 hover:text-slate-900'
-                        }`}
-                      >
-                        Tavasz
-                      </button>
-                    </div>
-                  </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={`block text-xs font-semibold mb-1 ${textMuted}`}>Év</label>
+                  <input
+                    type="number"
+                    min="2000"
+                    max="2099"
+                    required
+                    value={editSemesterStartYear}
+                    onChange={e => setEditSemesterStartYear(e.target.value)}
+                    className={`w-full border rounded-lg px-3 py-2.5 sm:py-2 font-bold focus:outline-none ${inputStyle}`}
+                  />
+                </div>
+                <div>
+                  <label className={`block text-xs font-semibold mb-1 ${textMuted}`}>Időszak</label>
+                  <select
+                    value={editSemesterSeason}
+                    onChange={e => setEditSemesterSeason(e.target.value)}
+                    className={`w-full border rounded-lg px-3 py-2.5 sm:py-2 font-bold focus:outline-none ${inputStyle}`}
+                  >
+                    <option value="osz">Ősz (/1)</option>
+                    <option value="tavasz">Tavasz (/2)</option>
+                  </select>
                 </div>
               </div>
 
-              {editSemesterPreview ? (
-                <div className={`p-3.5 rounded-xl border space-y-1 ${
-                  isEditSemesterDuplicate
-                    ? darkMode
-                      ? 'bg-rose-500/15 border-rose-500/40'
-                      : 'bg-rose-50 border-rose-300'
-                    : darkMode
-                      ? 'bg-amber-400/10 border-amber-400/35'
-                      : 'bg-amber-50/80 border-amber-300'
-                }`}>
-                  <div className="flex items-center justify-between gap-2">
-                    <span className={`text-[11px] font-semibold uppercase ${textMuted}`}>
-                      Módosított félév:
-                    </span>
-                    <span className="px-2.5 py-0.5 rounded-full bg-amber-400 text-slate-950 font-extrabold text-xs">
-                      {editSemesterPreview.fullLabel}
-                    </span>
-                  </div>
-                  <p className={`text-xs ${textStrong}`}>
-                    {editSemesterPreview.description}
-                  </p>
+              {editSemesterPreview && (
+                <div className={`p-3.5 rounded-xl border space-y-1 ${bgSubCard}`}>
+                  <p className={`text-[11px] uppercase font-bold ${textMuted}`}>Új félév megnevezés</p>
+                  <p className={`text-sm font-extrabold ${textStrong}`}>{editSemesterPreview.fullLabel}</p>
                   {isEditSemesterDuplicate && (
-                    <p className="text-xs font-bold text-rose-500 pt-1">
-                      Ez a félév már szerepel a listádban!
-                    </p>
+                    <p className="text-xs font-bold text-rose-500 pt-1">Már létezik ilyen kódú féléved!</p>
                   )}
                 </div>
-              ) : (
-                <p className="text-xs text-rose-500 font-medium">
-                  Adj meg egy érvényes évszámot (2000–2099 között).
-                </p>
               )}
 
-              <div className="flex justify-end gap-2 pt-1">
+              <div className="flex justify-end gap-2">
                 <button
                   type="button"
                   disabled={isUpdatingSemester}
@@ -8760,10 +8589,10 @@ export default function App() {
                 </button>
                 <button
                   type="submit"
-                  disabled={isUpdatingSemester || !editSemesterPreview || isEditSemesterDuplicate}
-                  className="px-4 py-2 text-sm font-bold bg-amber-400 hover:bg-amber-300 disabled:opacity-45 disabled:cursor-not-allowed text-slate-950 rounded-lg cursor-pointer"
+                  disabled={!editSemesterPreview || isEditSemesterDuplicate || isUpdatingSemester}
+                  className="px-4 py-2 text-sm font-bold bg-amber-400 hover:bg-amber-300 disabled:opacity-45 text-slate-950 rounded-lg cursor-pointer"
                 >
-                  {isUpdatingSemester ? 'Mentés...' : 'Módosítás mentése'}
+                  {isUpdatingSemester ? 'Mentés...' : 'Mentés'}
                 </button>
               </div>
             </form>
@@ -8772,7 +8601,7 @@ export default function App() {
       )}
 
       {/* ========================================================= */}
-      {/* ÚJ TANTÁRGY / BEÁLLÍTÁSOK MODAL (11 SZAK VÁLASZTÓVAL)     */}
+      {/* ÚJ TANTÁRGY FELVÉTELE / BEÁLLÍTÁSOK MODAL                 */}
       {/* ========================================================= */}
       {isSubjectModalOpen && editingSubject && (
         <div
@@ -8781,651 +8610,375 @@ export default function App() {
             setIsSubjectModalOpen(false);
             setSelectedSubjectMajorId(null);
           }}
-          className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-2.5 sm:p-4 overscroll-none"
+          className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-2.5 sm:p-4 overscroll-none"
         >
           <div
             onClick={(e) => e.stopPropagation()}
             className={`rounded-2xl max-w-xl w-full max-h-[92dvh] flex flex-col shadow-2xl overflow-hidden border ${bgCard}`}
           >
             <div className="px-4 sm:px-6 py-3.5 sm:py-4 bg-slate-900 text-white flex justify-between items-center border-b border-slate-800 shrink-0">
-              <div className="flex items-center gap-2 min-w-0">
+              <div className="min-w-0">
                 <h2 className="font-bold text-base truncate">
-                  {editingSubject.id ? 'Tantárgy konfigurációja' : 'Új tantárgy felvétele'}
+                  {editingSubject.id ? 'Tantárgy beállításai' : 'Új tantárgy felvétele'}
                 </h2>
-                {isSim && editingSubject.id && (
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-400 text-slate-950 shrink-0">
-                    Szimulátor mód
-                  </span>
-                )}
+                <p className="text-[11px] text-slate-400 truncate">
+                  {formatSemesterLabel(editingSubject.semester || selectedSemester)}
+                </p>
               </div>
               <button
+                type="button"
                 onClick={() => {
                   setIsSubjectModalOpen(false);
                   setSelectedSubjectMajorId(null);
                 }}
-                className="text-slate-400 hover:text-white p-1 cursor-pointer"
+                className="text-slate-400 hover:text-white p-1.5 cursor-pointer shrink-0"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            {!editingSubject.id && selectedSubjectMajorId === null ? (
-              <div className="p-4 sm:p-6 overflow-y-auto overscroll-contain space-y-4 flex-1 min-h-0">
-                <div className="flex items-center gap-3">
-                  <div className="w-11 h-11 rounded-2xl bg-amber-400/20 text-amber-500 border border-amber-400/30 flex items-center justify-center shrink-0">
-                    <GraduationCap className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <h3 className={`text-base sm:text-lg font-extrabold leading-tight ${textStrong}`}>
-                      Milyen szakon tanulsz?
-                    </h3>
-                    <p className={`text-xs mt-0.5 ${textMuted}`}>
-                      Válaszd ki a szakodat az előre definiált féléves tantárgyak betöltéséhez, vagy hozz létre egyedi tárgyat kézzel.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="space-y-1.5">
-                  {BGE_MAJORS.map(major => (
-                    <button
-                      key={major.id}
-                      type="button"
-                      onClick={() => {
-                        setSelectedSubjectMajorId(major.id);
-                        setSubjectModalMode('template');
-                        setTemplateSemesterScope('current');
-                        setTemplateSearch('');
-                      }}
-                      className={`w-full px-3.5 py-2.5 rounded-xl border text-left flex items-center justify-between gap-2 transition cursor-pointer ${
-                        major.isGazdinfo
-                          ? darkMode
-                            ? 'bg-amber-400/15 hover:bg-amber-400/25 border-amber-400/50 text-amber-200'
-                            : 'bg-amber-50 hover:bg-amber-100/80 border-amber-400 text-slate-900'
-                          : darkMode
-                            ? 'bg-slate-800/70 hover:bg-slate-800 border-slate-700 text-slate-200'
-                            : 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-800'
-                      }`}
-                    >
-                      <span className="text-xs sm:text-sm font-bold leading-snug">{major.label}</span>
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        {major.isGazdinfo && (
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-400 text-slate-950">
-                            Ellenőrzött sablonok
-                          </span>
-                        )}
-                        <ChevronRight className="w-4 h-4 opacity-70" />
-                      </div>
-                    </button>
-                  ))}
-                </div>
-
-                <div className={`pt-2 border-t flex justify-end ${darkMode ? 'border-slate-800' : 'border-slate-200'}`}>
+            {!editingSubject.id && (
+              <div className={`px-4 sm:px-6 py-3 border-b space-y-2.5 shrink-0 ${
+                darkMode ? 'bg-slate-900/70 border-slate-800' : 'bg-slate-50 border-slate-200'
+              }`}>
+                <div className="grid grid-cols-2 gap-1.5 p-1 rounded-xl border bg-black/5 dark:bg-slate-800 border-slate-200 dark:border-slate-700">
                   <button
                     type="button"
-                    onClick={() => {
-                      setSelectedSubjectMajorId('custom_only');
-                      setSubjectModalMode('custom');
-                    }}
-                    className={`text-xs font-semibold underline hover:text-amber-500 transition cursor-pointer ${textMuted}`}
+                    onClick={() => setSubjectModalMode('template')}
+                    className={`py-2 px-3 rounded-lg text-xs font-bold transition cursor-pointer ${
+                      subjectModalMode === 'template'
+                        ? 'bg-amber-400 text-slate-950 shadow-xs'
+                        : textMuted
+                    }`}
                   >
-                    Kihagyás — üres tárgy létrehozása kézzel →
+                    Tárgysablonból
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSubjectModalMode('custom')}
+                    className={`py-2 px-3 rounded-lg text-xs font-bold transition cursor-pointer ${
+                      subjectModalMode === 'custom'
+                        ? 'bg-amber-400 text-slate-950 shadow-xs'
+                        : textMuted
+                    }`}
+                  >
+                    Kézi felvétel
                   </button>
                 </div>
-              </div>
-            ) : (
-              <>
-                {!editingSubject.id && selectedSubjectMajorId !== 'custom_only' && (
-                  <div className={`px-4 sm:px-6 pt-3 border-b flex items-center justify-between gap-2 overflow-x-auto shrink-0 ${darkMode ? 'border-slate-800 bg-slate-900/50' : 'border-slate-200 bg-slate-50'}`}>
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setSubjectModalMode('template')}
-                        className={`pb-2.5 px-3 text-xs sm:text-sm font-semibold border-b-2 transition cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
-                          subjectModalMode === 'template'
-                            ? 'border-amber-400 text-amber-500'
-                            : `border-transparent ${textMuted}`
-                        }`}
-                      >
-                        <Sparkles className="w-3.5 h-3.5" /> Félév tárgyai ({semesterMatchingTemplates.length})
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setSubjectModalMode('custom')}
-                        className={`pb-2.5 px-3 text-xs sm:text-sm font-semibold border-b-2 transition cursor-pointer whitespace-nowrap ${
-                          subjectModalMode === 'custom'
-                            ? 'border-amber-400 text-amber-500'
-                            : `border-transparent ${textMuted}`
-                        }`}
-                      >
-                        Üres tárgy létrehozása
-                      </button>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setSelectedSubjectMajorId(null)}
-                      className={`pb-2 text-[11px] font-semibold underline hover:text-amber-500 whitespace-nowrap cursor-pointer ${textMuted}`}
+
+                {subjectModalMode === 'template' && (
+                  <div className="space-y-2">
+                    <select
+                      value={selectedSubjectMajorId || ''}
+                      onChange={e => setSelectedSubjectMajorId(e.target.value || null)}
+                      className={`w-full border rounded-lg px-3 py-2 text-xs sm:text-sm font-semibold focus:outline-none ${inputStyle}`}
                     >
-                      Szak váltása
-                    </button>
-                  </div>
-                )}
+                      <option value="">-- Válassz alapszakot --</option>
+                      {BGE_MAJORS.map(m => (
+                        <option key={m.id} value={m.id}>{m.label}</option>
+                      ))}
+                    </select>
 
-                {!editingSubject.id && selectedSubjectMajorId !== 'custom_only' && subjectModalMode === 'template' ? (
-                  <div className="p-4 sm:p-6 overflow-y-auto overscroll-contain space-y-4 flex-1 min-h-0">
-                    {/* Aktív szak jelzése + szürke megjegyzés a nem gazdinfós szakoknál */}
-                    {activeMajorObject && (
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className={`text-xs font-extrabold ${textStrong}`}>
-                            Kiválasztott szak: <span className="text-amber-500">{activeMajorObject.label}</span>
-                          </span>
-                        </div>
-                        {!activeMajorObject.isGazdinfo && (
-                          <div className={`p-3 rounded-xl border text-xs leading-relaxed ${
-                            darkMode
-                              ? 'bg-slate-800/90 border-slate-700 text-slate-400'
-                              : 'bg-slate-100 border-slate-300 text-slate-600'
-                          }`}>
-                            Mivel Én, az app készítője gazdinfós vagyok, csak azokat a tárgyakat tudtam fixen jóra definiálni, a többi tárgy az egyetem weboldaláról lett letöltve (2026 novemberében) szóval egyes adatokat kézzel kell megadni.
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div>
-                        <label className={`block text-xs font-semibold mb-1 ${textMuted}`}>Cél félév</label>
-                        <select
-                          value={editingSubject.semester}
-                          onChange={e => {
-                            setEditingSubject({ ...editingSubject, semester: e.target.value });
-                            setTemplateSemesterScope('current');
-                          }}
-                          className={`w-full border rounded-lg px-3 py-2.5 sm:py-2 focus:outline-none ${inputStyle}`}
-                        >
-                          {(semesters.length > 0 ? semesters : [editingSubject.semester || getCurrentSemesterCode()]).map(sem => (
-                            <option key={sem} value={sem}>{formatSemesterLabel(sem)}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label className={`block text-xs font-semibold mb-1 ${textMuted}`}>Keresés a tárgyak között</label>
-                        <div className="relative">
-                          <Search className={`w-4 h-4 absolute left-3 top-3 sm:top-2.5 ${textMuted}`} />
+                    {selectedSubjectMajorId && (
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div className="relative flex-1 min-w-[160px]">
+                          <Search className={`w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 ${textMuted}`} />
                           <input
                             type="text"
-                            placeholder="Pl. Marketing, Számvitel..."
+                            placeholder="Tárgy keresése..."
                             value={templateSearch}
                             onChange={e => setTemplateSearch(e.target.value)}
-                            className={`w-full border rounded-lg pl-9 pr-3 py-2.5 sm:py-2 focus:outline-none ${inputStyle}`}
+                            className={`w-full border rounded-lg pl-8 pr-3 py-1.5 text-xs focus:outline-none ${inputStyle}`}
                           />
                         </div>
-                      </div>
-                    </div>
-
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className={`inline-flex p-1 rounded-xl border text-xs ${
-                        darkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-100 border-slate-200'
-                      }`}>
-                        <button
-                          type="button"
-                          onClick={() => setTemplateSemesterScope('current')}
-                          className={`px-3 py-1.5 rounded-lg font-bold transition cursor-pointer ${
-                            templateSemesterScope === 'current'
-                              ? 'bg-amber-400 text-slate-950'
-                              : darkMode ? 'text-slate-300' : 'text-slate-600'
-                          }`}
-                        >
-                          {formatSemesterLabel(editingSubject.semester)} ({semesterMatchingTemplates.length})
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setTemplateSemesterScope('all')}
-                          className={`px-3 py-1.5 rounded-lg font-bold transition cursor-pointer ${
-                            templateSemesterScope === 'all'
-                              ? 'bg-amber-400 text-slate-950'
-                              : darkMode ? 'text-slate-300' : 'text-slate-600'
-                          }`}
-                        >
-                          Összes félév ({activeMajorTemplates.length})
-                        </button>
-                      </div>
-
-                      {activeMajorObject?.isGazdinfo && (
-                        <button
-                          type="button"
-                          disabled={isRefreshingTemplates}
-                          onClick={() => fetchTemplates(true)}
-                          title="Legújabb tárgysablonok lekérése"
-                          className={`px-2.5 py-1.5 rounded-lg border text-xs font-semibold inline-flex items-center gap-1.5 transition cursor-pointer disabled:opacity-50 ${
-                            darkMode
-                              ? 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
-                              : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200'
-                          }`}
-                        >
-                          <RefreshCw className={`w-3.5 h-3.5 ${isRefreshingTemplates ? 'animate-spin' : ''}`} />
-                          <span>Frissítés</span>
-                        </button>
-                      )}
-                    </div>
-
-                    {filteredTemplates.length === 0 ? (
-                      <div className={`p-5 sm:p-6 rounded-xl border text-center space-y-2.5 ${bgSubCard}`}>
-                        <p className={`text-sm font-semibold ${textStrong}`}>
-                          {activeMajorTemplates.length === 0
-                            ? 'Még nincs elérhető előre definiált tantárgy'
-                            : templateSemesterScope === 'current'
-                              ? `A(z) ${formatSemesterLabel(editingSubject.semester)} félévhez ebben a szakban nincs előre definiált tárgy`
-                              : 'Nincs a keresésnek megfelelő tantárgy'}
-                        </p>
-                        <p className={`text-xs ${textMuted}`}>
-                          {templateSemesterScope === 'current' && activeMajorTemplates.length > 0
-                            ? 'Kattints az „Összes félév” fülre, vagy válts az „Üres tárgy létrehozása” fülre.'
-                            : 'Válts át az „Üres tárgy létrehozása” fülre, és rögzítsd a tárgyat manuálisan.'}
-                        </p>
-                      </div>
-                    ) : (
-                      <div className="space-y-2.5">
-                        {filteredTemplates.map(tpl => {
-                          const zhTemplates = (tpl.assessments || []).filter(a => a.category === 'ZH');
-                          const zhCount = zhTemplates.length;
-                          const zhMaxList = zhTemplates
-                            .map(z => z.max)
-                            .filter(m => m !== undefined && m !== null && m !== '');
-                          const otherCount = (tpl.assessments || []).filter(a => a.category !== 'ZH').length;
-                          const bucketCount = (tpl.customBuckets || []).length;
-                          const isJustAdded = Boolean(addedTemplateIds[tpl.id]);
-                          const alreadyInTargetSem = subjects.some(
-                            s => s.semester === editingSubject.semester && s.name === tpl.name
-                          );
-                          const isTplElective = (tpl.courseType || 'mandatory') === 'elective';
-                          const semBadgeText = tpl.sourceSemester
-                            ? formatSemesterLabel(tpl.sourceSemester)
-                            : tpl.sourceSemesterOrdinal
-                              ? `${tpl.sourceSemesterOrdinal}. félév`
-                              : '';
-
-                          return (
-                            <div
-                              key={tpl.id}
-                              className={`p-3.5 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition ${
-                                darkMode
-                                  ? 'bg-slate-800/60 border-slate-700/80 hover:border-amber-400/50'
-                                  : 'bg-slate-50 border-slate-200 hover:border-amber-400'
-                              }`}
-                            >
-                              <div className="min-w-0 flex-1">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <h4 className={`font-bold text-sm ${textStrong}`}>{tpl.name}</h4>
-                                  <span className="text-xs font-semibold text-amber-500">
-                                    {tpl.credits} kredit
-                                  </span>
-                                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                                    isTplElective
-                                      ? darkMode
-                                        ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/35'
-                                        : 'bg-emerald-50 text-emerald-700 border-emerald-300'
-                                      : darkMode
-                                        ? 'bg-sky-500/15 text-sky-300 border-sky-500/35'
-                                        : 'bg-sky-50 text-sky-700 border-sky-300'
-                                  }`}>
-                                    {isTplElective ? 'Szabadon választott' : 'Kötelező'}
-                                  </span>
-                                  {templateSemesterScope === 'all' && semBadgeText && (
-                                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
-                                      darkMode ? 'bg-slate-700 text-slate-300' : 'bg-slate-200 text-slate-700'
-                                    }`}>
-                                      {semBadgeText}
-                                    </span>
-                                  )}
-                                  {alreadyInTargetSem && !isJustAdded && (
-                                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
-                                      darkMode ? 'bg-slate-700 text-slate-300' : 'bg-slate-200 text-slate-700'
-                                    }`}>
-                                      Már felvéve
-                                    </span>
-                                  )}
-                                </div>
-                                {tpl.isWebScrapedMajor ? (
-                                  <p className={`text-[11px] mt-1 ${textMuted}`}>
-                                    {zhCount > 0 ? `${zhCount} ZH (max pontszám ismeretlen)` : '0 ZH'} • {tpl.totalClasses} db gyakorlati óra
-                                  </p>
-                                ) : (
-                                  <>
-                                    <p className={`text-[11px] mt-1 ${textMuted}`}>
-                                      Aláírás: {formatHu(tpl.alairasMin)} p • Megajánlott: {formatHu(tpl.megajanlottMin)} p (ZH min: {formatHu(tpl.megajanlottMinZH || 0)} p) • Jelenlét: {tpl.minAttendanceAlairas}/{tpl.totalClasses}
-                                    </p>
-                                    <p className={`text-[11px] mt-0.5 ${textMuted}`}>
-                                      Előre beállított tételek:{' '}
-                                      <strong>{zhCount} ZH</strong>
-                                      {zhMaxList.length > 0 && ` (${zhMaxList.map(m => `${formatHu(m)} p`).join(', ')})`}
-                                      {otherCount > 0 && `, ${otherCount} egyéb tétel`}
-                                      {bucketCount > 0 && `, ${bucketCount} gyűjtő`} (üres elért pontokkal)
-                                    </p>
-                                  </>
-                                )}
-                              </div>
-
-                              <div className="flex items-center justify-end gap-1.5 shrink-0">
-                                {isAdmin && !tpl.isWebScrapedMajor && (
-                                  <button
-                                    type="button"
-                                    onClick={() => handleDeleteTemplate(tpl.id, tpl.name)}
-                                    title="Sablon törlése (Admin)"
-                                    className="p-2 text-slate-400 hover:text-rose-500 transition cursor-pointer"
-                                  >
-                                    <Trash2 className="w-4 h-4" />
-                                  </button>
-                                )}
-                                <button
-                                  type="button"
-                                  onClick={() => handleCreateFromTemplate(tpl)}
-                                  className={`px-3.5 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer ${
-                                    isJustAdded
-                                      ? 'bg-emerald-500 text-white'
-                                      : 'bg-amber-400 hover:bg-amber-300 text-slate-950'
-                                  }`}
-                                >
-                                  {isJustAdded ? (
-                                    <>
-                                      <Check className="w-3.5 h-3.5" /> Hozzáadva
-                                    </>
-                                  ) : (
-                                    <>
-                                      <Plus className="w-3.5 h-3.5" /> Felvétel
-                                    </>
-                                  )}
-                                </button>
-                              </div>
-                            </div>
-                          );
-                        })}
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => setTemplateSemesterScope('current')}
+                            className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold border transition cursor-pointer ${
+                              templateSemesterScope === 'current'
+                                ? 'bg-amber-400 text-slate-950 border-amber-400'
+                                : `${bgCard} ${textMuted}`
+                            }`}
+                          >
+                            Aktuális félév
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setTemplateSemesterScope('all')}
+                            className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold border transition cursor-pointer ${
+                              templateSemesterScope === 'all'
+                                ? 'bg-amber-400 text-slate-950 border-amber-400'
+                                : `${bgCard} ${textMuted}`
+                            }`}
+                          >
+                            Összes
+                          </button>
+                        </div>
                       </div>
                     )}
+                  </div>
+                )}
+              </div>
+            )}
 
-                    <div className={`pt-3 border-t flex justify-end ${darkMode ? 'border-slate-800' : 'border-slate-200'}`}>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIsSubjectModalOpen(false);
-                          setSelectedSubjectMajorId(null);
-                        }}
-                        className="w-full sm:w-auto px-4 py-2.5 sm:py-2 text-sm font-semibold bg-amber-400 hover:bg-amber-300 text-slate-950 rounded-lg cursor-pointer"
+            {!editingSubject.id && subjectModalMode === 'template' ? (
+              <div className="p-4 sm:p-6 overflow-y-auto overscroll-contain space-y-2.5 flex-1 min-h-0">
+                {!selectedSubjectMajorId ? (
+                  <p className={`text-xs sm:text-sm text-center py-8 ${textMuted}`}>
+                    Válaszd ki a szakodat a fenti listából, vagy válts a <strong>„Kézi felvétel”</strong> fülre!
+                  </p>
+                ) : isRefreshingTemplates && activeMajorObject?.isGazdinfo ? (
+                  <p className={`text-xs text-center py-8 ${textMuted}`}>Sablonok betöltése...</p>
+                ) : filteredTemplates.length === 0 ? (
+                  <p className={`text-xs text-center py-8 ${textMuted}`}>
+                    Nincs találat ebben a szűrésben. Próbáld az „Összes” nézetet vagy a kézi felvételt!
+                  </p>
+                ) : (
+                  filteredTemplates.map(tpl => {
+                    const isAdded = Boolean(addedTemplateIds[tpl.id]);
+                    return (
+                      <div
+                        key={tpl.id}
+                        className={`p-3 rounded-xl border flex items-center justify-between gap-3 ${bgSubCard}`}
                       >
-                        Kész
-                      </button>
-                    </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="text-[11px] font-bold text-amber-500">{tpl.credits} kr.</span>
+                            {tpl.sourceSemesterOrdinal && (
+                              <span className={`text-[10px] px-2 py-0.5 rounded-full ${
+                                darkMode ? 'bg-slate-800 text-slate-300' : 'bg-slate-200 text-slate-700'
+                              }`}>
+                                {tpl.sourceSemesterOrdinal}. félév
+                              </span>
+                            )}
+                          </div>
+                          <p className={`text-xs sm:text-sm font-bold truncate mt-0.5 ${textStrong}`}>{tpl.name}</p>
+                        </div>
+
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {isAdmin && !tpl.isWebScrapedMajor && (
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteTemplate(tpl.id, tpl.name)}
+                              title="Sablon törlése"
+                              className="p-1.5 text-rose-500 hover:bg-rose-500/10 rounded-lg cursor-pointer"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => handleCreateFromTemplate(tpl)}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 transition cursor-pointer ${
+                              isAdded
+                                ? 'bg-emerald-500 text-white'
+                                : 'bg-amber-400 hover:bg-amber-300 text-slate-950'
+                            }`}
+                          >
+                            {isAdded ? <><Check className="w-3.5 h-3.5" /> Hozzáadva</> : <><Plus className="w-3.5 h-3.5" /> Felvétel</>}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            ) : (
+              <form onSubmit={handleSaveSubject} className="p-4 sm:p-6 overflow-y-auto overscroll-contain space-y-4 flex-1 min-h-0">
+                {isSim && editingSubject.id ? (
+                  <div className={`p-4 rounded-xl border-2 border-amber-400/60 space-y-3 ${
+                    darkMode ? 'bg-amber-400/10' : 'bg-amber-50'
+                  }`}>
+                    <p className={`text-xs font-bold ${textStrong}`}>
+                      Szimulált végleges jegy beállítása ({editingSubject.name})
+                    </p>
+                    <select
+                      value={editingSubject.manualGrade || ''}
+                      onChange={e => setEditingSubject({ ...editingSubject, manualGrade: e.target.value })}
+                      className={`w-full border rounded-lg px-3 py-2 font-bold focus:outline-none ${inputStyle}`}
+                    >
+                      <option value="">Automatikus (pontszámok alapján)</option>
+                      <option value="2">2 (Elégséges)</option>
+                      <option value="3">3 (Közepes)</option>
+                      <option value="4">4 (Jó)</option>
+                      <option value="5">5 (Jeles)</option>
+                    </select>
                   </div>
                 ) : (
-                  <form noValidate onSubmit={handleSaveSubject} className="p-4 sm:p-6 overflow-y-auto overscroll-contain space-y-4 flex-1 min-h-0">
-                    {isSim && editingSubject.id && (
-                      <div className={`p-3.5 rounded-xl border-2 border-amber-400/70 space-y-2 ${
-                        darkMode ? 'bg-amber-400/10 text-amber-100' : 'bg-amber-50 text-slate-900'
-                      }`}>
-                        <p className="text-xs font-extrabold text-amber-500 uppercase tracking-wide flex items-center gap-1.5">
-                          <FlaskConical className="w-4 h-4 shrink-0" /> Szimulátor mód aktív
-                        </p>
-                        <p className="text-xs leading-relaxed">
-                          Válassz alább egy <strong>előre meghatározott jegyet</strong> a pontok alapú számítás helyett: az átlagok és a kreditindex azonnal frissülnek, az adatbázisba viszont semmi nem mentődik el. A felső sárga sáv <em>„Visszaállítás”</em> gombjával minden visszaáll az eredeti állapotra.
-                        </p>
-                      </div>
-                    )}
+                  <>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setEditingSubject({ ...editingSubject, courseKind: 'regular' })}
+                        className={`py-2 px-3 rounded-xl text-xs font-bold border transition cursor-pointer ${
+                          (editingSubject.courseKind || 'regular') === 'regular'
+                            ? 'bg-amber-400 text-slate-950 border-amber-400'
+                            : `${bgSubCard} ${textMuted}`
+                        }`}
+                      >
+                        Sima kurzus
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEditingSubject({ ...editingSubject, courseKind: 'exam' })}
+                        className={`py-2 px-3 rounded-xl text-xs font-bold border transition cursor-pointer ${
+                          editingSubject.courseKind === 'exam'
+                            ? 'bg-violet-600 text-white border-violet-600'
+                            : `${bgSubCard} ${textMuted}`
+                        }`}
+                      >
+                        Vizsgakurzus
+                      </button>
+                    </div>
 
                     <div>
-                      <label className={`block text-xs font-semibold mb-1.5 ${textMuted}`}>Kurzus formája</label>
-                      <div className={`grid grid-cols-2 gap-1.5 p-1 rounded-xl border ${
-                        darkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-100 border-slate-200'
-                      }`}>
-                        <button
-                          type="button"
-                          disabled={isSim && Boolean(editingSubject.id)}
-                          onClick={() => setEditingSubject({ ...editingSubject, courseKind: 'regular' })}
-                          className={`py-2 px-2.5 rounded-lg text-xs font-bold transition cursor-pointer disabled:opacity-60 ${
-                            (editingSubject.courseKind || 'regular') === 'regular'
-                              ? 'bg-amber-400 text-slate-950 shadow-xs'
-                              : darkMode
-                                ? 'text-slate-300 hover:text-white'
-                                : 'text-slate-600 hover:text-slate-900'
-                          }`}
-                        >
-                          Sima kurzus
-                        </button>
-                        <button
-                          type="button"
-                          disabled={isSim && Boolean(editingSubject.id)}
-                          onClick={() => setEditingSubject({ ...editingSubject, courseKind: 'exam' })}
-                          className={`py-2 px-2.5 rounded-lg text-xs font-bold transition cursor-pointer disabled:opacity-60 ${
-                            editingSubject.courseKind === 'exam'
-                              ? 'bg-violet-500 text-white shadow-xs'
-                              : darkMode
-                                ? 'text-slate-300 hover:text-white'
-                                : 'text-slate-600 hover:text-slate-900'
-                          }`}
-                        >
-                          Vizsgakurzus
-                        </button>
-                      </div>
+                      <label className={`block text-xs font-semibold mb-1 ${textMuted}`}>Tantárgy neve</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="Pl. Gazdasági matematika"
+                        value={editingSubject.name}
+                        onChange={e => setEditingSubject({ ...editingSubject, name: e.target.value })}
+                        className={`w-full border rounded-lg px-3 py-2 focus:outline-none ${inputStyle}`}
+                      />
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className={`block text-xs font-semibold mb-1 ${textMuted}`}>Tantárgy neve</label>
-                        <input
-                          type="text"
-                          required
-                          disabled={isSim && Boolean(editingSubject.id)}
-                          placeholder="Pl. Üzleti statisztika"
-                          value={editingSubject.name}
-                          onChange={e => setEditingSubject({ ...editingSubject, name: e.target.value })}
-                          className={`w-full border rounded-lg px-3 py-2.5 sm:py-2 focus:outline-none disabled:opacity-60 ${inputStyle}`}
-                        />
-                      </div>
-                      <div>
-                        <label className={`block text-xs font-semibold mb-1 ${textMuted}`}>Félév</label>
-                        <select
-                          disabled={isSim && Boolean(editingSubject.id)}
-                          value={editingSubject.semester}
-                          onChange={e => setEditingSubject({ ...editingSubject, semester: e.target.value })}
-                          className={`w-full border rounded-lg px-3 py-2.5 sm:py-2 focus:outline-none disabled:opacity-60 ${inputStyle}`}
-                        >
-                          {(semesters.length > 0 ? semesters : [editingSubject.semester || getCurrentSemesterCode()]).map(sem => (
-                            <option key={sem} value={sem}>{formatSemesterLabel(sem)}</option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div>
-                        <label className={`block text-xs font-semibold mb-1 ${textMuted}`}>
-                          Kredit {!editingSubject.id && '(3 kr → 6 gyak., 6 kr → 12 gyak.)'}
-                        </label>
+                        <label className={`block text-xs font-semibold mb-1 ${textMuted}`}>Kredit</label>
                         <input
                           type="number"
                           min="0"
                           max="30"
-                          step="1"
-                          disabled={isSim && Boolean(editingSubject.id)}
+                          required
                           placeholder="Pl. 3 vagy 6"
                           value={editingSubject.credits}
                           onChange={e => handleSubjectCreditsChange(e.target.value)}
-                          className={`w-full border rounded-lg px-3 py-2.5 sm:py-2 focus:outline-none disabled:opacity-60 ${inputStyle}`}
+                          className={`w-full border rounded-lg px-3 py-2 focus:outline-none ${inputStyle}`}
                         />
                       </div>
-
                       <div>
-                        <label className={`block text-xs font-semibold mb-1 ${textMuted}`}>Tárgy besorolása</label>
-                        <div className={`grid grid-cols-2 gap-1.5 p-1 rounded-xl border ${
-                          darkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-100 border-slate-200'
-                        }`}>
-                          <button
-                            type="button"
-                            disabled={isSim && Boolean(editingSubject.id)}
-                            onClick={() => setEditingSubject({ ...editingSubject, courseType: 'mandatory' })}
-                            className={`py-2 px-2 rounded-lg text-xs font-bold transition cursor-pointer disabled:opacity-60 ${
-                              (editingSubject.courseType || 'mandatory') === 'mandatory'
-                                ? 'bg-sky-500 text-white shadow-xs'
-                                : darkMode
-                                  ? 'text-slate-300 hover:text-white'
-                                  : 'text-slate-600 hover:text-slate-900'
-                            }`}
-                          >
-                            Kötelező
-                          </button>
-                          <button
-                            type="button"
-                            disabled={isSim && Boolean(editingSubject.id)}
-                            onClick={() => setEditingSubject({ ...editingSubject, courseType: 'elective' })}
-                            className={`py-2 px-2 rounded-lg text-xs font-bold transition cursor-pointer disabled:opacity-60 ${
-                              editingSubject.courseType === 'elective'
-                                ? 'bg-emerald-500 text-white shadow-xs'
-                                : darkMode
-                                  ? 'text-slate-300 hover:text-white'
-                                  : 'text-slate-600 hover:text-slate-900'
-                            }`}
-                          >
-                            Szab. választott
-                          </button>
-                        </div>
+                        <label className={`block text-xs font-semibold mb-1 ${textMuted}`}>Besorolás</label>
+                        <select
+                          value={editingSubject.courseType || 'mandatory'}
+                          onChange={e => setEditingSubject({ ...editingSubject, courseType: e.target.value })}
+                          className={`w-full border rounded-lg px-3 py-2 focus:outline-none ${inputStyle}`}
+                        >
+                          <option value="mandatory">Kötelező</option>
+                          <option value="elective">Szabadon választott</option>
+                        </select>
                       </div>
                     </div>
 
-                    {editingSubject.courseKind === 'exam' ? (
-                      <div className={`p-3.5 rounded-xl border text-xs space-y-1.5 ${
-                        darkMode
-                          ? 'bg-violet-500/10 border-violet-500/35 text-violet-200'
-                          : 'bg-violet-50 border-violet-300 text-violet-950'
-                      }`}>
-                        <p className="font-bold text-violet-500">Vizsgakurzus beállításai:</p>
-                        <p>
-                          A vizsgakurzushoz nem tartozik gyakorlati jelenlét vagy aláírási küszöb — automatikusan egyetlen <strong>Vizsga</strong> tétel jön létre <strong>100 max ponttal</strong>.
-                        </p>
-                      </div>
-                    ) : (
+                    {(editingSubject.courseKind || 'regular') === 'regular' && (
                       <>
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div className="grid grid-cols-3 gap-2.5">
                           <div>
-                            <label className={`block text-xs font-semibold mb-1 ${textMuted}`}>Aláírás min. pont</label>
+                            <label className={`block text-[11px] font-semibold mb-1 ${textMuted}`}>Aláírás min. (p)</label>
                             <input
                               type="number"
-                              step="1"
-                              disabled={isSim && Boolean(editingSubject.id)}
+                              step="any"
                               value={editingSubject.alairasMin}
                               onChange={e => setEditingSubject({ ...editingSubject, alairasMin: e.target.value })}
-                              className={`w-full border rounded-lg px-3 py-2.5 sm:py-2 focus:outline-none disabled:opacity-60 ${inputStyle}`}
+                              className={`w-full border rounded-lg px-2.5 py-2 focus:outline-none ${inputStyle}`}
                             />
                           </div>
                           <div>
-                            <label className={`block text-xs font-semibold mb-1 ${textMuted}`}>Megajánlott min. összpont</label>
+                            <label className={`block text-[11px] font-semibold mb-1 ${textMuted}`}>ZH min. (p)</label>
                             <input
                               type="number"
-                              step="1"
-                              disabled={isSim && Boolean(editingSubject.id)}
+                              step="any"
+                              value={editingSubject.megajanlottMinZH}
+                              onChange={e => setEditingSubject({ ...editingSubject, megajanlottMinZH: e.target.value })}
+                              className={`w-full border rounded-lg px-2.5 py-2 focus:outline-none ${inputStyle}`}
+                            />
+                          </div>
+                          <div>
+                            <label className={`block text-[11px] font-semibold mb-1 ${textMuted}`}>Megajánlott (p)</label>
+                            <input
+                              type="number"
+                              step="any"
                               value={editingSubject.megajanlottMin}
                               onChange={e => setEditingSubject({ ...editingSubject, megajanlottMin: e.target.value })}
-                              className={`w-full border rounded-lg px-3 py-2.5 sm:py-2 focus:outline-none disabled:opacity-60 ${inputStyle}`}
-                            />
-                          </div>
-                          <div>
-                            <label className={`block text-xs font-semibold mb-1 ${textMuted}`}>Megajánlott min. ZH pont</label>
-                            <input
-                              type="number"
-                              step="1"
-                              disabled={isSim && Boolean(editingSubject.id)}
-                              value={editingSubject.megajanlottMinZH ?? 0}
-                              onChange={e => setEditingSubject({ ...editingSubject, megajanlottMinZH: e.target.value })}
-                              className={`w-full border rounded-lg px-3 py-2.5 sm:py-2 focus:outline-none disabled:opacity-60 ${inputStyle}`}
+                              className={`w-full border rounded-lg px-2.5 py-2 focus:outline-none ${inputStyle}`}
                             />
                           </div>
                         </div>
 
-                        <div className={`p-3.5 rounded-xl border space-y-3 ${bgSubCard}`}>
-                          <p className={`text-xs font-bold ${textStrong}`}>Gyakorlati jelenlét szabályai</p>
-                          <div className="grid grid-cols-3 gap-2">
-                            <div>
-                              <label className={`block text-[11px] font-semibold mb-1 ${textMuted}`}>Összes gyak.</label>
-                              <input
-                                type="number"
-                                min="0"
-                                max="40"
-                                disabled={isSim && Boolean(editingSubject.id)}
-                                placeholder="Pl. 6"
-                                value={editingSubject.totalClasses}
-                                onChange={e => setEditingSubject({ ...editingSubject, totalClasses: e.target.value })}
-                                className={`w-full border rounded-lg px-2.5 py-2 sm:py-1.5 focus:outline-none disabled:opacity-60 ${inputStyle}`}
-                              />
-                            </div>
-                            <div>
-                              <label className={`block text-[11px] font-semibold mb-1 ${textMuted}`}>Aláírás min.</label>
-                              <input
-                                type="number"
-                                min="0"
-                                max="40"
-                                disabled={isSim && Boolean(editingSubject.id)}
-                                placeholder="Pl. 3"
-                                value={editingSubject.minAttendanceAlairas}
-                                onChange={e => setEditingSubject({ ...editingSubject, minAttendanceAlairas: e.target.value })}
-                                className={`w-full border rounded-lg px-2.5 py-2 sm:py-1.5 focus:outline-none disabled:opacity-60 ${inputStyle}`}
-                              />
-                            </div>
-                            <div>
-                              <label className={`block text-[11px] font-semibold mb-1 ${textMuted}`}>Megajánlott min.</label>
-                              <input
-                                type="number"
-                                min="0"
-                                max="40"
-                                disabled={isSim && Boolean(editingSubject.id)}
-                                placeholder="Pl. 4"
-                                value={editingSubject.minAttendanceMegajanlott}
-                                onChange={e => setEditingSubject({ ...editingSubject, minAttendanceMegajanlott: e.target.value })}
-                                className={`w-full border rounded-lg px-2.5 py-2 sm:py-1.5 focus:outline-none disabled:opacity-60 ${inputStyle}`}
-                              />
-                            </div>
+                        <div className="grid grid-cols-3 gap-2.5">
+                          <div>
+                            <label className={`block text-[11px] font-semibold mb-1 ${textMuted}`}>Összes gyak.</label>
+                            <input
+                              type="number"
+                              min="0"
+                              value={editingSubject.totalClasses}
+                              onChange={e => setEditingSubject({ ...editingSubject, totalClasses: e.target.value })}
+                              className={`w-full border rounded-lg px-2.5 py-2 focus:outline-none ${inputStyle}`}
+                            />
+                          </div>
+                          <div>
+                            <label className={`block text-[11px] font-semibold mb-1 ${textMuted}`}>Aláírás jelenlét</label>
+                            <input
+                              type="number"
+                              min="0"
+                              value={editingSubject.minAttendanceAlairas}
+                              onChange={e => setEditingSubject({ ...editingSubject, minAttendanceAlairas: e.target.value })}
+                              className={`w-full border rounded-lg px-2.5 py-2 focus:outline-none ${inputStyle}`}
+                            />
+                          </div>
+                          <div>
+                            <label className={`block text-[11px] font-semibold mb-1 ${textMuted}`}>Megajánl. jelenlét</label>
+                            <input
+                              type="number"
+                              min="0"
+                              value={editingSubject.minAttendanceMegajanlott}
+                              onChange={e => setEditingSubject({ ...editingSubject, minAttendanceMegajanlott: e.target.value })}
+                              className={`w-full border rounded-lg px-2.5 py-2 focus:outline-none ${inputStyle}`}
+                            />
                           </div>
                         </div>
                       </>
                     )}
 
-                    <div className={isSim && editingSubject.id ? `p-3.5 rounded-xl border-2 border-amber-400/70 ${darkMode ? 'bg-amber-400/10' : 'bg-amber-50/80'}` : ''}>
-                      <label className={`block text-xs font-semibold mb-1 ${isSim && editingSubject.id ? 'text-amber-500 font-bold' : textMuted}`}>
-                        {isSim && editingSubject.id
-                          ? 'Szimulált előre meghatározott jegy (nem ment az adatbázisba)'
-                          : 'Kézi / Vizsga végleges jegy (opcionális)'}
+                    <div>
+                      <label className={`block text-xs font-semibold mb-1 ${textMuted}`}>
+                        Kézi végleges jegy (opcionális, felülírja a pontszámítást)
                       </label>
                       <select
                         value={editingSubject.manualGrade || ''}
                         onChange={e => setEditingSubject({ ...editingSubject, manualGrade: e.target.value })}
-                        className={`w-full border rounded-lg px-3 py-2.5 sm:py-2 focus:outline-none ${inputStyle}`}
+                        className={`w-full border rounded-lg px-3 py-2 focus:outline-none ${inputStyle}`}
                       >
-                        <option value="">Automatikus (pontok alapján)</option>
+                        <option value="">Automatikus (pontszámok alapján)</option>
                         <option value="2">2 (Elégséges)</option>
                         <option value="3">3 (Közepes)</option>
                         <option value="4">4 (Jó)</option>
                         <option value="5">5 (Jeles)</option>
                       </select>
                     </div>
-
-                    <div className="pt-2 flex justify-end gap-2">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIsSubjectModalOpen(false);
-                          setSelectedSubjectMajorId(null);
-                        }}
-                        className={`px-4 py-2 text-sm rounded-lg cursor-pointer ${textMuted}`}
-                      >
-                        Mégse
-                      </button>
-                      <button
-                        type="submit"
-                        className="px-4 py-2 text-sm font-semibold bg-amber-400 hover:bg-amber-300 text-slate-950 rounded-lg cursor-pointer"
-                      >
-                        {isSim && editingSubject.id ? 'Szimulált jegy alkalmazása' : 'Tantárgy mentése'}
-                      </button>
-                    </div>
-                  </form>
+                  </>
                 )}
-              </>
+
+                <div className="flex justify-end gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsSubjectModalOpen(false);
+                      setSelectedSubjectMajorId(null);
+                    }}
+                    className={`px-4 py-2 text-sm rounded-lg cursor-pointer ${textMuted}`}
+                  >
+                    Mégse
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 py-2 text-sm font-bold bg-amber-400 hover:bg-amber-300 text-slate-950 rounded-lg cursor-pointer"
+                  >
+                    Mentés
+                  </button>
+                </div>
+              </form>
             )}
           </div>
         </div>
@@ -9433,4 +8986,3 @@ export default function App() {
     </div>
   );
 }
-      

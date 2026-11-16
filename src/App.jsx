@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
 import {
-  collection, doc, getDocs, onSnapshot, setDoc, updateDoc, deleteDoc, writeBatch
+  collection, doc, getDocs, onSnapshot, setDoc, updateDoc, deleteDoc, writeBatch,
+  serverTimestamp
 } from 'firebase/firestore';
 import {
   LogOut, Plus, FlaskConical, Check, X, Trash2, Settings,
@@ -10,7 +11,8 @@ import {
   History, Tag, BookOpen, ChevronLeft, ChevronRight,
   MessageSquare, Mail, ExternalLink, User, GraduationCap,
   Menu, Palette, ChevronDown, SlidersHorizontal, RefreshCw, Lightbulb, CheckCircle2,
-  LayoutList, ArrowUpDown, GripVertical, ArrowUp, ArrowDown, Calculator
+  LayoutList, ArrowUpDown, GripVertical, ArrowUp, ArrowDown, Calculator,
+  BarChart3, Users
 } from 'lucide-react';
 import { auth, googleProvider, db } from './firebase';
 
@@ -37,6 +39,13 @@ const UPDATE_CHECK_THROTTLE_MS = 30 * 1000; // 30 mp aktivitás-ellenőrzési k�
 // VERZIÓKÖVETÉS (CHANGELOG) — Új frissítésnél írd a legújabb verziót legfelülre!
 // ============================================================================
 const APP_RELEASES = [
+  {
+    version: 'v1.23.0',
+    date: '2026. 11. 16.',
+    changes: [
+      'Új „App statisztika” gomb a felső menüsávban: valós időben megmutatja a regisztrált felhasználók összesített számát, valamint azt, hogy jelenleg hányan használják egyszerre az alkalmazást'
+    ]
+  },
   {
     version: 'v1.22.0',
     date: '2026. 11. 16.',
@@ -993,6 +1002,11 @@ export default function App() {
   const [simpleView, setSimpleView] = useState(() => localStorage.getItem('bge_card_view') === 'simple');
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
+  // App statisztika (regisztrált + jelenleg aktív felhasználók)
+  const [isStatsModalOpen, setIsStatsModalOpen] = useState(false);
+  const [appUsersStats, setAppUsersStats] = useState({ totalUsers: 0, activeUsers: 0 });
+  const [statsLoading, setStatsLoading] = useState(true);
+
   // Rendezés állapotok (féléves dashboard tetején)
   const [sortMode, setSortMode] = useState(() => localStorage.getItem('bge_subject_sort_mode') || 'custom');
   const [isSortMenuOpen, setIsSortMenuOpen] = useState(false);
@@ -1199,6 +1213,91 @@ export default function App() {
     });
     return () => unsub();
   }, []);
+
+  // Regisztrált és jelenleg aktív felhasználók élő nyilvántartása
+  useEffect(() => {
+    if (!user) return;
+
+    const userPresenceRef = doc(db, 'appUsers', user.uid);
+    const HEARTBEAT_INTERVAL_MS = 60 * 1000; // 1 percenkénti életjel
+    const ACTIVE_WINDOW_MS = 3 * 60 * 1000;  // 3 percen belüli aktivitás = jelenleg használja
+
+    const updatePresence = (isOnline = true) => {
+      setDoc(
+        userPresenceRef,
+        {
+          uid: user.uid,
+          email: user.email || '',
+          online: isOnline,
+          lastSeenMs: Date.now(),
+          lastSeen: serverTimestamp()
+        },
+        { merge: true }
+      ).catch(() => {});
+    };
+
+    updatePresence(true);
+
+    const heartbeatTimer = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        updatePresence(true);
+      }
+    }, HEARTBEAT_INTERVAL_MS);
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        updatePresence(true);
+      }
+    };
+
+    const handleBeforeUnload = () => {
+      updatePresence(false);
+    };
+
+    document.addEventListener('visibilitychange', handleVisibility);
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    const unsubAppUsers = onSnapshot(
+      collection(db, 'appUsers'),
+      (snapshot) => {
+        const now = Date.now();
+        let total = 0;
+        let active = 0;
+
+        snapshot.forEach((docSnap) => {
+          total++;
+          const data = docSnap.data();
+          const lastSeenMs =
+            typeof data.lastSeenMs === 'number'
+              ? data.lastSeenMs
+              : data.lastSeen?.toMillis
+                ? data.lastSeen.toMillis()
+                : 0;
+
+          if (data.online !== false && now - lastSeenMs <= ACTIVE_WINDOW_MS) {
+            active++;
+          }
+        });
+
+        setAppUsersStats({
+          totalUsers: total,
+          activeUsers: Math.max(1, active)
+        });
+        setStatsLoading(false);
+      },
+      () => {
+        setStatsLoading(false);
+      }
+    );
+
+    return () => {
+      clearInterval(heartbeatTimer);
+      document.removeEventListener('visibilitychange', handleVisibility);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      updatePresence(false);
+      unsubAppUsers();
+    };
+  }, [user]);
 
   const fetchTemplates = async (forceRefresh = false) => {
     if (!forceRefresh) {
@@ -3066,7 +3165,8 @@ export default function App() {
     isJokerModalOpen ||
     semesterToDelete ||
     isCustomSortModalOpen ||
-    isAvgCalcOpen
+    isAvgCalcOpen ||
+    isStatsModalOpen
   );
 
   useEffect(() => {
@@ -3735,6 +3835,20 @@ export default function App() {
             <div className="flex items-center gap-1.5 sm:gap-2 ml-auto">
               <button
                 type="button"
+                onClick={() => setIsStatsModalOpen(true)}
+                title="Alkalmazás statisztika megtekintése"
+                className={`px-2.5 sm:px-3 py-2 sm:py-1.5 rounded-lg border text-xs font-bold flex items-center gap-1.5 transition cursor-pointer ${
+                  darkMode
+                    ? 'bg-slate-900 hover:bg-slate-800 text-violet-400 border-slate-800'
+                    : 'bg-white hover:bg-violet-50 text-violet-700 border-slate-200 shadow-2xs'
+                }`}
+              >
+                <BarChart3 className="w-3.5 h-3.5 text-violet-500" />
+                <span className="hidden sm:inline">App statisztika</span>
+              </button>
+
+              <button
+                type="button"
                 onClick={() => setIsWelcomeOpen(true)}
                 title="Köszöntő és bemutatkozás"
                 className={`px-2.5 sm:px-3 py-2 sm:py-1.5 rounded-lg border text-xs font-bold flex items-center gap-1.5 transition cursor-pointer ${
@@ -4362,8 +4476,16 @@ export default function App() {
                   </button>
                 </div>
 
-                {/* Mobil jobb felső gyorsgombok: Bemutató + Menü */}
+                {/* Mobil jobb felső gyorsgombok: App statisztika + Bemutató + Menü */}
                 <div className="flex items-center gap-1.5 lg:hidden shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setIsStatsModalOpen(true)}
+                    title="App statisztika"
+                    className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-violet-400 border border-slate-700 transition cursor-pointer"
+                  >
+                    <BarChart3 className="w-4 h-4" />
+                  </button>
                   <button
                     type="button"
                     onClick={handleOpenTutorial}
@@ -4422,6 +4544,16 @@ export default function App() {
                 )}
 
                 <div className="hidden lg:flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsStatsModalOpen(true)}
+                    title="Alkalmazás statisztika megtekintése"
+                    className="px-3 py-1.5 rounded-lg text-xs sm:text-sm font-semibold bg-slate-800 hover:bg-slate-700 text-violet-400 border border-slate-700 flex items-center gap-1.5 transition cursor-pointer"
+                  >
+                    <BarChart3 className="w-4 h-4" />
+                    <span>App statisztika</span>
+                  </button>
+
                   <button
                     type="button"
                     onClick={handleOpenTutorial}
@@ -5009,10 +5141,7 @@ export default function App() {
             {appFooter}
           </main>
 
-          {/* Féléves dashboard lebegő (floating) glowing gombok:
-              1. Felül: lila JOKER ZH gomb
-              2. Középen: cián/kék Számológép (Átlagszámoló) gomb
-              3. Alul: nagy sárga + gomb */}
+          {/* Féléves dashboard lebegő (floating) glowing gombok */}
           <div className="fixed bottom-5 right-5 sm:bottom-7 sm:right-7 z-30 flex flex-col items-end gap-3">
             <button
               type="button"
@@ -5050,6 +5179,87 @@ export default function App() {
             </button>
           </div>
         </>
+      )}
+
+      {/* ========================================================= */}
+      {/* APP STATISZTIKA MODAL (REGISZTRÁLT + JELENLEG AKTÍV)       */}
+      {/* ========================================================= */}
+      {isStatsModalOpen && (
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-2.5 sm:p-4 overscroll-none">
+          <div className={`rounded-2xl max-w-md w-full shadow-2xl overflow-hidden border ${bgCard}`}>
+            <div className="px-4 sm:px-6 py-3.5 sm:py-4 bg-slate-900 text-white flex justify-between items-center border-b border-slate-800">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-8 h-8 rounded-lg bg-violet-500 text-white flex items-center justify-center shrink-0">
+                  <BarChart3 className="w-4 h-4" />
+                </div>
+                <div className="min-w-0">
+                  <h2 className="font-extrabold text-sm sm:text-base leading-tight">App statisztika</h2>
+                  <p className="text-[11px] text-slate-400 truncate">BGE Progress élő használati adatok</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsStatsModalOpen(false)}
+                className="text-slate-400 hover:text-white p-1.5 cursor-pointer shrink-0"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-4 sm:p-6 space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* Regisztrált felhasználók */}
+                <div className={`p-4 rounded-2xl border space-y-1.5 ${bgSubCard}`}>
+                  <div className="flex items-center justify-between">
+                    <span className={`text-[11px] font-bold uppercase tracking-wide ${textMuted}`}>
+                      Regisztráltak
+                    </span>
+                    <Users className="w-4 h-4 text-sky-500" />
+                  </div>
+                  <p className={`text-2xl sm:text-3xl font-extrabold ${textStrong}`}>
+                    {statsLoading ? '...' : `${appUsersStats.totalUsers} fő`}
+                  </p>
+                  <p className={`text-[11px] ${textMuted}`}>Összes regisztrált hallgató</p>
+                </div>
+
+                {/* Jelenleg aktív felhasználók */}
+                <div className={`p-4 rounded-2xl border-2 space-y-1.5 ${
+                  darkMode
+                    ? 'bg-emerald-950/25 border-emerald-500/45'
+                    : 'bg-emerald-50/70 border-emerald-300'
+                }`}>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold uppercase tracking-wide text-emerald-500">
+                      Jelenleg aktív
+                    </span>
+                    <span className="relative flex h-2.5 w-2.5">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
+                    </span>
+                  </div>
+                  <p className={`text-2xl sm:text-3xl font-extrabold ${textStrong}`}>
+                    {statsLoading ? '...' : `${appUsersStats.activeUsers} fő`}
+                  </p>
+                  <p className={`text-[11px] ${textMuted}`}>Éppen most használja az appot</p>
+                </div>
+              </div>
+
+              <div className={`p-3 rounded-xl border text-xs leading-relaxed ${bgSubCard} ${textMuted}`}>
+                Az élő aktív számláló az elmúlt 3 percben aktív munkameneteket összesíti valós időben.
+              </div>
+
+              <div className="flex justify-end pt-1">
+                <button
+                  type="button"
+                  onClick={() => setIsStatsModalOpen(false)}
+                  className="w-full sm:w-auto px-5 py-2 rounded-xl text-xs sm:text-sm font-bold bg-amber-400 hover:bg-amber-300 text-slate-950 transition cursor-pointer"
+                >
+                  Bezárás
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* ========================================================= */}
@@ -6032,7 +6242,7 @@ export default function App() {
                       <input
                         type="text"
                         required
-                        placeholder="Pl. v1.23.0"
+                        placeholder="Pl. v1.24.0"
                         value={newReleaseVersion}
                         onChange={e => setNewReleaseVersion(e.target.value)}
                         className={`w-full border rounded-lg px-3 py-1.5 font-semibold focus:outline-none ${inputStyle}`}
@@ -8047,12 +8257,10 @@ export default function App() {
                           type="button"
                           disabled={isSim && Boolean(editingSubject.id)}
                           onClick={() => setEditingSubject({ ...editingSubject, courseKind: 'regular' })}
-                          className={`py-2 px-3 rounded-lg text-xs font-bold transition cursor-pointer disabled:opacity-60 ${
+                          className={`py-2 px-3 rounded-lg text-xs font-bold transition cursor-pointer disabled:opacity-50 ${
                             (editingSubject.courseKind || 'regular') === 'regular'
                               ? 'bg-amber-400 text-slate-950 shadow-xs'
-                              : darkMode
-                                ? 'text-slate-300 hover:text-white'
-                                : 'text-slate-600 hover:text-slate-900'
+                              : darkMode ? 'text-slate-300 hover:text-white' : 'text-slate-600 hover:text-slate-900'
                           }`}
                         >
                           Sima kurzus
@@ -8061,41 +8269,36 @@ export default function App() {
                           type="button"
                           disabled={isSim && Boolean(editingSubject.id)}
                           onClick={() => setEditingSubject({ ...editingSubject, courseKind: 'exam' })}
-                          className={`py-2 px-3 rounded-lg text-xs font-bold transition cursor-pointer disabled:opacity-60 ${
+                          className={`py-2 px-3 rounded-lg text-xs font-bold transition cursor-pointer disabled:opacity-50 ${
                             editingSubject.courseKind === 'exam'
                               ? 'bg-violet-600 text-white shadow-xs'
-                              : darkMode
-                                ? 'text-slate-300 hover:text-white'
-                                : 'text-slate-600 hover:text-slate-900'
+                              : darkMode ? 'text-slate-300 hover:text-white' : 'text-slate-600 hover:text-slate-900'
                           }`}
                         >
                           Vizsgakurzus
                         </button>
                       </div>
-                      {editingSubject.courseKind === 'exam' && (
-                        <p className={`text-[11px] mt-1.5 ${textMuted}`}>
-                          Vizsgakurzus esetén nincs aláírási vagy jelenléti követelmény — elég megadni a tantárgy nevét és kreditjét.
-                        </p>
-                      )}
                     </div>
 
-                    <div className="grid grid-cols-3 gap-2">
-                      <div className="col-span-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
                         <label className={`block text-xs font-semibold mb-1 ${textMuted}`}>Tantárgy neve</label>
                         <input
                           type="text"
                           required
                           disabled={isSim && Boolean(editingSubject.id)}
-                          placeholder="Pl. Adatbázisrendszerek"
+                          placeholder="Pl. Alkalmazásépítés"
                           value={editingSubject.name}
                           onChange={e => setEditingSubject({ ...editingSubject, name: e.target.value })}
                           className={`w-full border rounded-lg px-3 py-2.5 sm:py-2 focus:outline-none disabled:opacity-60 ${inputStyle}`}
                         />
                       </div>
                       <div>
-                        <label className={`block text-xs font-semibold mb-1 ${textMuted}`}>Kredit</label>
+                        <label className={`block text-xs font-semibold mb-1 ${textMuted}`}>Kreditérték</label>
                         <input
                           type="number"
+                          min="0"
+                          max="30"
                           step="1"
                           required
                           disabled={isSim && Boolean(editingSubject.id)}
@@ -8107,145 +8310,124 @@ export default function App() {
                       </div>
                     </div>
 
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className={`block text-xs font-semibold mb-1 ${textMuted}`}>Félév</label>
+                        <select
+                          disabled={isSim && Boolean(editingSubject.id)}
+                          value={editingSubject.semester}
+                          onChange={e => setEditingSubject({ ...editingSubject, semester: e.target.value })}
+                          className={`w-full border rounded-lg px-3 py-2.5 sm:py-2 focus:outline-none disabled:opacity-60 ${inputStyle}`}
+                        >
+                          {(semesters.length > 0 ? semesters : [editingSubject.semester || getCurrentSemesterCode()]).map(sem => (
+                            <option key={sem} value={sem}>{formatSemesterLabel(sem)}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className={`block text-xs font-semibold mb-1 ${textMuted}`}>Tárgy besorolása</label>
+                        <select
+                          disabled={isSim && Boolean(editingSubject.id)}
+                          value={editingSubject.courseType || 'mandatory'}
+                          onChange={e => setEditingSubject({ ...editingSubject, courseType: e.target.value })}
+                          className={`w-full border rounded-lg px-3 py-2.5 sm:py-2 focus:outline-none disabled:opacity-60 ${inputStyle}`}
+                        >
+                          <option value="mandatory">Kötelező tárgy</option>
+                          <option value="elective">Szabadon választott</option>
+                        </select>
+                      </div>
+                    </div>
+
                     {(editingSubject.courseKind || 'regular') === 'regular' && (
                       <>
-                        <div>
-                          <label className={`block text-xs font-semibold mb-1 ${textMuted}`}>Félév</label>
-                          <select
-                            disabled={isSim && Boolean(editingSubject.id)}
-                            value={editingSubject.semester}
-                            onChange={e => setEditingSubject({ ...editingSubject, semester: e.target.value })}
-                            className={`w-full border rounded-lg px-3 py-2.5 sm:py-2 focus:outline-none disabled:opacity-60 ${inputStyle}`}
-                          >
-                            {(semesters.length > 0 ? semesters : [editingSubject.semester || getCurrentSemesterCode()]).map(sem => (
-                              <option key={sem} value={sem}>{formatSemesterLabel(sem)}</option>
-                            ))}
-                          </select>
-                        </div>
-
-                        <div>
-                          <label className={`block text-xs font-semibold mb-1.5 ${textMuted}`}>Tantárgy típusa (képzési besorolás)</label>
-                          <div className={`grid grid-cols-2 gap-1.5 p-1 rounded-xl border ${
-                            darkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-100 border-slate-200'
-                          }`}>
-                            <button
-                              type="button"
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                          <div>
+                            <label className={`block text-xs font-semibold mb-1 ${textMuted}`}>Aláírás min. (pont)</label>
+                            <input
+                              type="number"
+                              min="0"
+                              step="1"
                               disabled={isSim && Boolean(editingSubject.id)}
-                              onClick={() => setEditingSubject({ ...editingSubject, courseType: 'mandatory' })}
-                              className={`py-2 px-3 rounded-lg text-xs font-bold transition cursor-pointer disabled:opacity-60 ${
-                                (editingSubject.courseType || 'mandatory') === 'mandatory'
-                                  ? 'bg-sky-500 text-white shadow-xs'
-                                  : darkMode
-                                    ? 'text-slate-300 hover:text-white'
-                                    : 'text-slate-600 hover:text-slate-900'
-                              }`}
-                            >
-                              Kötelező (186 kr.)
-                            </button>
-                            <button
-                              type="button"
+                              value={editingSubject.alairasMin}
+                              onChange={e => setEditingSubject({ ...editingSubject, alairasMin: e.target.value })}
+                              className={`w-full border rounded-lg px-3 py-2.5 sm:py-2 focus:outline-none disabled:opacity-60 ${inputStyle}`}
+                            />
+                          </div>
+                          <div>
+                            <label className={`block text-xs font-semibold mb-1 ${textMuted}`}>Megajánlott min. (össz)</label>
+                            <input
+                              type="number"
+                              min="0"
+                              step="1"
                               disabled={isSim && Boolean(editingSubject.id)}
-                              onClick={() => setEditingSubject({ ...editingSubject, courseType: 'elective' })}
-                              className={`py-2 px-3 rounded-lg text-xs font-bold transition cursor-pointer disabled:opacity-60 ${
-                                editingSubject.courseType === 'elective'
-                                  ? 'bg-emerald-500 text-white shadow-xs'
-                                  : darkMode
-                                    ? 'text-slate-300 hover:text-white'
-                                    : 'text-slate-600 hover:text-slate-900'
-                              }`}
-                            >
-                              Szabadon választott (12 kr.)
-                            </button>
+                              value={editingSubject.megajanlottMin ?? 60}
+                              onChange={e => setEditingSubject({ ...editingSubject, megajanlottMin: e.target.value })}
+                              className={`w-full border rounded-lg px-3 py-2.5 sm:py-2 focus:outline-none disabled:opacity-60 ${inputStyle}`}
+                            />
+                          </div>
+                          <div>
+                            <label className={`block text-xs font-semibold mb-1 ${textMuted}`}>Megajánlott min. (ZH)</label>
+                            <input
+                              type="number"
+                              min="0"
+                              step="1"
+                              disabled={isSim && Boolean(editingSubject.id)}
+                              value={editingSubject.megajanlottMinZH ?? 50}
+                              onChange={e => setEditingSubject({ ...editingSubject, megajanlottMinZH: e.target.value })}
+                              className={`w-full border rounded-lg px-3 py-2.5 sm:py-2 focus:outline-none disabled:opacity-60 ${inputStyle}`}
+                            />
                           </div>
                         </div>
 
-                        <div className={`p-3.5 rounded-xl border space-y-3 ${bgSubCard}`}>
-                          <p className={`text-xs font-bold uppercase ${textStrong}`}>Ponthatárok</p>
-                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-2">
-                            <div>
-                              <label className={`block text-[11px] font-semibold mb-1 ${textMuted}`}>Aláírás min. összpont</label>
-                              <input
-                                type="number"
-                                step="1"
-                                disabled={isSim && Boolean(editingSubject.id)}
-                                value={editingSubject.alairasMin}
-                                onChange={e => setEditingSubject({ ...editingSubject, alairasMin: e.target.value })}
-                                className={`w-full border rounded-lg px-3 sm:px-2.5 py-2 sm:py-1.5 focus:outline-none disabled:opacity-60 ${inputStyle}`}
-                              />
-                            </div>
-                            <div>
-                              <label className={`block text-[11px] font-semibold mb-1 ${textMuted}`}>Megajánlott min. összpont</label>
-                              <input
-                                type="number"
-                                step="1"
-                                disabled={isSim && Boolean(editingSubject.id)}
-                                value={editingSubject.megajanlottMin}
-                                onChange={e => setEditingSubject({ ...editingSubject, megajanlottMin: e.target.value })}
-                                className={`w-full border rounded-lg px-3 sm:px-2.5 py-2 sm:py-1.5 focus:outline-none disabled:opacity-60 ${inputStyle}`}
-                              />
-                            </div>
-                            <div>
-                              <label className={`block text-[11px] font-semibold mb-1 ${textMuted}`}>Megajánlott min. ZH pont</label>
-                              <input
-                                type="number"
-                                step="1"
-                                disabled={isSim && Boolean(editingSubject.id)}
-                                value={editingSubject.megajanlottMinZH ?? 0}
-                                onChange={e => setEditingSubject({ ...editingSubject, megajanlottMinZH: e.target.value })}
-                                className={`w-full border rounded-lg px-3 sm:px-2.5 py-2 sm:py-1.5 focus:outline-none disabled:opacity-60 ${inputStyle}`}
-                              />
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className={`p-3.5 rounded-xl border space-y-3 ${bgSubCard}`}>
-                          <div className="flex flex-wrap items-center justify-between gap-1">
-                            <p className={`text-xs font-bold uppercase ${textStrong}`}>Gyakorlati órák & Jelenlét</p>
-                            {!editingSubject.id && (
-                              <span className={`text-[10px] ${textMuted}`}>
-                                3 kr → 6 (3/4) • 6 kr → 12 (6/9)
+                        <div className={`p-3.5 sm:p-4 rounded-xl border space-y-3 ${bgSubCard}`}>
+                          <div className="flex items-center justify-between gap-2">
+                            <p className={`text-xs font-bold uppercase tracking-wide ${textStrong}`}>
+                              Gyakorlati jelenlét beállításai
+                            </p>
+                            {!editingSubject.id && (Number(editingSubject.credits) === 3 || Number(editingSubject.credits) === 6) && (
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-500 border border-amber-400/30">
+                                Automatikus ({editingSubject.credits} kr.)
                               </span>
                             )}
                           </div>
-                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-2">
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                             <div>
-                              <label className={`block text-[11px] font-semibold mb-1 ${textMuted}`}>Gyakorlati órák száma</label>
+                              <label className={`block text-xs font-semibold mb-1 ${textMuted}`}>Gyakorlatok száma</label>
                               <input
                                 type="number"
                                 min="0"
-                                max="30"
-                                step="1"
+                                max="40"
                                 disabled={isSim && Boolean(editingSubject.id)}
                                 placeholder="Pl. 6 vagy 12"
                                 value={editingSubject.totalClasses ?? ''}
                                 onChange={e => setEditingSubject({ ...editingSubject, totalClasses: e.target.value })}
-                                className={`w-full border rounded-lg px-3 sm:px-2.5 py-2 sm:py-1.5 focus:outline-none disabled:opacity-60 ${inputStyle}`}
+                                className={`w-full border rounded-lg px-3 py-2.5 sm:py-2 focus:outline-none disabled:opacity-60 ${inputStyle}`}
                               />
                             </div>
                             <div>
-                              <label className={`block text-[11px] font-semibold mb-1 ${textMuted}`}>Kötelező jelenlét (Aláírás)</label>
+                              <label className={`block text-xs font-semibold mb-1 ${textMuted}`}>Aláírás min. jelenlét</label>
                               <input
                                 type="number"
                                 min="0"
-                                step="1"
+                                max="40"
                                 disabled={isSim && Boolean(editingSubject.id)}
                                 placeholder="Pl. 3 vagy 6"
                                 value={editingSubject.minAttendanceAlairas ?? ''}
                                 onChange={e => setEditingSubject({ ...editingSubject, minAttendanceAlairas: e.target.value })}
-                                className={`w-full border rounded-lg px-3 sm:px-2.5 py-2 sm:py-1.5 focus:outline-none disabled:opacity-60 ${inputStyle}`}
+                                className={`w-full border rounded-lg px-3 py-2.5 sm:py-2 focus:outline-none disabled:opacity-60 ${inputStyle}`}
                               />
                             </div>
                             <div>
-                              <label className={`block text-[11px] font-semibold mb-1 ${textMuted}`}>Kötelező jelenlét (Megajánlott)</label>
+                              <label className={`block text-xs font-semibold mb-1 ${textMuted}`}>Megajánlott min. jelenlét</label>
                               <input
                                 type="number"
                                 min="0"
-                                step="1"
+                                max="40"
                                 disabled={isSim && Boolean(editingSubject.id)}
                                 placeholder="Pl. 4 vagy 9"
                                 value={editingSubject.minAttendanceMegajanlott ?? ''}
                                 onChange={e => setEditingSubject({ ...editingSubject, minAttendanceMegajanlott: e.target.value })}
-                                className={`w-full border rounded-lg px-3 sm:px-2.5 py-2 sm:py-1.5 focus:outline-none disabled:opacity-60 ${inputStyle}`}
+                                className={`w-full border rounded-lg px-3 py-2.5 sm:py-2 focus:outline-none disabled:opacity-60 ${inputStyle}`}
                               />
                             </div>
                           </div>
@@ -8253,27 +8435,31 @@ export default function App() {
                       </>
                     )}
 
-                    {/* Előre meghatározott végleges jegy választó (sima és vizsgakurzusnál is elérhető, szimulátor módban pedig szimulált jegyként működik) */}
-                    {((editingSubject.courseKind || 'regular') === 'regular' || (isSim && editingSubject.id)) && (
-                      <div className={isSim && editingSubject.id ? 'p-3.5 rounded-xl border-2 border-amber-400/70 bg-amber-400/5' : ''}>
-                        <label className={`block text-xs font-semibold mb-1 ${isSim && editingSubject.id ? 'text-amber-500 font-bold' : textMuted}`}>
-                          {isSim && editingSubject.id
-                            ? 'Szimulált végleges jegy (előre meghatározott jegy kiválasztása)'
-                            : 'Végleges jegy (opcionális kézi felülírás)'}
-                        </label>
-                        <select
-                          value={editingSubject.manualGrade || ''}
-                          onChange={e => setEditingSubject({ ...editingSubject, manualGrade: e.target.value })}
-                          className={`w-full border rounded-lg px-3 py-2.5 sm:py-2 focus:outline-none ${inputStyle}`}
-                        >
-                          <option value="">Automatikus számítás (pontok alapján)</option>
-                          <option value="2">2 (Elégséges)</option>
-                          <option value="3">3 (Közepes)</option>
-                          <option value="4">4 (Jó)</option>
-                          <option value="5">5 (Jeles)</option>
-                        </select>
-                      </div>
-                    )}
+                    {/* Előre meghatározott végleges jegy (Szimulátor módban szimulált jegyként működik!) */}
+                    <div className={`p-3.5 rounded-xl border ${
+                      isSim && editingSubject.id
+                        ? darkMode
+                          ? 'bg-amber-400/10 border-amber-400/50'
+                          : 'bg-amber-50/90 border-amber-400'
+                        : bgSubCard
+                    }`}>
+                      <label className={`block text-xs font-bold mb-1 ${isSim && editingSubject.id ? 'text-amber-500' : textMuted}`}>
+                        {isSim && editingSubject.id
+                          ? 'Szimulált végleges jegy (nem ment az adatbázisba)'
+                          : 'Előre meghatározott végleges jegy (opcionális)'}
+                      </label>
+                      <select
+                        value={editingSubject.manualGrade || ''}
+                        onChange={e => setEditingSubject({ ...editingSubject, manualGrade: e.target.value })}
+                        className={`w-full border rounded-lg px-3 py-2.5 sm:py-2 focus:outline-none ${inputStyle}`}
+                      >
+                        <option value="">Automatikus számítás a pontok alapján</option>
+                        <option value="2">2 (Elégséges)</option>
+                        <option value="3">3 (Közepes)</option>
+                        <option value="4">4 (Jó)</option>
+                        <option value="5">5 (Jeles)</option>
+                      </select>
+                    </div>
 
                     <div className="pt-2 flex justify-end gap-2">
                       <button
@@ -8290,7 +8476,7 @@ export default function App() {
                         type="submit"
                         className="px-4 py-2 text-sm font-semibold bg-amber-400 hover:bg-amber-300 text-slate-950 rounded-lg cursor-pointer"
                       >
-                        {isSim && editingSubject.id ? 'Szimuláció alkalmazása' : 'Mentés'}
+                        {isSim && editingSubject.id ? 'Szimulálás alkalmazása' : 'Tantárgy mentése'}
                       </button>
                     </div>
                   </form>

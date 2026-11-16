@@ -38,6 +38,13 @@ const UPDATE_CHECK_THROTTLE_MS = 30 * 1000; // 30 mp aktivitás-ellenőrzési k�
 // ============================================================================
 const APP_RELEASES = [
   {
+    version: 'v1.20.1',
+    date: '2026. 11. 16.',
+    changes: [
+      'Mobilos görgetési pozíció javítása: egy adott félév megnyitásakor az oldal mostantól mindig a dashboard legtetejére ugrik'
+    ]
+  },
+  {
     version: 'v1.20.0',
     date: '2026. 11. 14.',
     changes: [
@@ -969,6 +976,7 @@ function getTodayFormattedHu() {
   const d = String(now.getDate()).padStart(2, '0');
   return `${y}. ${m}. ${d}.`;
 }
+
 export default function App() {
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem('bge_theme') === 'dark');
   const [monochrome, setMonochrome] = useState(() => localStorage.getItem('bge_palette') === 'monochrome');
@@ -1097,6 +1105,13 @@ export default function App() {
       .map(s => s.getAttribute('src'))
       .filter(Boolean);
   }, []);
+
+  // Nézetváltáskor (pl. féléves dashboard megnyitásakor) mindig az oldal tetejére görgetés
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+  }, [activeView, selectedSemester]);
 
   useEffect(() => {
     localStorage.setItem('bge_theme', darkMode ? 'dark' : 'light');
@@ -5652,7 +5667,7 @@ export default function App() {
                       <input
                         type="text"
                         required
-                        placeholder="Pl. 2026. 11. 15."
+                        placeholder="Pl. 2026. 11. 16."
                         value={newReleaseDate}
                         onChange={e => setNewReleaseDate(e.target.value)}
                         className={`w-full border rounded-lg px-3 py-1.5 focus:outline-none ${inputStyle}`}

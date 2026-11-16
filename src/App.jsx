@@ -632,6 +632,14 @@ function buildTemplatesForMajor(majorId) {
 
 const APP_RELEASES = [
   {
+    version: 'v1.30.0',
+    date: '2026. 11. 16.',
+    changes: [
+      'Aláírás hiányának (39,5 pont / aláírási küszöb alatti félévközi eredmény) pontos kezelése: ha minden ZH eredmény rögzítve lett, de nem érted el az aláírási ponthatárt (pl. 39,5 pontot 40 helyett) vagy elfogytak a hiányzásaid, a tárgy automatikusan „Megbuktam☹️” állapotba vált',
+      'Vizsga tételsor elrejtése aláírás nélkül: aláírás hiányában nem jelenik meg a vizsga pontbeíró tételsor, helyette egyértelmű figyelmeztetés jelzi, hogy nincs aláírásod, ezért vizsgázni sem mehetsz el, és a tárgyat egy évvel később újra fel kell venned'
+    ]
+  },
+  {
     version: 'v1.29.0',
     date: '2026. 11. 16.',
     changes: [
@@ -3544,10 +3552,26 @@ export default function App() {
       return v !== null && v !== undefined && v !== '' && !isNaN(Number(v));
     });
 
+    const effectiveManualGrade = getEffectiveManualGrade(subj);
+    const hasManualGrade = Boolean(effectiveManualGrade && !isNaN(parseInt(effectiveManualGrade, 10)));
+    const isSimulatedGrade = Boolean(
+      isSim &&
+      Object.prototype.hasOwnProperty.call(simManualGrades, subj.id) &&
+      simManualGrades[subj.id] !== ''
+    );
+
+    const autoFailedByNoSignature = Boolean(
+      !disablePointCalc &&
+      !isExamCourse &&
+      !hasManualGrade &&
+      ((allZhsFilled && !alairasPontOk) || !attendanceAlairasPossible)
+    );
+
     const needsAutoExam = Boolean(
       !disablePointCalc &&
       !isExamCourse &&
       allZhsFilled &&
+      alairasTeljesul &&
       (!megajanlottZHOk || !megajanlottPontOk)
     );
 
@@ -3587,21 +3611,13 @@ export default function App() {
     const effectiveOfferMin = (isExamCourse || needsAutoExam) ? 59.5 : (megajanlottMin || 60);
     const nextOfferedMilestone = getNextOfferedGradeMilestone(osszElert, effectiveOfferMin);
 
-    const effectiveManualGrade = getEffectiveManualGrade(subj);
-    const hasManualGrade = Boolean(effectiveManualGrade && !isNaN(parseInt(effectiveManualGrade, 10)));
-    const isSimulatedGrade = Boolean(
-      isSim &&
-      Object.prototype.hasOwnProperty.call(simManualGrades, subj.id) &&
-      simManualGrades[subj.id] !== ''
-    );
-
     const autoFailedByExam =
       !disablePointCalc &&
       !hasManualGrade &&
       ((isExamCourse && hasExamScore && examScoreNum < 59.5) ||
         (needsAutoExam && hasAutoExamScore && autoExamScoreNum < 59.5));
 
-    const isFailed = (!isSim && Boolean(subj.isFailed)) || autoFailedByExam;
+    const isFailed = (!isSim && Boolean(subj.isFailed)) || autoFailedByNoSignature || autoFailedByExam;
     const isGradeOnlyCard = !isFailed && (disablePointCalc || hasManualGrade);
 
     let progressLabel = null;
@@ -3655,6 +3671,7 @@ export default function App() {
       disablePointCalc,
       isGradeOnlyCard,
       hasManualGrade,
+      autoFailedByNoSignature,
       needsAutoExam,
       hasAutoExamScore,
       hasExamScore,
@@ -6670,7 +6687,9 @@ export default function App() {
                             <div className="flex flex-col gap-0.5 text-[11px] mt-1.5">
                               {st.isFailed ? (
                                 <span className="text-rose-500 font-semibold">
-                                  Nem teljesített tárgy • Nem számít az átlagba
+                                  {st.autoFailedByNoSignature
+                                    ? 'Nincs aláírás • Vizsgára nem bocsátható (újrafelvétel 1 év múlva)'
+                                    : 'Nem teljesített tárgy • Nem számít az átlagba'}
                                 </span>
                               ) : (
                                 <>
@@ -8912,7 +8931,7 @@ export default function App() {
               className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 sm:p-3 rounded-xl border transition ${rowBorderBg}`}
             >
               <div className={`min-w-0 flex-1 transition-opacity ${
-                (st.needsAutoExam || isDimmed) ? 'opacity-45 grayscale' : ''
+                (st.needsAutoExam || st.autoFailedByNoSignature || isDimmed) ? 'opacity-45 grayscale' : ''
               }`}>
                 <div className="flex items-center gap-1.5 flex-wrap">
                   <p className={`text-sm font-semibold break-words ${isDimmed ? textMuted : textStrong}`}>
@@ -8978,7 +8997,7 @@ export default function App() {
 
               <div className={`flex flex-wrap items-center justify-between sm:justify-end gap-2.5 sm:gap-2 shrink-0 pt-2.5 sm:pt-0 border-t sm:border-t-0 ${darkMode ? 'border-slate-700/60' : 'border-slate-200/80'}`}>
                 <div className={`flex items-center gap-2 transition-opacity ${
-                  (st.needsAutoExam || isDimmed) ? 'opacity-45 grayscale' : ''
+                  (st.needsAutoExam || st.autoFailedByNoSignature || isDimmed) ? 'opacity-45 grayscale' : ''
                 }`}>
                   <span className={`min-w-[4.75rem] text-right border rounded-lg px-2.5 py-1.5 text-xs sm:text-sm font-extrabold ${
                     darkMode
@@ -9350,7 +9369,49 @@ export default function App() {
                       </div>
                     </div>
 
-                    {st.needsAutoExam && (
+                    {st.autoFailedByNoSignature && (
+                      <div className={`p-4 sm:p-5 rounded-2xl border-2 space-y-2.5 ${
+                        darkMode
+                          ? 'bg-rose-950/45 border-rose-500/80 text-rose-100'
+                          : 'bg-rose-50 border-rose-400 text-rose-950'
+                      }`}>
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <span className="px-2.5 py-0.5 rounded-md text-xs font-extrabold uppercase tracking-wider bg-rose-600 text-white">
+                              NINCS ALÁÍRÁS
+                            </span>
+                            <span className="text-xs sm:text-sm font-extrabold">
+                              Vizsgára nem bocsátható • Megbuktam☹️
+                            </span>
+                          </div>
+                          {!st.attendanceAlairasPossible ? (
+                            <span className="text-xs font-bold text-rose-500">
+                              Jelenlét: {st.presentCount} / {st.totalClasses} (min. {st.minAttAlairas})
+                            </span>
+                          ) : (
+                            <span className="text-xs font-bold text-rose-500">
+                              Aláírás határ: {formatHu(activeSubject.alairasMin)} pont
+                            </span>
+                          )}
+                        </div>
+
+                        <p className={`text-xs sm:text-sm leading-relaxed font-semibold ${
+                          darkMode ? 'text-rose-200' : 'text-rose-900'
+                        }`}>
+                          {!st.attendanceAlairasPossible ? (
+                            <>
+                              A gyakorlati hiányzásaid száma meghaladta a megengedettet, ezért <strong>nincs aláírásod</strong>, így <strong>vizsgázni sem mehetsz el</strong> — a tárgyat <strong>újra fel kell venned egy évvel később</strong>.
+                            </>
+                          ) : (
+                            <>
+                              Minden ZH eredményed rögzítve lett, de a félévközi összpontszámod (<strong>{formatHu(st.regularOsszElert)} p</strong>) nem érte el az aláíráshoz szükséges <strong>{formatHu(activeSubject.alairasMin)} pontot</strong>. Mivel <strong>nincs aláírásod</strong>, <strong>vizsgázni sem mehetsz el</strong>, szóval a tárgyat <strong>újra fel kell venned egy évvel később</strong>.
+                            </>
+                          )}
+                        </p>
+                      </div>
+                    )}
+
+                    {st.needsAutoExam && !st.autoFailedByNoSignature && (
                       <div className={`p-4 rounded-2xl border-2 space-y-3 ${
                         darkMode
                           ? 'bg-amber-950/45 border-amber-600/80 text-amber-100'
@@ -9439,7 +9500,7 @@ export default function App() {
 
                     <div>
                       <div className="flex items-center justify-between gap-2 mb-3">
-                        <h3 className={`font-bold text-sm sm:text-base ${textStrong} ${st.needsAutoExam ? 'opacity-50' : ''}`}>
+                        <h3 className={`font-bold text-sm sm:text-base ${textStrong} ${(st.needsAutoExam || st.autoFailedByNoSignature) ? 'opacity-50' : ''}`}>
                           ZH-k (Zárthelyi dolgozatok)
                         </h3>
                         <button
@@ -9471,7 +9532,7 @@ export default function App() {
 
                     <div>
                       <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-                        <div className={st.needsAutoExam ? 'opacity-50' : ''}>
+                        <div className={(st.needsAutoExam || st.autoFailedByNoSignature) ? 'opacity-50' : ''}>
                           <h3 className={`font-bold text-sm sm:text-base ${textStrong}`}>Pluszpontok</h3>
                           <p className={`text-xs ${textMuted}`}>
                             Ebben a kategóriában maximum <strong>{BONUS_POINTS_CAP} pont</strong> számítható be az összpontszámba.
@@ -9498,7 +9559,7 @@ export default function App() {
 
                     <div className="space-y-4">
                       <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div className={st.needsAutoExam ? 'opacity-50' : ''}>
+                        <div className={(st.needsAutoExam || st.autoFailedByNoSignature) ? 'opacity-50' : ''}>
                           <h3 className={`font-bold text-sm sm:text-base ${textStrong}`}>Egyéb számonkérések / Gyűjtők</h3>
                           <p className={`text-xs ${textMuted}`}>
                             Hozz létre saját pontgyűjtőket (pl. Órai munka, Beadandó) opcionális ponthatárral.
@@ -9529,7 +9590,7 @@ export default function App() {
                           <div
                             key={bucket.id}
                             className={`rounded-2xl border p-3.5 sm:p-4 space-y-3 transition-opacity ${bgSubCard} ${
-                              st.needsAutoExam ? 'opacity-50' : ''
+                              (st.needsAutoExam || st.autoFailedByNoSignature) ? 'opacity-50' : ''
                             }`}
                           >
                             <div className="flex flex-wrap items-center justify-between gap-2">
@@ -9589,7 +9650,7 @@ export default function App() {
 
                       {st.unassignedEgyebEval.processed.length > 0 && (
                         <div className={`rounded-2xl border p-3.5 sm:p-4 space-y-3 transition-opacity ${bgSubCard} ${
-                          st.needsAutoExam ? 'opacity-50' : ''
+                          (st.needsAutoExam || st.autoFailedByNoSignature) ? 'opacity-50' : ''
                         }`}>
                           <h4 className={`font-bold text-sm ${textStrong}`}>Besorolatlan egyéb tételek</h4>
                           <div className="space-y-2.5">
@@ -9707,6 +9768,10 @@ export default function App() {
                     {activeSubject.isFailed ? (
                       <span className="text-rose-500 font-bold">
                         Ez a tárgy jelenleg bukottként van jelölve (nem számít az átlagba).
+                      </span>
+                    ) : st.autoFailedByNoSignature ? (
+                      <span className="text-rose-500 font-bold">
+                        Aláírás hiánya miatt automatikusan „Megbuktam☹️” állapotban van (nem számít az átlagba).
                       </span>
                     ) : (
                       <span className={textMuted}>

@@ -38,6 +38,13 @@ const UPDATE_CHECK_THROTTLE_MS = 30 * 1000; // 30 mp aktivitás-ellenőrzési k�
 // ============================================================================
 const APP_RELEASES = [
   {
+    version: 'v1.21.2',
+    date: '2026. 11. 16.',
+    changes: [
+      'Tárgysablonok bővítése: adminként történő sablon-közzétételkor a ZH-k maximum pontszámai is mentésre és betöltésre kerülnek a sablonban (az elért pontok továbbra is üresen maradnak)'
+    ]
+  },
+  {
     version: 'v1.20.1',
     date: '2026. 11. 16.',
     changes: [
@@ -1523,7 +1530,9 @@ export default function App() {
             category: a.category,
             title: a.title,
             date: a.date || '',
-            max: null,
+            max: a.category === 'ZH' && a.max !== undefined && a.max !== null && a.max !== ''
+              ? Number(a.max)
+              : null,
             achieved: null,
             ...(a.category === 'ZH' ? { bonusPoints: null } : {}),
             ...(a.category === 'Egyeb'
@@ -1991,7 +2000,9 @@ export default function App() {
       category: a.category,
       title: a.title,
       date: a.date || '',
-      max: null,
+      max: a.category === 'ZH' && a.max !== undefined && a.max !== null && a.max !== ''
+        ? Number(a.max)
+        : null,
       achieved: null,
       ...(a.category === 'ZH' ? { bonusPoints: null } : {}),
       ...(a.category === 'Egyeb' ? { bucketId: a.bucketId || null } : {})
@@ -2090,7 +2101,9 @@ export default function App() {
       category: a.category,
       title: a.title,
       date: a.date || '',
-      max: null,
+      max: a.category === 'ZH' && a.max !== undefined && a.max !== null && a.max !== ''
+        ? Number(a.max)
+        : null,
       achieved: null,
       ...(a.category === 'ZH' ? { bonusPoints: null } : {}),
       ...(a.category === 'Egyeb'
@@ -4508,11 +4521,11 @@ export default function App() {
                 } else if (st.progressStage === 'offered') {
                   progressBadgeClass = darkMode
                     ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                    : 'bg-emerald-100 text-emerald-800 border-emerald-300';
+                    : 'bg-emerald-100 text-emerald-800 border border-emerald-300';
                 } else if (st.progressStage === 'exam') {
                   progressBadgeClass = darkMode
                     ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
-                    : 'bg-blue-100 text-blue-800 border-blue-300';
+                    : 'bg-blue-100 text-blue-800 border border-blue-300';
                 }
 
                 const cardSurfaceClass = st.isFailed
@@ -4914,6 +4927,7 @@ export default function App() {
           </div>
         </>
       )}
+
       {/* ========================================================= */}
       {/* EGYÉNI TÁRGYRENDEZŐ MODAL (DRAG & DROP + NYILAK)           */}
       {/* ========================================================= */}
@@ -5656,7 +5670,7 @@ export default function App() {
                       <input
                         type="text"
                         required
-                        placeholder="Pl. v1.21.0"
+                        placeholder="Pl. v1.22.0"
                         value={newReleaseVersion}
                         onChange={e => setNewReleaseVersion(e.target.value)}
                         className={`w-full border rounded-lg px-3 py-1.5 font-semibold focus:outline-none ${inputStyle}`}
@@ -7521,7 +7535,11 @@ export default function App() {
                     ) : (
                       <div className="space-y-2.5">
                         {filteredTemplates.map(tpl => {
-                          const zhCount = (tpl.assessments || []).filter(a => a.category === 'ZH').length;
+                          const zhTemplates = (tpl.assessments || []).filter(a => a.category === 'ZH');
+                          const zhCount = zhTemplates.length;
+                          const zhMaxList = zhTemplates
+                            .map(z => z.max)
+                            .filter(m => m !== undefined && m !== null && m !== '');
                           const otherCount = (tpl.assessments || []).filter(a => a.category !== 'ZH').length;
                           const bucketCount = (tpl.customBuckets || []).length;
                           const isJustAdded = Boolean(addedTemplateIds[tpl.id]);
@@ -7575,9 +7593,11 @@ export default function App() {
                                   Aláírás: {formatHu(tpl.alairasMin)} p • Megajánlott: {formatHu(tpl.megajanlottMin)} p (ZH min: {formatHu(tpl.megajanlottMinZH || 0)} p) • Jelenlét: {tpl.minAttendanceAlairas}/{tpl.totalClasses}
                                 </p>
                                 <p className={`text-[11px] mt-0.5 ${textMuted}`}>
-                                  Előre beállított tételek: <strong>{zhCount} ZH</strong>
+                                  Előre beállított tételek:{' '}
+                                  <strong>{zhCount} ZH</strong>
+                                  {zhMaxList.length > 0 && ` (${zhMaxList.map(m => `${formatHu(m)} p`).join(', ')})`}
                                   {otherCount > 0 && `, ${otherCount} egyéb tétel`}
-                                  {bucketCount > 0 && `, ${bucketCount} gyűjtő`} (üres pontértékekkel)
+                                  {bucketCount > 0 && `, ${bucketCount} gyűjtő`} (üres elért pontokkal)
                                 </p>
                               </div>
 

@@ -632,6 +632,14 @@ function buildTemplatesForMajor(majorId) {
 
 const APP_RELEASES = [
   {
+    version: 'v1.32.0',
+    date: '2026. 11. 16.',
+    changes: [
+      'Sikeres vizsga felülírja a manuálisan vagy korábban beállított „Megbuktam☹️” állapotot: ha egy vizsgás tárgyból a vizsgapontszám eléri az 59,5%-ot (59,5 pontot), a kártya nem lesz kipirosozva a dashboardon, a félévközi ZH-k/pontgyűjtők szürkén maradnak, és a kártya jobb felső sarkába felkerül a nagy „Vizsgajegy” jelvény',
+      'Vizsgaeredmény rögzítésekor automatikus bukott-jelölés törlés az adatbázisban is, hogy a kártya állapota mindig összhangban maradjon a vizsgaeredménnyel'
+    ]
+  },
+  {
     version: 'v1.31.0',
     date: '2026. 11. 16.',
     changes: [
@@ -3619,13 +3627,22 @@ export default function App() {
     const effectiveOfferMin = (isExamCourse || needsAutoExam) ? 59.5 : (megajanlottMin || 60);
     const nextOfferedMilestone = getNextOfferedGradeMilestone(osszElert, effectiveOfferMin);
 
+    const passedByExam =
+      !disablePointCalc &&
+      !hasManualGrade &&
+      ((isExamCourse && hasExamScore && examScoreNum >= 59.5) ||
+        (needsAutoExam && hasAutoExamScore && autoExamScoreNum >= 59.5));
+
     const autoFailedByExam =
       !disablePointCalc &&
       !hasManualGrade &&
       ((isExamCourse && hasExamScore && examScoreNum < 59.5) ||
         (needsAutoExam && hasAutoExamScore && autoExamScoreNum < 59.5));
 
-    const isFailed = (!isSim && Boolean(subj.isFailed)) || autoFailedByNoSignature || autoFailedByExam;
+    const isFailed =
+      ((!isSim && Boolean(subj.isFailed)) && !passedByExam) ||
+      autoFailedByNoSignature ||
+      autoFailedByExam;
     const isGradeOnlyCard = !isFailed && (disablePointCalc || hasManualGrade);
 
     let progressLabel = null;
@@ -4573,9 +4590,13 @@ export default function App() {
           [autoExamItemId]: parsedAchieved === null ? undefined : parsedAchieved
         }));
       } else {
-        await updateDoc(doc(db, 'users', user.uid, 'subjects', activeSubject.id), {
+        const updatePayload = {
           autoExamScore: parsedAchieved
-        });
+        };
+        if (parsedAchieved !== null && parsedAchieved >= 59.5 && activeSubject.isFailed) {
+          updatePayload.isFailed = false;
+        }
+        await updateDoc(doc(db, 'users', user.uid, 'subjects', activeSubject.id), updatePayload);
       }
       setItemModal(null);
       return;
@@ -4634,9 +4655,18 @@ export default function App() {
       ? existing.map(a => (a.id === itemId ? formattedItem : a))
       : [...existing, formattedItem];
 
-    await updateDoc(doc(db, 'users', user.uid, 'subjects', activeSubject.id), {
+    const itemUpdatePayload = {
       assessments: updated
-    });
+    };
+    if (
+      activeSubject.courseKind === 'exam' &&
+      parsedAchieved !== null &&
+      parsedAchieved >= 59.5 &&
+      activeSubject.isFailed
+    ) {
+      itemUpdatePayload.isFailed = false;
+    }
+    await updateDoc(doc(db, 'users', user.uid, 'subjects', activeSubject.id), itemUpdatePayload);
     setItemModal(null);
   };
 

@@ -10,7 +10,7 @@ import {
   History, Tag, BookOpen, ChevronLeft, ChevronRight,
   MessageSquare, Mail, ExternalLink, User, GraduationCap,
   Menu, Palette, ChevronDown, SlidersHorizontal, RefreshCw, Lightbulb, CheckCircle2,
-  LayoutList, ArrowUpDown, GripVertical, ArrowUp, ArrowDown
+  LayoutList, ArrowUpDown, GripVertical, ArrowUp, ArrowDown, Calculator
 } from 'lucide-react';
 import { auth, googleProvider, db } from './firebase';
 
@@ -37,6 +37,15 @@ const UPDATE_CHECK_THROTTLE_MS = 30 * 1000; // 30 mp aktivitás-ellenőrzési k�
 // VERZIÓKÖVETÉS (CHANGELOG) — Új frissítésnél írd a legújabb verziót legfelülre!
 // ============================================================================
 const APP_RELEASES = [
+  {
+    version: 'v1.22.0',
+    date: '2026. 11. 16.',
+    changes: [
+      'Szimulátor mód bővítése: bekapcsolt szimulátor módban a tárgyak beállításaiban kézzel kiválasztható egy előre meghatározott végleges jegy (2–5) is, ami az adatbázis módosítása nélkül azonnal frissíti az átlagokat és a kreditindexet',
+      'Teljes visszaállítás a szimulátor sávból: a felső sárga sáv „Visszaállítás” gombja mostantól minden szimulált pontszámot és jegyet visszaállít a szimulátor bekapcsolása előtti állapotra, és automatikusan ki is kapcsolja a szimulátor módot',
+      'Új lebegő Átlagszámoló gomb a JOKER ZH és a „+” gomb között: megnyit egy külön tervezőfelületet, ahol a félév tárgyaihoz 1–5-ös skálán állítgatva élőben számolhatod a súlyozott átlagot és a kreditindexet'
+    ]
+  },
   {
     version: 'v1.21.2',
     date: '2026. 11. 16.',
@@ -308,16 +317,16 @@ const TUTORIAL_SLIDES = [
   {
     id: 'joker_simulator',
     shortLabel: '7. Joker & Szim.',
-    badge: '7 / 9 • JOKER ZH & Szimulátor mód',
-    title: 'ZH-javítás Jokerrel és „Mi lenne, ha?” tervezés',
+    badge: '7 / 9 • JOKER ZH, Szimulátor & Átlagszámoló',
+    title: 'ZH-javítás Jokerrel, Szimulátor mód és Átlagszámoló',
     description:
-      'Két különleges tervezőeszköz segít a félév végi hajrában, hogy pontosan lásd a lehetőségeidet.',
+      'Három különleges tervezőeszköz segít a félév végi hajrában, hogy pontosan lásd a lehetőségeidet.',
     steps: [
-      'JOKER ZH (lila lebegő gomb a féléven belül): válassz ki egy tárgyat és egy ZH-t, írd be az újraírt pontszámot — az app megőrzi az eredeti eredményt is.',
-      'Szimulátor mód (Menü -> Szimulátor mód): bekapcsolás után a ceruza ikonnal tét nélkül megadhatsz tervezett pontszámokat a még megíratlan ZH-khoz.',
-      'Szimulátor módban semmi nem íródik felül az adatbázisban; a felső sárga sáv „Visszaállítás” gombjával bármikor visszatérhetsz a valós adatokhoz.'
+      'JOKER ZH (lila lebegő gomb): válassz ki egy tárgyat és egy ZH-t, írd be az újraírt pontszámot — az app megőrzi az eredeti eredményt is.',
+      'Szimulátor mód (Menü -> Szimulátor mód): bekapcsolás után tét nélkül megadhatsz tervezett pontszámokat a ZH-khoz, vagy a tárgyak Beállításaiban közvetlenül kiválaszthatsz egy végleges jegyet is; a felső sárga sáv „Visszaállítás” gombja mindent visszaállít és kikapcsolja a módot.',
+      'Átlagszámoló (cián lebegő gomb a + felett): egy külön menüben a félév tárgyaihoz 1–5-ös skálán húzogatva élőben számolhatod a súlyozott átlagot és a KKI-t.'
     ],
-    tip: 'Vizsgaidőszak előtt a Szimulátor móddal másodpercek alatt kiszámolhatod, hány pontot kell elérned az utolsó ZH-n a négyeshez vagy ötöshöz.'
+    tip: 'Vizsgaidőszak előtt a Szimulátor móddal és az Átlagszámolóval másodpercek alatt kiszámolhatod, milyen jegyek kellenek az ösztöndíjas szinthez.'
   },
   {
     id: 'failed_attendance_pwa',
@@ -771,33 +780,27 @@ function TutorialSlidePreview({ slideId, darkMode }) {
       <div className={`rounded-2xl border p-3.5 sm:p-4 shadow-md space-y-3 ${cardBg}`}>
         <div className="flex flex-wrap items-center gap-2">
           <span className="px-3 py-1 rounded-full text-xs font-bold bg-violet-600 text-white inline-flex items-center gap-1.5 shadow-md">
-            <JokerIcon className="w-3.5 h-3.5" /> Lebegő JOKER ZH
+            <JokerIcon className="w-3.5 h-3.5" /> JOKER ZH
+          </span>
+          <span className="px-3 py-1 rounded-full text-xs font-bold bg-cyan-500 text-slate-950 inline-flex items-center gap-1.5 shadow-md">
+            <Calculator className="w-3.5 h-3.5" /> Átlagszámoló
           </span>
           <span className="px-3 py-1 rounded-lg text-xs font-bold bg-amber-400 text-slate-950 inline-flex items-center gap-1.5">
             <FlaskConical className="w-3.5 h-3.5" /> Szimulátor: BE
           </span>
         </div>
         <div className={`p-3 rounded-xl border space-y-2 ${
-          darkMode ? 'border-violet-500/60 bg-violet-950/30' : 'border-violet-300 bg-violet-50/60'
+          darkMode ? 'border-amber-400/50 bg-amber-400/10' : 'border-amber-300 bg-amber-50/70'
         }`}>
           <div className="flex items-center justify-between">
-            <span className={`text-xs font-bold ${strong}`}>1. ZH</span>
-            <div className="flex items-center gap-1.5">
-              <span className={`px-2.5 py-0.5 rounded border text-xs font-extrabold ${cardBg} ${strong}`}>25,5</span>
-              <span className={`text-[11px] ${muted}`}>/ 30 p</span>
-              <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-emerald-500/20 text-emerald-500">85%</span>
-            </div>
-          </div>
-          <div className={`inline-flex flex-wrap items-center gap-1.5 px-2 py-1 rounded-lg border text-[10px] font-semibold ${
-            darkMode
-              ? 'bg-violet-600/25 text-violet-200 border-violet-500/50'
-              : 'bg-violet-100 text-violet-900 border-violet-300'
-          }`}>
-            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-violet-600 text-white font-extrabold">
-              <JokerIcon className="w-2.5 h-2.5" /> JOKER ZH
+            <span className={`text-xs font-bold ${strong}`}>Szimulált jegy (Beállítások)</span>
+            <span className="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-emerald-500 text-white">
+              Jegy: 5 (Szimulált)
             </span>
-            <span>Újraírva Jokerrel • Eredeti eredmény: <strong>11 p</strong></span>
           </div>
+          <p className={`text-[11px] ${muted}`}>
+            A felső sárga sáv „Visszaállítás” gombja minden szimulált pontot és jegyet töröl, és kikapcsolja a szimulátor módot.
+          </p>
         </div>
       </div>
     );
@@ -1061,8 +1064,14 @@ export default function App() {
   const [newReleaseChangesText, setNewReleaseChangesText] = useState('');
   const [isSavingRelease, setIsSavingRelease] = useState(false);
 
+  // Szimulátor mód állapotok (pontszámok + tárgyak beállításaiban szimulált előre meghatározott jegyek)
   const [isSim, setIsSim] = useState(false);
   const [simScores, setSimScores] = useState({});
+  const [simManualGrades, setSimManualGrades] = useState({});
+
+  // Átlagszámoló (1–5 skálás tervező) modal állapotok
+  const [isAvgCalcOpen, setIsAvgCalcOpen] = useState(false);
+  const [avgCalcGrades, setAvgCalcGrades] = useState({});
 
   const [activeSubjectId, setActiveSubjectId] = useState(null);
   const [detailTab, setDetailTab] = useState('points');
@@ -1105,6 +1114,13 @@ export default function App() {
   const initialKnownVersionRef = useRef(APP_RELEASES[0]?.version || null);
   const lastVersionCheckAtRef = useRef(0);
   const isCheckingVersionRef = useRef(false);
+
+  const handleResetAndExitSimulator = () => {
+    setSimScores({});
+    setSimManualGrades({});
+    setIsSim(false);
+    showToast('Szimulátor visszaállítva a valós adatokra és kikapcsolva.');
+  };
 
   useEffect(() => {
     if (typeof document === 'undefined') return;
@@ -2179,6 +2195,14 @@ export default function App() {
     return assessment.achieved;
   };
 
+  // Szimulált vagy valós előre meghatározott jegy lekérése egy tárgyhoz
+  const getEffectiveManualGrade = (subj) => {
+    if (isSim && Object.prototype.hasOwnProperty.call(simManualGrades, subj.id)) {
+      return simManualGrades[subj.id];
+    }
+    return subj.manualGrade || '';
+  };
+
   const calcStats = (subj) => {
     const isExamCourse = subj.courseKind === 'exam';
     let zhElert = 0, zhMax = 0;
@@ -2309,9 +2333,18 @@ export default function App() {
     const effectiveOfferMin = (isExamCourse || needsAutoExam) ? 59.5 : (megajanlottMin || 60);
     const nextOfferedMilestone = getNextOfferedGradeMilestone(osszElert, effectiveOfferMin);
 
+    const effectiveManualGrade = getEffectiveManualGrade(subj);
+    const hasManualGrade = Boolean(effectiveManualGrade && !isNaN(parseInt(effectiveManualGrade, 10)));
+    const isSimulatedGrade = Boolean(
+      isSim &&
+      Object.prototype.hasOwnProperty.call(simManualGrades, subj.id) &&
+      simManualGrades[subj.id] !== ''
+    );
+
     const autoFailedByExam =
-      (isExamCourse && hasExamScore && examScoreNum < 59.5) ||
-      (needsAutoExam && hasAutoExamScore && autoExamScoreNum < 59.5);
+      !hasManualGrade &&
+      ((isExamCourse && hasExamScore && examScoreNum < 59.5) ||
+        (needsAutoExam && hasAutoExamScore && autoExamScoreNum < 59.5));
 
     const isFailed = (!isSim && Boolean(subj.isFailed)) || autoFailedByExam;
 
@@ -2323,9 +2356,9 @@ export default function App() {
       projectedGrade = null;
       progressLabel = 'Megbuktam☹️';
       progressStage = 'failed';
-    } else if (!isSim && subj.manualGrade && !isNaN(parseInt(subj.manualGrade, 10))) {
-      projectedGrade = parseInt(subj.manualGrade, 10);
-      progressLabel = `Jegy: ${projectedGrade}`;
+    } else if (hasManualGrade) {
+      projectedGrade = parseInt(effectiveManualGrade, 10);
+      progressLabel = isSimulatedGrade ? `Jegy: ${projectedGrade} (Szim.)` : `Jegy: ${projectedGrade}`;
       progressStage = 'offered';
     } else if (isExamCourse) {
       if (hasExamScore && examScoreNum >= 59.5) {
@@ -2363,6 +2396,7 @@ export default function App() {
       hasAutoExamScore,
       hasExamScore,
       isFailed,
+      isSimulatedGrade,
       zhElert: +zhElert.toFixed(2), zhMax,
       pluszElert, pluszMax,
       rawPluszElert: pluszEval.rawElert,
@@ -2397,7 +2431,7 @@ export default function App() {
       map[subj.id] = calcStats(subj);
     });
     return map;
-  }, [subjects, isSim, simScores]);
+  }, [subjects, isSim, simScores, simManualGrades]);
 
   const calcSemesterSummary = (semName) => {
     const list = subjects.filter(s => s.semester === semName);
@@ -2578,6 +2612,58 @@ export default function App() {
 
     return list;
   }, [subjects, selectedSemester, sortMode, subjectStatsMap, customOrderMap]);
+
+  // Átlagszámoló (1–5 skálás tervező) élő számítása
+  const handleOpenAvgCalcModal = () => {
+    const initialMap = {};
+    semesterSubjects.forEach(subj => {
+      const st = subjectStatsMap[subj.id] || calcStats(subj);
+      if (st.isFailed) {
+        initialMap[subj.id] = 1;
+      } else if (st.projectedGrade && st.projectedGrade >= 2 && st.projectedGrade <= 5) {
+        initialMap[subj.id] = st.projectedGrade;
+      } else {
+        initialMap[subj.id] = 3;
+      }
+    });
+    setAvgCalcGrades(initialMap);
+    setIsAvgCalcOpen(true);
+  };
+
+  const avgCalcSummary = useMemo(() => {
+    let totalTakenCredits = 0;
+    let completedCredits = 0;
+    let weightedSum = 0;
+    let countedSubjects = 0;
+
+    semesterSubjects.forEach(subj => {
+      const cred = Number(subj.credits) || 0;
+      const g = avgCalcGrades[subj.id];
+      if (g === null || g === undefined || g === 0) {
+        return; // Kihagyva a számításból
+      }
+      const gradeNum = Number(g);
+      totalTakenCredits += cred;
+      countedSubjects++;
+      if (gradeNum >= 2) {
+        completedCredits += cred;
+        weightedSum += cred * gradeNum;
+      }
+    });
+
+    const weightedAvg = completedCredits > 0 ? weightedSum / completedCredits : 0;
+    const ki = weightedSum / 30;
+    const kki = totalTakenCredits > 0 ? ki * (completedCredits / totalTakenCredits) : 0;
+
+    return {
+      totalTakenCredits,
+      completedCredits,
+      countedSubjects,
+      weightedAvg,
+      ki,
+      kki
+    };
+  }, [semesterSubjects, avgCalcGrades]);
 
   const handleSelectSortMode = (nextMode) => {
     setSortMode(nextMode);
@@ -2879,6 +2965,25 @@ export default function App() {
     e.preventDefault();
     if (!editingSubject.name.trim()) return;
     const id = editingSubject.id || `subj_${Date.now()}`;
+
+    // Szimulátor módban meglévő tárgynál a kiválasztott végleges jegyet szimulált jegyként tároljuk (adatbázisba nem ment)
+    if (isSim && editingSubject.id) {
+      const simGradeVal = editingSubject.manualGrade || '';
+      setSimManualGrades(prev => ({
+        ...prev,
+        [editingSubject.id]: simGradeVal
+      }));
+      setIsSubjectModalOpen(false);
+      setEditingSubject(null);
+      setSubjectGazdinfoChoice(null);
+      showToast(
+        simGradeVal
+          ? `Szimulált jegy (${simGradeVal}) beállítva: ${editingSubject.name}`
+          : `Szimulált jegy törölve (pontok alapján számol): ${editingSubject.name}`
+      );
+      return;
+    }
+
     const isExam = editingSubject.courseKind === 'exam';
     const totalClasses = isExam ? 0 : Math.max(0, Number(editingSubject.totalClasses) || 0);
     const sessions = isExam ? [] : createDefaultSessions(totalClasses, editingSubject.attendanceSessions || []);
@@ -2960,7 +3065,8 @@ export default function App() {
     isChangelogOpen ||
     isJokerModalOpen ||
     semesterToDelete ||
-    isCustomSortModalOpen
+    isCustomSortModalOpen ||
+    isAvgCalcOpen
   );
 
   useEffect(() => {
@@ -3432,7 +3538,11 @@ export default function App() {
               <button
                 type="button"
                 onClick={() => {
-                  setIsSim(prev => !prev);
+                  if (isSim) {
+                    handleResetAndExitSimulator();
+                  } else {
+                    setIsSim(true);
+                  }
                   setIsMenuOpen(false);
                 }}
                 className={`w-full px-3 py-2.5 rounded-xl text-xs font-bold border flex items-center justify-between transition cursor-pointer ${
@@ -3674,8 +3784,8 @@ export default function App() {
 
           {isSim && (
             <div className="mt-3 bg-amber-400 text-slate-950 text-xs font-medium px-3 sm:px-4 py-1.5 text-center">
-              <strong>„Mi lenne, ha?” szimulációs mód aktív:</strong> Tervezett pontszámokkal számol az app (nem ment az adatbázisba).
-              <button onClick={() => setSimScores({})} className="underline ml-2 font-bold cursor-pointer">
+              <strong>„Mi lenne, ha?” szimulációs mód aktív:</strong> Tervezett pontszámokkal és szimulált jegyekkel számol az app (nem ment az adatbázisba).
+              <button onClick={handleResetAndExitSimulator} className="underline ml-2 font-bold cursor-pointer">
                 Visszaállítás
               </button>
             </div>
@@ -4329,8 +4439,8 @@ export default function App() {
 
             {isSim && (
               <div className="bg-amber-400 text-slate-950 text-xs font-medium px-3 sm:px-4 py-1.5 text-center">
-                <strong>„Mi lenne, ha?” szimulációs mód aktív:</strong> Módosíts tervezett pontszámokat a tételek melletti ceruza ikonnal! Ilyenkor az app nem ment az adatbázisba.
-                <button onClick={() => setSimScores({})} className="underline ml-2 font-bold cursor-pointer">
+                <strong>„Mi lenne, ha?” szimulációs mód aktív:</strong> Módosítsd a pontszámokat vagy válassz előre meghatározott jegyet a tárgyak Beállításaiban (nem ment az adatbázisba).
+                <button onClick={handleResetAndExitSimulator} className="underline ml-2 font-bold cursor-pointer">
                   Visszaállítás
                 </button>
               </div>
@@ -4505,7 +4615,7 @@ export default function App() {
                 let barColorClass = 'bg-yellow-400';
                 if (st.isFailed) {
                   barColorClass = 'bg-rose-500';
-                } else if (st.megajanlottTeljesul) {
+                } else if (st.megajanlottTeljesul || st.progressStage === 'offered') {
                   barColorClass = 'bg-emerald-500';
                 } else if (st.alairasTeljesul) {
                   barColorClass = 'bg-blue-500';
@@ -4899,7 +5009,10 @@ export default function App() {
             {appFooter}
           </main>
 
-          {/* Féléves dashboard lebegő (floating) glowing gombok: felül kicsi Joker ZH, alul nagy + gomb */}
+          {/* Féléves dashboard lebegő (floating) glowing gombok:
+              1. Felül: lila JOKER ZH gomb
+              2. Középen: cián/kék Számológép (Átlagszámoló) gomb
+              3. Alul: nagy sárga + gomb */}
           <div className="fixed bottom-5 right-5 sm:bottom-7 sm:right-7 z-30 flex flex-col items-end gap-3">
             <button
               type="button"
@@ -4917,6 +5030,17 @@ export default function App() {
 
             <button
               type="button"
+              onClick={handleOpenAvgCalcModal}
+              disabled={semesterSubjects.length === 0}
+              title="Átlagszámoló (1–5 skálás tervező a félév tárgyaival)"
+              aria-label="Átlagszámoló"
+              className="w-12 h-12 sm:w-[52px] sm:h-[52px] rounded-full bg-cyan-400 hover:bg-cyan-300 disabled:opacity-45 disabled:cursor-not-allowed text-slate-950 shadow-[0_0_22px_rgba(34,211,238,0.8)] hover:shadow-[0_0_30px_rgba(34,211,238,0.98)] flex items-center justify-center transition transform hover:scale-105 active:scale-95 cursor-pointer"
+            >
+              <Calculator className="w-6 h-6 stroke-[2.3]" />
+            </button>
+
+            <button
+              type="button"
               onClick={handleOpenCreateNewSubjectModal}
               title="Új tantárgy felvétele"
               aria-label="Új tantárgy felvétele"
@@ -4926,6 +5050,244 @@ export default function App() {
             </button>
           </div>
         </>
+      )}
+
+      {/* ========================================================= */}
+      {/* ÁTLAGSZÁMOLÓ MODAL (1–5 SKÁLÁS TERVEZŐ)                    */}
+      {/* ========================================================= */}
+      {isAvgCalcOpen && (
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-2.5 sm:p-4 overscroll-none">
+          <div className={`rounded-2xl max-w-xl w-full max-h-[92dvh] flex flex-col shadow-2xl overflow-hidden border-2 border-cyan-400/70 ${bgCard}`}>
+            <div className="px-4 sm:px-6 py-3.5 sm:py-4 bg-slate-900 text-white flex justify-between items-center border-b border-slate-800 shrink-0">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-9 h-9 rounded-xl bg-cyan-400 text-slate-950 flex items-center justify-center shrink-0">
+                  <Calculator className="w-5 h-5" />
+                </div>
+                <div className="min-w-0">
+                  <h2 className="font-extrabold text-sm sm:text-base leading-tight">Átlagszámoló (1–5 skála)</h2>
+                  <p className="text-[11px] text-cyan-300 truncate">{formatSemesterLabel(selectedSemester)}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsAvgCalcOpen(false)}
+                className="text-slate-400 hover:text-white p-1.5 cursor-pointer shrink-0"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Élő összesítő kártyák a tetején */}
+            <div className={`px-4 sm:px-6 py-3.5 border-b shrink-0 ${
+              darkMode ? 'bg-slate-900/90 border-slate-800' : 'bg-cyan-50/70 border-slate-200'
+            }`}>
+              <div className="grid grid-cols-3 gap-2 text-center">
+                <div className={`p-2.5 rounded-xl border ${bgCard}`}>
+                  <span className={`text-[10px] uppercase font-bold block ${textMuted}`}>Súlyozott átlag</span>
+                  <strong className={`text-lg sm:text-xl font-extrabold ${
+                    avgCalcSummary.weightedAvg >= reclassificationThreshold ? 'text-emerald-500' : 'text-amber-500'
+                  }`}>
+                    {formatHu(avgCalcSummary.weightedAvg, 2)}
+                  </strong>
+                </div>
+                <div className={`p-2.5 rounded-xl border ${bgCard}`}>
+                  <span className={`text-[10px] uppercase font-bold block ${textMuted}`}>KI / KKI</span>
+                  <strong className={`text-lg sm:text-xl font-extrabold ${textStrong}`}>
+                    {formatHu(avgCalcSummary.ki, 2)}{' '}
+                    <span className={`text-xs font-semibold ${textMuted}`}>({formatHu(avgCalcSummary.kki, 2)})</span>
+                  </strong>
+                </div>
+                <div className={`p-2.5 rounded-xl border ${bgCard}`}>
+                  <span className={`text-[10px] uppercase font-bold block ${textMuted}`}>Teljesített kr.</span>
+                  <strong className={`text-lg sm:text-xl font-extrabold ${textStrong}`}>
+                    {avgCalcSummary.completedCredits}{' '}
+                    <span className={`text-xs font-semibold ${textMuted}`}>/ {avgCalcSummary.totalTakenCredits}</span>
+                  </strong>
+                </div>
+              </div>
+
+              {/* Gyors beállító gombok */}
+              <div className="flex flex-wrap items-center justify-between gap-1.5 mt-2.5">
+                <span className={`text-[11px] font-semibold ${textMuted}`}>Gyors kitöltés:</span>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {[2, 3, 4, 5].map(presetGrade => (
+                    <button
+                      key={presetGrade}
+                      type="button"
+                      onClick={() => {
+                        const allSet = {};
+                        semesterSubjects.forEach(s => {
+                          allSet[s.id] = presetGrade;
+                        });
+                        setAvgCalcGrades(allSet);
+                      }}
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition cursor-pointer ${
+                        darkMode
+                          ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
+                          : 'bg-white hover:bg-cyan-100 text-slate-800 border-slate-200'
+                      }`}
+                    >
+                      Mind {presetGrade}-es
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={handleOpenAvgCalcModal}
+                    title="Visszaállítás a jelenlegi állásra"
+                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border inline-flex items-center gap-1 transition cursor-pointer ${
+                      darkMode
+                        ? 'bg-slate-800 hover:bg-slate-700 text-cyan-400 border-slate-700'
+                        : 'bg-white hover:bg-slate-100 text-cyan-700 border-slate-200'
+                    }`}
+                  >
+                    <RotateCcw className="w-3 h-3" /> Alaphelyzet
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Tantárgyak listája 1–5 skálával */}
+            <div className="p-4 sm:p-6 overflow-y-auto overscroll-contain space-y-3 flex-1 min-h-0">
+              {semesterSubjects.map(subj => {
+                const currentVal = avgCalcGrades[subj.id] ?? 3;
+                const isExcluded = currentVal === 0;
+                const isFailGrade = currentVal === 1;
+
+                const gradeLabels = {
+                  0: 'Kihagyva',
+                  1: '1 (Elégtelen)',
+                  2: '2 (Elégséges)',
+                  3: '3 (Közepes)',
+                  4: '4 (Jó)',
+                  5: '5 (Jeles)'
+                };
+
+                return (
+                  <div
+                    key={subj.id}
+                    className={`p-3.5 rounded-xl border transition space-y-2.5 ${
+                      isExcluded
+                        ? darkMode
+                          ? 'bg-slate-900/40 border-slate-800 opacity-55'
+                          : 'bg-slate-100/80 border-slate-200 opacity-60'
+                        : isFailGrade
+                          ? darkMode
+                            ? 'bg-rose-950/25 border-rose-500/45'
+                            : 'bg-rose-50/80 border-rose-300'
+                          : bgSubCard
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-xs font-bold text-amber-500">{subj.credits} kredit</span>
+                          <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${
+                            darkMode ? 'bg-slate-800 text-slate-300' : 'bg-slate-200 text-slate-700'
+                          }`}>
+                            {(subj.courseType || 'mandatory') === 'elective' ? 'Szab. vál.' : 'Kötelező'}
+                          </span>
+                        </div>
+                        <p className={`text-sm font-bold leading-snug mt-0.5 ${textStrong}`}>{subj.name}</p>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <span className={`px-2.5 py-1 rounded-full text-xs font-extrabold ${
+                          isExcluded
+                            ? darkMode ? 'bg-slate-800 text-slate-400' : 'bg-slate-200 text-slate-600'
+                            : isFailGrade
+                              ? 'bg-rose-500 text-white'
+                              : 'bg-cyan-400 text-slate-950'
+                        }`}>
+                          {gradeLabels[currentVal]}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* 1–5 csúszka */}
+                    <div className="space-y-1.5">
+                      <div className="flex items-center gap-3">
+                        <span className={`text-xs font-extrabold w-3 text-center ${textMuted}`}>1</span>
+                        <input
+                          type="range"
+                          min="1"
+                          max="5"
+                          step="1"
+                          disabled={isExcluded}
+                          value={isExcluded ? 3 : currentVal}
+                          onChange={(e) => {
+                            const nextVal = Number(e.target.value);
+                            setAvgCalcGrades(prev => ({ ...prev, [subj.id]: nextVal }));
+                          }}
+                          className="w-full accent-cyan-400 cursor-pointer disabled:opacity-40"
+                        />
+                        <span className={`text-xs font-extrabold w-3 text-center ${textMuted}`}>5</span>
+                      </div>
+
+                      {/* 1–5 közvetlen gombok + Kihagyva kapcsoló */}
+                      <div className="grid grid-cols-6 gap-1">
+                        {[1, 2, 3, 4, 5].map(g => {
+                          const selected = currentVal === g;
+                          return (
+                            <button
+                              key={g}
+                              type="button"
+                              onClick={() => setAvgCalcGrades(prev => ({ ...prev, [subj.id]: g }))}
+                              className={`py-1.5 rounded-lg text-xs font-extrabold border transition cursor-pointer ${
+                                selected
+                                  ? g === 1
+                                    ? 'bg-rose-500 text-white border-rose-500'
+                                    : 'bg-cyan-400 text-slate-950 border-cyan-400 shadow-2xs'
+                                  : darkMode
+                                    ? 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
+                                    : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200'
+                              }`}
+                            >
+                              {g}
+                            </button>
+                          );
+                        })}
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setAvgCalcGrades(prev => ({
+                              ...prev,
+                              [subj.id]: isExcluded ? 3 : 0
+                            }))
+                          }
+                          title="Tárgy kihagyása az átlagszámításból"
+                          className={`py-1.5 rounded-lg text-[10px] font-bold border transition cursor-pointer ${
+                            isExcluded
+                              ? 'bg-amber-400 text-slate-950 border-amber-400'
+                              : darkMode
+                                ? 'bg-slate-800 hover:bg-slate-700 text-slate-400 border-slate-700'
+                                : 'bg-white hover:bg-slate-100 text-slate-500 border-slate-200'
+                          }`}
+                        >
+                          Kihagy
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className={`px-4 sm:px-6 py-3.5 border-t flex items-center justify-between gap-2 shrink-0 ${
+              darkMode ? 'border-slate-800 bg-slate-900/70' : 'border-slate-200 bg-slate-50'
+            }`}>
+              <span className={`text-[11px] ${textMuted}`}>
+                Csak tervezéshez — nem módosítja a tárgyak valós adatait.
+              </span>
+              <button
+                type="button"
+                onClick={() => setIsAvgCalcOpen(false)}
+                className="px-5 py-2 text-xs sm:text-sm font-bold bg-cyan-400 hover:bg-cyan-300 text-slate-950 rounded-xl cursor-pointer shrink-0"
+              >
+                Bezárás
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* ========================================================= */}
@@ -5670,7 +6032,7 @@ export default function App() {
                       <input
                         type="text"
                         required
-                        placeholder="Pl. v1.22.0"
+                        placeholder="Pl. v1.23.0"
                         value={newReleaseVersion}
                         onChange={e => setNewReleaseVersion(e.target.value)}
                         className={`w-full border rounded-lg px-3 py-1.5 font-semibold focus:outline-none ${inputStyle}`}
@@ -6332,7 +6694,10 @@ export default function App() {
                   <button
                     type="button"
                     onClick={() => {
-                      setEditingSubject(activeSubject);
+                      setEditingSubject({
+                        ...activeSubject,
+                        manualGrade: getEffectiveManualGrade(activeSubject)
+                      });
                       setSubjectGazdinfoChoice(null);
                       setSubjectModalMode('custom');
                       setIsSubjectModalOpen(true);
@@ -7352,15 +7717,22 @@ export default function App() {
       )}
 
       {/* ========================================================= */}
-      {/* ÚJ TANTÁRGY („GAZDINFÓS VAGY?” -> SABLONOK / KÉZI + VIZSGAKURZUS) */}
+      {/* ÚJ TANTÁRGY / BEÁLLÍTÁSOK MODAL (Szimulátor jegyválasztással) */}
       {/* ========================================================= */}
       {isSubjectModalOpen && editingSubject && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-2.5 sm:p-4 overscroll-none">
           <div className={`rounded-2xl max-w-xl w-full max-h-[92dvh] flex flex-col shadow-2xl overflow-hidden border ${bgCard}`}>
             <div className="px-4 sm:px-6 py-3.5 sm:py-4 bg-slate-900 text-white flex justify-between items-center border-b border-slate-800 shrink-0">
-              <h2 className="font-bold text-base">
-                {editingSubject.id ? 'Tantárgy konfigurációja' : 'Új tantárgy felvétele'}
-              </h2>
+              <div className="flex items-center gap-2 min-w-0">
+                <h2 className="font-bold text-base truncate">
+                  {editingSubject.id ? 'Tantárgy konfigurációja' : 'Új tantárgy felvétele'}
+                </h2>
+                {isSim && editingSubject.id && (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-400 text-slate-950 shrink-0">
+                    Szimulátor mód
+                  </span>
+                )}
+              </div>
               <button
                 onClick={() => {
                   setIsSubjectModalOpen(false);
@@ -7653,6 +8025,19 @@ export default function App() {
                   </div>
                 ) : (
                   <form noValidate onSubmit={handleSaveSubject} className="p-4 sm:p-6 overflow-y-auto overscroll-contain space-y-4 flex-1 min-h-0">
+                    {isSim && editingSubject.id && (
+                      <div className={`p-3.5 rounded-xl border-2 border-amber-400/70 space-y-2 ${
+                        darkMode ? 'bg-amber-400/10 text-amber-100' : 'bg-amber-50 text-slate-900'
+                      }`}>
+                        <p className="text-xs font-extrabold text-amber-500 uppercase tracking-wide flex items-center gap-1.5">
+                          <FlaskConical className="w-4 h-4 shrink-0" /> Szimulátor mód aktív
+                        </p>
+                        <p className="text-xs leading-relaxed">
+                          Válassz alább egy <strong>előre meghatározott jegyet</strong> a pontok alapú számítás helyett: az átlagok és a kreditindex azonnal frissülnek, az adatbázisba viszont semmi nem mentődik el. A felső sárga sáv <em>„Visszaállítás”</em> gombjával minden visszaáll az eredeti állapotra.
+                        </p>
+                      </div>
+                    )}
+
                     <div>
                       <label className={`block text-xs font-semibold mb-1.5 ${textMuted}`}>Kurzus formája</label>
                       <div className={`grid grid-cols-2 gap-1.5 p-1 rounded-xl border ${
@@ -7660,8 +8045,9 @@ export default function App() {
                       }`}>
                         <button
                           type="button"
+                          disabled={isSim && Boolean(editingSubject.id)}
                           onClick={() => setEditingSubject({ ...editingSubject, courseKind: 'regular' })}
-                          className={`py-2 px-3 rounded-lg text-xs font-bold transition cursor-pointer ${
+                          className={`py-2 px-3 rounded-lg text-xs font-bold transition cursor-pointer disabled:opacity-60 ${
                             (editingSubject.courseKind || 'regular') === 'regular'
                               ? 'bg-amber-400 text-slate-950 shadow-xs'
                               : darkMode
@@ -7673,8 +8059,9 @@ export default function App() {
                         </button>
                         <button
                           type="button"
+                          disabled={isSim && Boolean(editingSubject.id)}
                           onClick={() => setEditingSubject({ ...editingSubject, courseKind: 'exam' })}
-                          className={`py-2 px-3 rounded-lg text-xs font-bold transition cursor-pointer ${
+                          className={`py-2 px-3 rounded-lg text-xs font-bold transition cursor-pointer disabled:opacity-60 ${
                             editingSubject.courseKind === 'exam'
                               ? 'bg-violet-600 text-white shadow-xs'
                               : darkMode
@@ -7698,10 +8085,11 @@ export default function App() {
                         <input
                           type="text"
                           required
+                          disabled={isSim && Boolean(editingSubject.id)}
                           placeholder="Pl. Adatbázisrendszerek"
                           value={editingSubject.name}
                           onChange={e => setEditingSubject({ ...editingSubject, name: e.target.value })}
-                          className={`w-full border rounded-lg px-3 py-2.5 sm:py-2 focus:outline-none ${inputStyle}`}
+                          className={`w-full border rounded-lg px-3 py-2.5 sm:py-2 focus:outline-none disabled:opacity-60 ${inputStyle}`}
                         />
                       </div>
                       <div>
@@ -7710,10 +8098,11 @@ export default function App() {
                           type="number"
                           step="1"
                           required
+                          disabled={isSim && Boolean(editingSubject.id)}
                           placeholder="Pl. 3 vagy 6"
                           value={editingSubject.credits}
                           onChange={e => handleSubjectCreditsChange(e.target.value)}
-                          className={`w-full border rounded-lg px-3 py-2.5 sm:py-2 focus:outline-none ${inputStyle}`}
+                          className={`w-full border rounded-lg px-3 py-2.5 sm:py-2 focus:outline-none disabled:opacity-60 ${inputStyle}`}
                         />
                       </div>
                     </div>
@@ -7723,9 +8112,10 @@ export default function App() {
                         <div>
                           <label className={`block text-xs font-semibold mb-1 ${textMuted}`}>Félév</label>
                           <select
+                            disabled={isSim && Boolean(editingSubject.id)}
                             value={editingSubject.semester}
                             onChange={e => setEditingSubject({ ...editingSubject, semester: e.target.value })}
-                            className={`w-full border rounded-lg px-3 py-2.5 sm:py-2 focus:outline-none ${inputStyle}`}
+                            className={`w-full border rounded-lg px-3 py-2.5 sm:py-2 focus:outline-none disabled:opacity-60 ${inputStyle}`}
                           >
                             {(semesters.length > 0 ? semesters : [editingSubject.semester || getCurrentSemesterCode()]).map(sem => (
                               <option key={sem} value={sem}>{formatSemesterLabel(sem)}</option>
@@ -7740,8 +8130,9 @@ export default function App() {
                           }`}>
                             <button
                               type="button"
+                              disabled={isSim && Boolean(editingSubject.id)}
                               onClick={() => setEditingSubject({ ...editingSubject, courseType: 'mandatory' })}
-                              className={`py-2 px-3 rounded-lg text-xs font-bold transition cursor-pointer ${
+                              className={`py-2 px-3 rounded-lg text-xs font-bold transition cursor-pointer disabled:opacity-60 ${
                                 (editingSubject.courseType || 'mandatory') === 'mandatory'
                                   ? 'bg-sky-500 text-white shadow-xs'
                                   : darkMode
@@ -7753,8 +8144,9 @@ export default function App() {
                             </button>
                             <button
                               type="button"
+                              disabled={isSim && Boolean(editingSubject.id)}
                               onClick={() => setEditingSubject({ ...editingSubject, courseType: 'elective' })}
-                              className={`py-2 px-3 rounded-lg text-xs font-bold transition cursor-pointer ${
+                              className={`py-2 px-3 rounded-lg text-xs font-bold transition cursor-pointer disabled:opacity-60 ${
                                 editingSubject.courseType === 'elective'
                                   ? 'bg-emerald-500 text-white shadow-xs'
                                   : darkMode
@@ -7775,9 +8167,10 @@ export default function App() {
                               <input
                                 type="number"
                                 step="1"
+                                disabled={isSim && Boolean(editingSubject.id)}
                                 value={editingSubject.alairasMin}
                                 onChange={e => setEditingSubject({ ...editingSubject, alairasMin: e.target.value })}
-                                className={`w-full border rounded-lg px-3 sm:px-2.5 py-2 sm:py-1.5 focus:outline-none ${inputStyle}`}
+                                className={`w-full border rounded-lg px-3 sm:px-2.5 py-2 sm:py-1.5 focus:outline-none disabled:opacity-60 ${inputStyle}`}
                               />
                             </div>
                             <div>
@@ -7785,9 +8178,10 @@ export default function App() {
                               <input
                                 type="number"
                                 step="1"
+                                disabled={isSim && Boolean(editingSubject.id)}
                                 value={editingSubject.megajanlottMin}
                                 onChange={e => setEditingSubject({ ...editingSubject, megajanlottMin: e.target.value })}
-                                className={`w-full border rounded-lg px-3 sm:px-2.5 py-2 sm:py-1.5 focus:outline-none ${inputStyle}`}
+                                className={`w-full border rounded-lg px-3 sm:px-2.5 py-2 sm:py-1.5 focus:outline-none disabled:opacity-60 ${inputStyle}`}
                               />
                             </div>
                             <div>
@@ -7795,9 +8189,10 @@ export default function App() {
                               <input
                                 type="number"
                                 step="1"
+                                disabled={isSim && Boolean(editingSubject.id)}
                                 value={editingSubject.megajanlottMinZH ?? 0}
                                 onChange={e => setEditingSubject({ ...editingSubject, megajanlottMinZH: e.target.value })}
-                                className={`w-full border rounded-lg px-3 sm:px-2.5 py-2 sm:py-1.5 focus:outline-none ${inputStyle}`}
+                                className={`w-full border rounded-lg px-3 sm:px-2.5 py-2 sm:py-1.5 focus:outline-none disabled:opacity-60 ${inputStyle}`}
                               />
                             </div>
                           </div>
@@ -7820,10 +8215,11 @@ export default function App() {
                                 min="0"
                                 max="30"
                                 step="1"
+                                disabled={isSim && Boolean(editingSubject.id)}
                                 placeholder="Pl. 6 vagy 12"
                                 value={editingSubject.totalClasses ?? ''}
                                 onChange={e => setEditingSubject({ ...editingSubject, totalClasses: e.target.value })}
-                                className={`w-full border rounded-lg px-3 sm:px-2.5 py-2 sm:py-1.5 focus:outline-none ${inputStyle}`}
+                                className={`w-full border rounded-lg px-3 sm:px-2.5 py-2 sm:py-1.5 focus:outline-none disabled:opacity-60 ${inputStyle}`}
                               />
                             </div>
                             <div>
@@ -7832,10 +8228,11 @@ export default function App() {
                                 type="number"
                                 min="0"
                                 step="1"
+                                disabled={isSim && Boolean(editingSubject.id)}
                                 placeholder="Pl. 3 vagy 6"
                                 value={editingSubject.minAttendanceAlairas ?? ''}
                                 onChange={e => setEditingSubject({ ...editingSubject, minAttendanceAlairas: e.target.value })}
-                                className={`w-full border rounded-lg px-3 sm:px-2.5 py-2 sm:py-1.5 focus:outline-none ${inputStyle}`}
+                                className={`w-full border rounded-lg px-3 sm:px-2.5 py-2 sm:py-1.5 focus:outline-none disabled:opacity-60 ${inputStyle}`}
                               />
                             </div>
                             <div>
@@ -7844,30 +8241,38 @@ export default function App() {
                                 type="number"
                                 min="0"
                                 step="1"
+                                disabled={isSim && Boolean(editingSubject.id)}
                                 placeholder="Pl. 4 vagy 9"
                                 value={editingSubject.minAttendanceMegajanlott ?? ''}
                                 onChange={e => setEditingSubject({ ...editingSubject, minAttendanceMegajanlott: e.target.value })}
-                                className={`w-full border rounded-lg px-3 sm:px-2.5 py-2 sm:py-1.5 focus:outline-none ${inputStyle}`}
+                                className={`w-full border rounded-lg px-3 sm:px-2.5 py-2 sm:py-1.5 focus:outline-none disabled:opacity-60 ${inputStyle}`}
                               />
                             </div>
                           </div>
                         </div>
-
-                        <div>
-                          <label className={`block text-xs font-semibold mb-1 ${textMuted}`}>Végleges jegy (opcionális kézi felülírás)</label>
-                          <select
-                            value={editingSubject.manualGrade || ''}
-                            onChange={e => setEditingSubject({ ...editingSubject, manualGrade: e.target.value })}
-                            className={`w-full border rounded-lg px-3 py-2.5 sm:py-2 focus:outline-none ${inputStyle}`}
-                          >
-                            <option value="">Automatikus számítás (pontok alapján)</option>
-                            <option value="2">2 (Elégséges)</option>
-                            <option value="3">3 (Közepes)</option>
-                            <option value="4">4 (Jó)</option>
-                            <option value="5">5 (Jeles)</option>
-                          </select>
-                        </div>
                       </>
+                    )}
+
+                    {/* Előre meghatározott végleges jegy választó (sima és vizsgakurzusnál is elérhető, szimulátor módban pedig szimulált jegyként működik) */}
+                    {((editingSubject.courseKind || 'regular') === 'regular' || (isSim && editingSubject.id)) && (
+                      <div className={isSim && editingSubject.id ? 'p-3.5 rounded-xl border-2 border-amber-400/70 bg-amber-400/5' : ''}>
+                        <label className={`block text-xs font-semibold mb-1 ${isSim && editingSubject.id ? 'text-amber-500 font-bold' : textMuted}`}>
+                          {isSim && editingSubject.id
+                            ? 'Szimulált végleges jegy (előre meghatározott jegy kiválasztása)'
+                            : 'Végleges jegy (opcionális kézi felülírás)'}
+                        </label>
+                        <select
+                          value={editingSubject.manualGrade || ''}
+                          onChange={e => setEditingSubject({ ...editingSubject, manualGrade: e.target.value })}
+                          className={`w-full border rounded-lg px-3 py-2.5 sm:py-2 focus:outline-none ${inputStyle}`}
+                        >
+                          <option value="">Automatikus számítás (pontok alapján)</option>
+                          <option value="2">2 (Elégséges)</option>
+                          <option value="3">3 (Közepes)</option>
+                          <option value="4">4 (Jó)</option>
+                          <option value="5">5 (Jeles)</option>
+                        </select>
+                      </div>
                     )}
 
                     <div className="pt-2 flex justify-end gap-2">
@@ -7885,7 +8290,7 @@ export default function App() {
                         type="submit"
                         className="px-4 py-2 text-sm font-semibold bg-amber-400 hover:bg-amber-300 text-slate-950 rounded-lg cursor-pointer"
                       >
-                        Mentés
+                        {isSim && editingSubject.id ? 'Szimuláció alkalmazása' : 'Mentés'}
                       </button>
                     </div>
                   </form>

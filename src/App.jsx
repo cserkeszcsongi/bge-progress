@@ -12,7 +12,8 @@ import {
   MessageSquare, Mail, ExternalLink, User, GraduationCap,
   Menu, Palette, ChevronDown, SlidersHorizontal, RefreshCw, Lightbulb, CheckCircle2,
   LayoutList, ArrowUpDown, GripVertical, ArrowUp, ArrowDown, Calculator,
-  BarChart3, Users, FastForward, FileSpreadsheet, HelpCircle, Upload
+  BarChart3, Users, FastForward, FileSpreadsheet, HelpCircle, Upload,
+  Download, Smartphone, Share
 } from 'lucide-react';
 import { auth, googleProvider, db } from './firebase';
 
@@ -630,6 +631,15 @@ function buildTemplatesForMajor(majorId) {
 }
 
 const APP_RELEASES = [
+  {
+    version: 'v1.29.0',
+    date: '2026. 11. 16.',
+    changes: [
+      'Mobil parancsikon (PWA) letöltés ikon a felső menüsávban: ha telefonról nyitod meg a webalkalmazást, egyetlen koppintással telepítheted / kirakhatod a főképernyőre (Androidon közvetlen telepítéssel, iOS-en lépésről lépésre útmutatóval)',
+      'Kicsi felugró emlékeztető ablak mobilon, amely figyelmeztet a parancsikonként való letöltés lehetőségére',
+      'Automatikus elrejtés telepítés után: amint parancsikonként telepítetted vagy főképernyőről nyitod meg az appot, a letöltés ikon és az emlékeztető ablak többé nem jelenik meg'
+    ]
+  },
   {
     version: 'v1.28.0',
     date: '2026. 11. 16.',
@@ -1611,6 +1621,33 @@ function detectInAppBrowser() {
   return null;
 }
 
+function detectMobilePlatform() {
+  if (typeof navigator === 'undefined') return { isMobile: false, isIOS: false, isAndroid: false };
+  const ua = navigator.userAgent || navigator.vendor || window.opera || '';
+  const isIOS = /iPad|iPhone|iPod/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const isAndroid = /Android/i.test(ua);
+  const isMobile = isIOS || isAndroid || /webOS|BlackBerry|IEMobile|Opera Mini|Mobile/i.test(ua);
+  return { isMobile, isIOS, isAndroid };
+}
+
+function checkIsInstalledPwa() {
+  if (typeof window === 'undefined') return false;
+  const isStandaloneMedia = window.matchMedia && (
+    window.matchMedia('(display-mode: standalone)').matches ||
+    window.matchMedia('(display-mode: fullscreen)').matches ||
+    window.matchMedia('(display-mode: minimal-ui)').matches
+  );
+  const isNavigatorStandalone = window.navigator && window.navigator.standalone === true;
+  const isMarkedInstalled = (() => {
+    try {
+      return localStorage.getItem('bge_pwa_installed') === 'true';
+    } catch {
+      return false;
+    }
+  })();
+  return Boolean(isStandaloneMedia || isNavigatorStandalone || isMarkedInstalled);
+}
+
 function createDefaultSessions(count, existing = []) {
   const n = Math.max(0, Number(count) || 0);
   return Array.from({ length: n }, (_, idx) => {
@@ -1775,6 +1812,121 @@ export default function App() {
 
   const inAppBrowser = useMemo(() => detectInAppBrowser(), []);
   const [linkCopied, setLinkCopied] = useState(false);
+
+  const mobilePlatform = useMemo(() => detectMobilePlatform(), []);
+  const [isAppInstalled, setIsAppInstalled] = useState(() => checkIsInstalledPwa());
+  const [deferredInstallPrompt, setDeferredInstallPrompt] = useState(null);
+  const [isInstallGuideOpen, setIsInstallGuideOpen] = useState(false);
+  const [isInstallMiniPopupVisible, setIsInstallMiniPopupVisible] = useState(false);
+  const [isInstallMiniDismissedSession, setIsInstallMiniDismissedSession] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    if (checkIsInstalledPwa()) {
+      try {
+        localStorage.setItem('bge_pwa_installed', 'true');
+      } catch {
+        // ignore
+      }
+      setIsAppInstalled(true);
+      setIsInstallMiniPopupVisible(false);
+    }
+
+    const handleBeforeInstallPrompt = (e) => {
+      e.preventDefault();
+      setDeferredInstallPrompt(e);
+    };
+
+    const handleAppInstalled = () => {
+      try {
+        localStorage.setItem('bge_pwa_installed', 'true');
+      } catch {
+        // ignore
+      }
+      setIsAppInstalled(true);
+      setDeferredInstallPrompt(null);
+      setIsInstallMiniPopupVisible(false);
+      setIsInstallGuideOpen(false);
+      showToast('BGE Progress sikeresen telepítve parancsikonként!');
+    };
+
+    const standaloneMql = window.matchMedia ? window.matchMedia('(display-mode: standalone)') : null;
+    const handleDisplayModeChange = (e) => {
+      if (e.matches) {
+        try {
+          localStorage.setItem('bge_pwa_installed', 'true');
+        } catch {
+          // ignore
+        }
+        setIsAppInstalled(true);
+        setIsInstallMiniPopupVisible(false);
+      }
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    window.addEventListener('appinstalled', handleAppInstalled);
+    if (standaloneMql && standaloneMql.addEventListener) {
+      standaloneMql.addEventListener('change', handleDisplayModeChange);
+    }
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      window.removeEventListener('appinstalled', handleAppInstalled);
+      if (standaloneMql && standaloneMql.removeEventListener) {
+        standaloneMql.removeEventListener('change', handleDisplayModeChange);
+      }
+    };
+  }, []);
+
+  const canShowMobileInstall = Boolean(mobilePlatform.isMobile && !isAppInstalled);
+
+  useEffect(() => {
+    if (!user || !canShowMobileInstall || isInstallMiniDismissedSession) {
+      setIsInstallMiniPopupVisible(false);
+      return;
+    }
+    const timer = setTimeout(() => {
+      setIsInstallMiniPopupVisible(true);
+    }, 1800);
+    return () => clearTimeout(timer);
+  }, [user, canShowMobileInstall, isInstallMiniDismissedSession]);
+
+  const handleTriggerMobileInstall = async () => {
+    setIsInstallMiniPopupVisible(false);
+    if (deferredInstallPrompt) {
+      try {
+        deferredInstallPrompt.prompt();
+        const choiceResult = await deferredInstallPrompt.userChoice;
+        if (choiceResult?.outcome === 'accepted') {
+          try {
+            localStorage.setItem('bge_pwa_installed', 'true');
+          } catch {
+            // ignore
+          }
+          setIsAppInstalled(true);
+          setDeferredInstallPrompt(null);
+          showToast('Alkalmazás telepítve a főképernyőre!');
+          return;
+        }
+      } catch {
+        // fallback to guide modal
+      }
+    }
+    setIsInstallGuideOpen(true);
+  };
+
+  const handleConfirmManualShortcutAdded = () => {
+    try {
+      localStorage.setItem('bge_pwa_installed', 'true');
+    } catch {
+      // ignore
+    }
+    setIsAppInstalled(true);
+    setIsInstallGuideOpen(false);
+    setIsInstallMiniPopupVisible(false);
+    showToast('Parancsikon mentve! A letöltés gomb és az emlékeztető elrejtve.');
+  };
 
   const [activeView, setActiveView] = useState('home');
   const [subjects, setSubjects] = useState([]);
@@ -4193,7 +4345,8 @@ export default function App() {
     semesterToDelete ||
     isCustomSortModalOpen ||
     isAvgCalcOpen ||
-    isStatsModalOpen
+    isStatsModalOpen ||
+    isInstallGuideOpen
   );
 
   useEffect(() => {
@@ -4223,6 +4376,7 @@ export default function App() {
         if (isSemesterModalOpen) { setIsSemesterModalOpen(false); return; }
         if (editingSemesterOldName && !isUpdatingSemester) { setEditingSemesterOldName(null); return; }
         if (semesterToDelete && !isDeletingSemester) { setSemesterToDelete(null); return; }
+        if (isInstallGuideOpen) { setIsInstallGuideOpen(false); return; }
         if (isStatsModalOpen) { setIsStatsModalOpen(false); return; }
         if (isFeedbackOpen) { setIsFeedbackOpen(false); return; }
         if (isChangelogOpen) { handleCloseChangelog(); return; }
@@ -4957,6 +5111,162 @@ export default function App() {
         </div>
       )}
 
+      {/* KICSI FELUGRÓ MINI EMLÉKEZTETŐ ABLAK MOBILRA */}
+      {canShowMobileInstall && isInstallMiniPopupVisible && !isAnyModalOpen && (
+        <div
+          className={`fixed bottom-24 left-3 right-24 sm:left-5 sm:right-auto sm:max-w-xs z-40 rounded-2xl border-2 border-amber-400 p-3 shadow-2xl backdrop-blur-md transition-all ${
+            darkMode
+              ? 'bg-slate-900/95 text-slate-100 shadow-black/60'
+              : 'bg-white/95 text-slate-900 shadow-slate-900/20'
+          }`}
+        >
+          <div className="flex items-start gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-amber-400 text-slate-950 flex items-center justify-center shrink-0 mt-0.5">
+              <Smartphone className="w-4 h-4" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-start justify-between gap-1">
+                <p className="text-xs font-extrabold leading-tight text-amber-500">
+                  Tedd ki parancsikonként!
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsInstallMiniPopupVisible(false);
+                    setIsInstallMiniDismissedSession(true);
+                  }}
+                  title="Bezárás"
+                  aria-label="Mini emlékeztető bezárása"
+                  className={`p-0.5 -mt-0.5 -mr-1 rounded-md cursor-pointer ${textMuted} hover:text-amber-500`}
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+              <p className={`text-[11px] leading-snug mt-0.5 ${darkMode ? 'text-slate-300' : 'text-slate-600'}`}>
+                Töltsd le a BGE Progress-t a főképernyődre gyors eléréshez!
+              </p>
+              <div className="flex items-center gap-2 mt-2">
+                <button
+                  type="button"
+                  onClick={handleTriggerMobileInstall}
+                  className="px-2.5 py-1 rounded-lg text-[11px] font-extrabold bg-amber-400 hover:bg-amber-300 text-slate-950 inline-flex items-center gap-1 transition cursor-pointer"
+                >
+                  <Download className="w-3 h-3" /> Letöltés
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsInstallMiniPopupVisible(false);
+                    setIsInstallMiniDismissedSession(true);
+                  }}
+                  className={`text-[11px] font-semibold cursor-pointer ${textMuted} hover:underline`}
+                >
+                  Később
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MOBIL PARANCSIKON TELEPÍTÉSI ÚTMUTATÓ MODAL */}
+      {isInstallGuideOpen && (
+        <div
+          data-top-modal="true"
+          onClick={() => setIsInstallGuideOpen(false)}
+          className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-2.5 sm:p-4 overscroll-none"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className={`rounded-2xl max-w-md w-full shadow-2xl overflow-hidden border-2 border-amber-400 ${bgCard}`}
+          >
+            <div className="px-4 sm:px-6 py-3.5 sm:py-4 bg-slate-900 text-white flex justify-between items-center border-b border-slate-800">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-8 h-8 rounded-lg bg-amber-400 text-slate-950 flex items-center justify-center shrink-0">
+                  <Download className="w-4 h-4" />
+                </div>
+                <div className="min-w-0">
+                  <h2 className="font-extrabold text-sm sm:text-base leading-tight">App letöltése parancsikonként</h2>
+                  <p className="text-[11px] text-amber-400 truncate">Főképernyőre helyezés mobilon</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsInstallGuideOpen(false)}
+                className="text-slate-400 hover:text-white p-1.5 cursor-pointer shrink-0"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-4 sm:p-6 space-y-4">
+              {mobilePlatform.isIOS ? (
+                <div className={`p-3.5 sm:p-4 rounded-xl border space-y-2.5 text-xs leading-relaxed ${bgSubCard}`}>
+                  <p className={`font-extrabold text-sm ${textStrong}`}>iPhone / iPad (Safari) lépések:</p>
+                  <ol className="space-y-2">
+                    <li className="flex items-start gap-2">
+                      <span className="w-5 h-5 rounded-full bg-amber-400 text-slate-950 font-extrabold text-[11px] flex items-center justify-center shrink-0 mt-0.5">1</span>
+                      <span>Koppints a böngésző alsó (vagy felső) sávjában található <strong className="inline-flex items-center gap-0.5 text-sky-500"><Share className="w-3.5 h-3.5" /> Megosztás</strong> ikonra.</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="w-5 h-5 rounded-full bg-amber-400 text-slate-950 font-extrabold text-[11px] flex items-center justify-center shrink-0 mt-0.5">2</span>
+                      <span>Görgess lefelé, és válaszd a <strong>„Főképernyőhöz adás”</strong> (Add to Home Screen) opciót.</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="w-5 h-5 rounded-full bg-amber-400 text-slate-950 font-extrabold text-[11px] flex items-center justify-center shrink-0 mt-0.5">3</span>
+                      <span>Jobb felül nyomj a <strong>Hozzáadás</strong> gombra — ezután saját app ikonról nyithatod meg!</span>
+                    </li>
+                  </ol>
+                </div>
+              ) : (
+                <div className={`p-3.5 sm:p-4 rounded-xl border space-y-2.5 text-xs leading-relaxed ${bgSubCard}`}>
+                  <p className={`font-extrabold text-sm ${textStrong}`}>Android (Chrome / Edge) lépések:</p>
+                  <ol className="space-y-2">
+                    <li className="flex items-start gap-2">
+                      <span className="w-5 h-5 rounded-full bg-amber-400 text-slate-950 font-extrabold text-[11px] flex items-center justify-center shrink-0 mt-0.5">1</span>
+                      <span>Koppints a böngésző jobb felső sarkában található <strong>⋮ (három pont)</strong> menüikonra.</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="w-5 h-5 rounded-full bg-amber-400 text-slate-950 font-extrabold text-[11px] flex items-center justify-center shrink-0 mt-0.5">2</span>
+                      <span>Válaszd a <strong>„Telepítés alkalmazásként”</strong> vagy a <strong>„Hozzáadás a kezdőképernyőhöz”</strong> menüpontot.</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="w-5 h-5 rounded-full bg-amber-400 text-slate-950 font-extrabold text-[11px] flex items-center justify-center shrink-0 mt-0.5">3</span>
+                      <span>Erősítsd meg a <strong>Telepítés / Hozzáadás</strong> gombbal!</span>
+                    </li>
+                  </ol>
+                </div>
+              )}
+
+              <div className={`p-3 rounded-xl border text-xs leading-relaxed ${
+                darkMode
+                  ? 'bg-emerald-950/25 border-emerald-500/40 text-emerald-200'
+                  : 'bg-emerald-50 border-emerald-300 text-emerald-900'
+              }`}>
+                Ha már kiraktad a főképernyőre, nyomj az alábbi gombra (vagy nyisd meg az appot az új parancsikonról), és a letöltés ikon többé nem jelenik meg.
+              </div>
+
+              <div className="flex flex-col sm:flex-row justify-end gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setIsInstallGuideOpen(false)}
+                  className={`px-4 py-2 text-xs sm:text-sm rounded-xl cursor-pointer ${textMuted}`}
+                >
+                  Bezárás
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmManualShortcutAdded}
+                  className="px-4 py-2.5 text-xs sm:text-sm font-extrabold bg-emerald-500 hover:bg-emerald-400 text-white rounded-xl flex items-center justify-center gap-1.5 transition cursor-pointer"
+                >
+                  <Check className="w-4 h-4" /> Már kiraktam parancsikonként
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {activeView === 'home' ? (
         <>
           <div className="max-w-6xl mx-auto px-3 sm:px-4 pt-3 sm:pt-4 flex flex-wrap items-center justify-between gap-2">
@@ -4969,6 +5279,24 @@ export default function App() {
               )}
             </div>
             <div className="flex items-center gap-1.5 sm:gap-2 ml-auto">
+              {canShowMobileInstall && (
+                <button
+                  type="button"
+                  onClick={handleTriggerMobileInstall}
+                  title="Alkalmazás letöltése parancsikonként a főképernyőre"
+                  aria-label="Alkalmazás letöltése parancsikonként"
+                  className={`px-2.5 sm:px-3 py-2 sm:py-1.5 rounded-lg border text-xs font-extrabold flex items-center gap-1.5 transition cursor-pointer relative ${
+                    darkMode
+                      ? 'bg-amber-400/15 hover:bg-amber-400/25 text-amber-400 border-amber-400/50'
+                      : 'bg-amber-50 hover:bg-amber-100 text-amber-800 border-amber-400 shadow-2xs'
+                  }`}
+                >
+                  <Download className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                  <span>Letöltés</span>
+                  <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse shrink-0" />
+                </button>
+              )}
+
               <button
                 type="button"
                 onClick={() => setIsStatsModalOpen(true)}
@@ -5665,6 +5993,18 @@ export default function App() {
                 </div>
 
                 <div className="flex items-center gap-1.5 lg:hidden shrink-0">
+                  {canShowMobileInstall && (
+                    <button
+                      type="button"
+                      onClick={handleTriggerMobileInstall}
+                      title="Alkalmazás letöltése parancsikonként"
+                      aria-label="Alkalmazás letöltése parancsikonként"
+                      className="p-2 rounded-lg bg-amber-400/20 hover:bg-amber-400/30 text-amber-400 border border-amber-400/50 transition cursor-pointer relative"
+                    >
+                      <Download className="w-4 h-4" />
+                      <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => setIsStatsModalOpen(true)}
@@ -5731,6 +6071,17 @@ export default function App() {
                 )}
 
                 <div className="hidden lg:flex items-center gap-2">
+                  {canShowMobileInstall && (
+                    <button
+                      type="button"
+                      onClick={handleTriggerMobileInstall}
+                      title="Alkalmazás letöltése parancsikonként"
+                      className="px-3 py-1.5 rounded-lg text-xs sm:text-sm font-bold bg-amber-400/20 hover:bg-amber-400/30 text-amber-400 border border-amber-400/50 flex items-center gap-1.5 transition cursor-pointer"
+                    >
+                      <Download className="w-4 h-4" />
+                      <span>Letöltés</span>
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => setIsStatsModalOpen(true)}

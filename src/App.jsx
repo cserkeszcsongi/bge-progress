@@ -631,6 +631,15 @@ function buildTemplatesForMajor(majorId) {
 
 const APP_RELEASES = [
   {
+    version: 'v1.28.0',
+    date: '2026. 11. 16.',
+    changes: [
+      'Új megajánlott jegy jelvény: ha a pontok alapján megszerzed a megajánlott jegyet, a kártya jobb felső sarkában ugyanúgy nagyban jelenik meg, mint a kézi jegybeírásnál',
+      'Jegyhatárok szövegezésének javítása a kártyák alján (pl. 3-ashoz)',
+      'Vizsgakurzusoknál a jegyek elnevezése mostantól „Vizsgajegy” a „Megajánlott jegy” helyett'
+    ]
+  },
+  {
     version: 'v1.27.0',
     date: '2026. 11. 16.',
     changes: [
@@ -3462,7 +3471,7 @@ export default function App() {
     } else if (isExamCourse) {
       if (hasExamScore && examScoreNum >= 59.5) {
         projectedGrade = getGradeFromScore(examScoreNum);
-        progressLabel = `Megajánlott: ${projectedGrade}`;
+        progressLabel = `Vizsgajegy: ${projectedGrade}`;
         progressStage = 'offered';
       } else {
         progressLabel = null;
@@ -5962,18 +5971,20 @@ export default function App() {
 
                 const ms = st.nextOfferedMilestone;
                 const gradeLabelPrefix = (st.isExamCourse || st.needsAutoExam) ? 'Vizsgajegy' : 'Megajánlott';
+                const showLargeBadge = st.isGradeOnlyCard || st.progressStage === 'offered';
                 let nextGradeText = '';
                 if (!st.isFailed && !st.isGradeOnlyCard) {
+                  const gradeSuffix = { 2: '2-eshez', 3: '3-ashoz', 4: '4-eshez', 5: '5-öshöz' };
                   if (ms.allMaxed) {
                     nextGradeText = `${gradeLabelPrefix} 5-ös elérve!`;
                   } else if (ms.targetGrade === 2) {
                     if (!st.isExamCourse && !st.needsAutoExam && !st.megajanlottZHOk && megajanlottMinZH > 0) {
-                      nextGradeText = `Megajánlott 2-eshez még ${formatHu(ms.needed)} p (és ${formatHu(st.megajanlottZHHianyzik)} ZH p) kell`;
+                      nextGradeText = `${gradeLabelPrefix} 2-eshez még ${formatHu(ms.needed)} p (és ${formatHu(st.megajanlottZHHianyzik)} ZH p) kell`;
                     } else {
                       nextGradeText = `${gradeLabelPrefix} 2-eshez még ${formatHu(ms.needed)} p kell`;
                     }
                   } else {
-                    nextGradeText = `${gradeLabelPrefix} ${ms.targetGrade}-eshez még ${formatHu(ms.needed)} p kell`;
+                    nextGradeText = `${gradeLabelPrefix} ${gradeSuffix[ms.targetGrade]} még ${formatHu(ms.needed)} p kell`;
                   }
                 }
 
@@ -6020,7 +6031,7 @@ export default function App() {
                           <h3 className={`font-bold text-base leading-snug break-words ${textStrong}`}>{subj.name}</h3>
                         </div>
 
-                        {st.isGradeOnlyCard ? (
+                        {showLargeBadge ? (
                           <div
                             className={`-mt-3.5 sm:-mt-4 -mr-1 px-3.5 sm:px-4 pt-3.5 sm:pt-4 pb-2.5 rounded-b-2xl shadow-md flex flex-col items-center justify-center shrink-0 select-none ${
                               st.projectedGrade
@@ -6031,7 +6042,7 @@ export default function App() {
                             }`}
                           >
                             <span className="text-[8px] font-extrabold uppercase tracking-wider opacity-85 leading-none mb-1">
-                              {st.isSimulatedGrade ? 'Szim.' : 'Jegy'}
+                              {st.isSimulatedGrade ? 'Szim.' : (st.isExamCourse || st.needsAutoExam ? 'Vizsgajegy' : (st.hasManualGrade ? 'Jegy' : 'Megajánlott'))}
                             </span>
                             <span className="text-2xl sm:text-3xl font-black leading-none tracking-tight">
                               {st.projectedGrade ?? '—'}
@@ -6132,7 +6143,7 @@ export default function App() {
                           <h3 className={`font-bold text-base sm:text-lg leading-snug break-words ${textStrong}`}>{subj.name}</h3>
                         </div>
 
-                        {st.isGradeOnlyCard ? (
+                        {showLargeBadge ? (
                           <div
                             className={`-mt-4 sm:-mt-5 -mr-1 px-4 sm:px-5 pt-4 sm:pt-5 pb-3 rounded-b-2xl shadow-lg flex flex-col items-center justify-center shrink-0 select-none ${
                               st.projectedGrade
@@ -6143,7 +6154,7 @@ export default function App() {
                             }`}
                           >
                             <span className="text-[9px] font-extrabold uppercase tracking-wider opacity-85 leading-none mb-1">
-                              {st.isSimulatedGrade ? 'Szim. jegy' : 'Megajánlott'}
+                              {st.isSimulatedGrade ? 'Szim. jegy' : (st.isExamCourse || st.needsAutoExam ? 'Vizsgajegy' : (st.hasManualGrade ? 'Jegy' : 'Megajánlott'))}
                             </span>
                             <span className="text-3xl sm:text-4xl font-black leading-none tracking-tight">
                               {st.projectedGrade ?? '—'}

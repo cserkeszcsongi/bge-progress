@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import * as XLSX from 'https://cdn.sheetjs.com/xlsx-0.20.3/package/xlsx.mjs';
 import { signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
 import {
   collection, doc, getDocs, onSnapshot, setDoc, updateDoc, deleteDoc, writeBatch,
@@ -16,6 +15,13 @@ import {
   BarChart3, Users, FastForward, FileSpreadsheet, HelpCircle, Upload
 } from 'lucide-react';
 import { auth, googleProvider, db } from './firebase';
+
+let cachedXlsxLib = null;
+async function getXlsxLib() {
+  if (cachedXlsxLib) return cachedXlsxLib;
+  cachedXlsxLib = await import(/* @vite-ignore */ 'https://cdn.sheetjs.com/xlsx-0.20.3/package/xlsx.mjs');
+  return cachedXlsxLib;
+}
 
 const BONUS_POINTS_CAP = 10;
 const DEFAULT_RECLASSIFICATION_AVG_THRESHOLD = 2.75;
@@ -1042,7 +1048,8 @@ function parseNeptunGradeNumber(rawGradeVal) {
   return null;
 }
 
-function parseNeptunExcelWorkbook(arrayBuffer) {
+async function parseNeptunExcelWorkbook(arrayBuffer) {
+  const XLSX = await getXlsxLib();
   const wb = XLSX.read(arrayBuffer, { type: 'array' });
   const firstSheetName = wb.SheetNames[0];
   if (!firstSheetName) return [];
@@ -2747,7 +2754,7 @@ export default function App() {
 
     try {
       const buffer = await file.arrayBuffer();
-      const importedItems = parseNeptunExcelWorkbook(buffer);
+      const importedItems = await parseNeptunExcelWorkbook(buffer);
 
       if (!importedItems || importedItems.length === 0) {
         setExcelImportError(
@@ -5933,7 +5940,7 @@ export default function App() {
                 } else if (st.progressStage === 'offered') {
                   progressBadgeClass = darkMode
                     ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                    : 'bg-emerald-100 text-emerald-800 border border-emerald-300';
+                    : 'bg-emerald-100 text-emerald-800 border-emerald-300';
                 } else if (st.progressStage === 'exam') {
                   progressBadgeClass = darkMode
                     ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30'

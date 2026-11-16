@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import * as XLSX from 'https://cdn.sheetjs.com/xlsx-0.20.3/package/xlsx.mjs';
 import { signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
 import {
   collection, doc, getDocs, onSnapshot, setDoc, updateDoc, deleteDoc, writeBatch,
@@ -12,7 +13,7 @@ import {
   MessageSquare, Mail, ExternalLink, User, GraduationCap,
   Menu, Palette, ChevronDown, SlidersHorizontal, RefreshCw, Lightbulb, CheckCircle2,
   LayoutList, ArrowUpDown, GripVertical, ArrowUp, ArrowDown, Calculator,
-  BarChart3, Users, FastForward
+  BarChart3, Users, FastForward, FileSpreadsheet, HelpCircle, Upload
 } from 'lucide-react';
 import { auth, googleProvider, db } from './firebase';
 
@@ -554,7 +555,7 @@ const NON_GAZDINFO_CURRICULA = {
       { name: 'Speciális szakismeret 1', credits: 6 }
     ],
     6: [
-      { name: 'Turisztikai vállalkozások tervezése (projekttárgy)', credits: 6 },
+      { name: 'Turisztikai vállalkozás tervezése (projekttárgy)', credits: 6 },
       { name: 'Turizmusmarketing (projekttárgy)', credits: 6 },
       { name: 'Interkulturális kapcsolatok', credits: 6 },
       { name: 'Kereskedelem és logisztika', credits: 3 },
@@ -623,6 +624,14 @@ function buildTemplatesForMajor(majorId) {
 }
 
 const APP_RELEASES = [
+  {
+    version: 'v1.27.0',
+    date: '2026. 11. 16.',
+    changes: [
+      'Neptun Excel fájl (.xlsx / .xls) automatikus importálása a „Múltbéli félévek feltöltése” varázslóban: egyetlen kattintással beolvassa a tárgyak nevét, kreditszámát, besorolását és a szöveges érdemjegyekből kinyert 1–5-ös számértéket',
+      'Beépített Neptun exportálási útmutató ablak: pontos lépésről lépésre leírással, hol találod a Törzslap exportálási gombot a Neptunban'
+    ]
+  },
   {
     version: 'v1.26.0',
     date: '2026. 11. 16.',
@@ -866,14 +875,14 @@ const TUTORIAL_SLIDES = [
   },
   {
     id: 'semesters_kki',
-    shortLabel: '2. Félévek',
-    badge: '2 / 9 • Félévek létrehozása és KKI',
-    title: 'Félévek (1–7.) kezelése és a Korrigált Kreditindex',
+    shortLabel: '2. Félévek & Excel',
+    badge: '2 / 9 • Félévek & Neptun Excel import',
+    title: 'Félévek (1–7.) kezelése és Neptun Excel importálás',
     description:
       'A főoldalon félévenként külön kártyán látod a teljesített/felvett krediteket, a Korrigált kreditindexet (KKI) és a súlyozott átlagot.',
     steps: [
       'Új félévhez vagy a korábbi féléveid gyors feltöltéséhez kattints a jobb alsó sarokban lévő nagy, világító „+” gombra.',
-      'A „Múltbéli félévek feltöltése” varázslóval megadhatod, hanyadik félévedben jársz most, az app pedig visszaszámolja a korábbi féléveket, és félévenként rögzítheted a tárgyakat és jegyeket.',
+      'A „Múltbéli félévek feltöltése” varázslóban feltöltheted a Neptun Törzslapból kiexportált Excel fájlt (.xlsx), és az app automatikusan beolvassa a tárgyak nevét, kreditjét és érdemjegyét (1–5).',
       'A félévkártya jobb felső sarkában a ceruza ikonnal bármikor átírhatod az évszámot, a kukával pedig törölheted a félévet.'
     ],
     tip: 'Kattints bármelyik félévkártyára, hogy belépj a félév saját dashboardjára és kezeld a tantárgyaidat!'
@@ -1004,6 +1013,95 @@ function formatHu(val, fixedDecimals = null) {
   const num = Number(val);
   const str = fixedDecimals !== null ? num.toFixed(fixedDecimals) : String(num);
   return str.replace('.', ',');
+}
+
+function parseNeptunGradeNumber(rawGradeVal) {
+  if (rawGradeVal === null || rawGradeVal === undefined) return null;
+  const str = String(rawGradeVal).trim();
+  if (!str) return null;
+
+  const parenMatch = str.match(/\((\d)\)/);
+  if (parenMatch) {
+    const n = parseInt(parenMatch[1], 10);
+    if (n >= 1 && n <= 5) return n;
+  }
+
+  const standaloneDigit = str.match(/\b([1-5])\b/);
+  if (standaloneDigit) {
+    const n = parseInt(standaloneDigit[1], 10);
+    if (n >= 1 && n <= 5) return n;
+  }
+
+  const lower = str.toLowerCase();
+  if (lower.includes('jeles') || lower.includes('kiváló') || lower.includes('excellent')) return 5;
+  if (lower.includes('jó') || lower.includes('good')) return 4;
+  if (lower.includes('közepes') || lower.includes('satisfactory')) return 3;
+  if (lower.includes('elégséges') || lower.includes('pass')) return 2;
+  if (lower.includes('elégtelen') || lower.includes('nem teljesít') || lower.includes('fail')) return 1;
+
+  return null;
+}
+
+function parseNeptunExcelWorkbook(arrayBuffer) {
+  const wb = XLSX.read(arrayBuffer, { type: 'array' });
+  const firstSheetName = wb.SheetNames[0];
+  if (!firstSheetName) return [];
+
+  const sheet = wb.Sheets[firstSheetName];
+  const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+  const parsedItems = [];
+
+  rows.forEach((row) => {
+    const entries = Object.entries(row);
+
+    const findColValue = (patterns) => {
+      for (const pat of patterns) {
+        const found = entries.find(([key]) => pat.test(String(key).trim().toLowerCase()));
+        if (found && found[1] !== '' && found[1] !== null && found[1] !== undefined) {
+          return found[1];
+        }
+      }
+      return '';
+    };
+
+    const rawName = String(
+      findColValue([/^tárgynév$/i, /tárgynév/i, /tantárgy/i, /^név$/i, /subject/i])
+    ).trim();
+
+    if (!rawName || rawName.toLowerCase() === 'tárgynév') return;
+
+    const rawCredits = findColValue([/^kredit$/i, /kredit/i, /credit/i]);
+    const parsedCredits = parseFloat(String(rawCredits).replace(',', '.'));
+    const credits = !isNaN(parsedCredits) && parsedCredits >= 0 ? parsedCredits : 0;
+
+    const rawGradeText = findColValue([
+      /teljesítés.*érdemjegy/i,
+      /érdemjegy/i,
+      /jegy/i,
+      /eredmény/i,
+      /grade/i
+    ]);
+    const numericGrade = parseNeptunGradeNumber(rawGradeText);
+
+    const rawCourseType = String(
+      findColValue([/felvétel\s*típusa/i, /típus/i, /jelleg/i])
+    ).toLowerCase();
+    const isElective =
+      rawCourseType.includes('szabadon') ||
+      rawCourseType.includes('választható') ||
+      rawCourseType.includes('elective');
+
+    parsedItems.push({
+      name: rawName,
+      credits,
+      grade: numericGrade !== null ? numericGrade : 5,
+      hasParsedGrade: numericGrade !== null,
+      rawGradeText: String(rawGradeText || '').trim(),
+      courseType: isElective ? 'elective' : 'mandatory'
+    });
+  });
+
+  return parsedItems;
 }
 
 function buildSemesterFromStartInput(yearInput, season) {
@@ -1218,7 +1316,6 @@ function JokerIcon({ className = 'w-4 h-4' }) {
     </svg>
   );
 }
-
 function TutorialSlidePreview({ slideId, darkMode }) {
   const cardBg = darkMode ? 'bg-slate-900 border-slate-700/90' : 'bg-white border-slate-200';
   const subBg = darkMode ? 'bg-slate-800/80 border-slate-700' : 'bg-slate-50 border-slate-200/80';
@@ -1263,7 +1360,7 @@ function TutorialSlidePreview({ slideId, darkMode }) {
         <div className="flex items-center justify-between">
           <div>
             <span className="inline-block px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-amber-400 text-slate-950 mb-1">
-              Aktuális félév
+              Neptun Excel import támogatás
             </span>
             <p className={`text-sm font-extrabold ${strong}`}>2026/2027/1 (3. félév)</p>
           </div>
@@ -1713,9 +1810,14 @@ export default function App() {
   const [isHomePlusMenuOpen, setIsHomePlusMenuOpen] = useState(false);
   const [isPastSemestersWizardOpen, setIsPastSemestersWizardOpen] = useState(false);
   const [wizardCurrentOrdinal, setWizardCurrentOrdinal] = useState(2);
-  const [wizardStepIndex, setWizardStepIndex] = useState(0); // 0 = félév választás, 1..N = múltbéli félévek
+  const [wizardStepIndex, setWizardStepIndex] = useState(0);
   const [wizardEntriesBySem, setWizardEntriesBySem] = useState({});
   const [isSavingPastSemesters, setIsSavingPastSemesters] = useState(false);
+
+  const [excelImportTargetSemCode, setExcelImportTargetSemCode] = useState(null);
+  const [excelImportError, setExcelImportError] = useState('');
+  const [isParsingExcel, setIsParsingExcel] = useState(false);
+  const neptunExcelInputRef = useRef(null);
 
   const [isSemesterModalOpen, setIsSemesterModalOpen] = useState(false);
   const [newSemesterStartYear, setNewSemesterStartYear] = useState(() => String(new Date().getFullYear()));
@@ -2569,6 +2671,8 @@ export default function App() {
     setWizardCurrentOrdinal(initialOrd);
     setWizardStepIndex(0);
     setWizardEntriesBySem({});
+    setExcelImportTargetSemCode(null);
+    setExcelImportError('');
     setIsPastSemestersWizardOpen(true);
   };
 
@@ -2624,6 +2728,65 @@ export default function App() {
         [semCode]: filtered.length > 0 ? filtered : [createEmptyWizardRow()]
       };
     });
+  };
+
+  const handleOpenExcelImportGuide = (semCode) => {
+    setExcelImportError('');
+    setExcelImportTargetSemCode(semCode);
+  };
+
+  const handleNeptunExcelFileSelected = async (e) => {
+    const file = e.target?.files?.[0];
+    if (e.target) {
+      e.target.value = '';
+    }
+    if (!file || !excelImportTargetSemCode) return;
+
+    setIsParsingExcel(true);
+    setExcelImportError('');
+
+    try {
+      const buffer = await file.arrayBuffer();
+      const importedItems = parseNeptunExcelWorkbook(buffer);
+
+      if (!importedItems || importedItems.length === 0) {
+        setExcelImportError(
+          'Nem találtunk beolvasható tantárgyakat a fájlban. Ellenőrizd, hogy a Neptun Törzslapból exportált „Felvett tárgyak” Excel fájlt választottad-e ki!'
+        );
+        return;
+      }
+
+      const now = Date.now();
+      const newRows = importedItems.map((item, idx) => ({
+        rowId: `wrow_xlsx_${now}_${idx}_${Math.random().toString(36).slice(2, 6)}`,
+        name: item.name,
+        credits: item.credits > 0 ? String(item.credits) : '0',
+        grade: item.grade,
+        courseType: item.courseType
+      }));
+
+      setWizardEntriesBySem(prev => {
+        const existing = prev[excelImportTargetSemCode] || [];
+        const nonEmptyExisting = existing.filter(r => String(r.name || '').trim() !== '');
+        return {
+          ...prev,
+          [excelImportTargetSemCode]: [...nonEmptyExisting, ...newRows]
+        };
+      });
+
+      const targetLabel =
+        wizardPastSemesters.find(s => s.code === excelImportTargetSemCode)?.fullLabel ||
+        excelImportTargetSemCode;
+      setExcelImportTargetSemCode(null);
+      showToast(`${newRows.length} tárgy sikeresen beolvasva a(z) ${targetLabel} félévhez!`);
+    } catch (err) {
+      console.error('Neptun Excel feldolgozási hiba:', err);
+      setExcelImportError(
+        'Hiba történt az Excel fájl beolvasása közben. Kérjük, tölts fel érvényes .xlsx vagy .xls fájlt!'
+      );
+    } finally {
+      setIsParsingExcel(false);
+    }
   };
 
   const handleSavePastSemestersWizard = async () => {
@@ -4001,6 +4164,7 @@ export default function App() {
     itemModal ||
     isSemesterModalOpen ||
     isPastSemestersWizardOpen ||
+    excelImportTargetSemCode ||
     editingSemesterOldName ||
     isSubjectModalOpen ||
     isThresholdModalOpen ||
@@ -4024,6 +4188,10 @@ export default function App() {
 
       if (e.key === 'Escape') {
         e.preventDefault();
+        if (excelImportTargetSemCode && !isParsingExcel) {
+          setExcelImportTargetSemCode(null);
+          return;
+        }
         if (itemModal) { setItemModal(null); return; }
         if (bucketModal) { setBucketModal(null); return; }
         if (isSubjectModalOpen) {
@@ -4054,6 +4222,8 @@ export default function App() {
       if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey) {
         const tag = (e.target?.tagName || '').toLowerCase();
         if (tag === 'textarea' || tag === 'button' || tag === 'a') return;
+
+        if (excelImportTargetSemCode) return;
 
         const topForm = document.querySelector('[data-top-modal="true"] form');
         if (topForm) {
@@ -4719,6 +4889,14 @@ export default function App() {
 
   return (
     <div className={`min-h-screen pb-24 transition-colors duration-200 ${bgPage}`}>
+      <input
+        ref={neptunExcelInputRef}
+        type="file"
+        accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+        onChange={handleNeptunExcelFileSelected}
+        className="hidden"
+      />
+
       {showUpdateBanner && (
         <div className="fixed top-3 left-3 right-3 sm:left-1/2 sm:-translate-x-1/2 sm:max-w-lg z-[70] rounded-2xl border-2 border-amber-400 bg-slate-900/95 text-white backdrop-blur-md shadow-2xl px-4 py-3 flex items-center justify-between gap-3">
           <div className="flex items-start sm:items-center gap-2.5 min-w-0">
@@ -5364,7 +5542,6 @@ export default function App() {
             {appFooter}
           </main>
 
-          {/* LEBEGŐ + MENÜ A FŐOLDALON (Új félév + Múltbéli félévek feltöltése) */}
           <div data-home-plus-menu="true" className="fixed bottom-5 right-5 sm:bottom-7 sm:right-7 z-30 flex flex-col items-end gap-3">
             {isHomePlusMenuOpen && (
               <div className={`w-72 sm:w-80 rounded-2xl border-2 p-2.5 shadow-2xl space-y-2 transition-all ${
@@ -5389,7 +5566,7 @@ export default function App() {
                       Múltbéli félévek feltöltése
                     </p>
                     <p className={`text-[11px] mt-1 leading-snug ${textMuted}`}>
-                      Korábbi félévek tárgyainak és 1–5 jegyeinek gyors rögzítése az átlagokhoz
+                      Neptun Excel importtal vagy kézi beírással a korábbi félévek jegyeihez
                     </p>
                   </div>
                 </button>
@@ -5760,7 +5937,7 @@ export default function App() {
                 } else if (st.progressStage === 'exam') {
                   progressBadgeClass = darkMode
                     ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
-                    : 'bg-blue-100 text-blue-800 border border-blue-300';
+                    : 'bg-blue-100 text-blue-800 border-blue-300';
                 }
 
                 const cardSurfaceClass = st.isFailed
@@ -6276,7 +6453,7 @@ export default function App() {
 
         return (
           <div
-            data-top-modal="true"
+            data-top-modal={!excelImportTargetSemCode ? 'true' : undefined}
             onClick={() => !isSavingPastSemesters && setIsPastSemestersWizardOpen(false)}
             className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-2.5 sm:p-4 overscroll-none"
           >
@@ -6376,7 +6553,7 @@ export default function App() {
                         {currentSemesterMeta.code} • {currentSemesterMeta.seasonLabel}
                       </p>
                       <p className={`text-xs leading-relaxed ${textMuted}`}>
-                        Válaszd ki alább, hogy <strong>most hanyadik félévedben jársz</strong> — ebből automatikusan visszaszámoljuk az összes korábbi őszi és tavaszi félévedet!
+                        Válaszd ki alább, hogy <strong>most hanyadik félévedben jársz</strong> — ebből automatikusan visszaszámoljuk az összes korábbi őszi és tavaszi félévedet, amelyekhez Neptun Excel fájlból vagy kézzel is betöltheted a tárgyakat!
                       </p>
                     </div>
 
@@ -6440,26 +6617,44 @@ export default function App() {
                   </>
                 ) : activePastSem ? (
                   <>
-                    <div className={`p-3.5 rounded-xl border flex flex-wrap items-center justify-between gap-2 ${
+                    <div className={`p-3.5 sm:p-4 rounded-2xl border space-y-3 ${
                       darkMode
                         ? 'bg-emerald-950/25 border-emerald-500/40'
                         : 'bg-emerald-50/75 border-emerald-300'
                     }`}>
-                      <div>
-                        <span className="text-[11px] font-extrabold uppercase tracking-wide text-emerald-500">
-                          {activePastSem.seasonLabel} • {wizardStepIndex}. / {totalPastSteps} múltbéli félév
-                        </span>
-                        <h3 className={`text-base sm:text-lg font-extrabold ${textStrong}`}>
-                          {activePastSem.fullLabel}
-                        </h3>
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                          <span className="text-[11px] font-extrabold uppercase tracking-wide text-emerald-500">
+                            {activePastSem.seasonLabel} • {wizardStepIndex}. / {totalPastSteps} múltbéli félév
+                          </span>
+                          <h3 className={`text-base sm:text-lg font-extrabold ${textStrong}`}>
+                            {activePastSem.fullLabel}
+                          </h3>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleOpenExcelImportGuide(activePastSem.code)}
+                            className="px-3.5 py-2 rounded-xl text-xs font-extrabold bg-amber-400 hover:bg-amber-300 text-slate-950 shadow-sm flex items-center gap-1.5 transition cursor-pointer shrink-0"
+                          >
+                            <FileSpreadsheet className="w-4 h-4" />
+                            <span>Excel fájl feltöltése</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => handleAddWizardSubjectRow(activePastSem.code)}
+                            className="px-3.5 py-2 rounded-xl text-xs font-extrabold bg-emerald-500 hover:bg-emerald-400 text-white flex items-center gap-1.5 transition cursor-pointer shrink-0"
+                          >
+                            <Plus className="w-4 h-4" /> Új tárgy sor
+                          </button>
+                        </div>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => handleAddWizardSubjectRow(activePastSem.code)}
-                        className="px-3.5 py-2 rounded-xl text-xs font-extrabold bg-emerald-500 hover:bg-emerald-400 text-white flex items-center gap-1.5 transition cursor-pointer shrink-0"
-                      >
-                        <Plus className="w-4 h-4" /> Új tárgy sor
-                      </button>
+
+                      <p className={`text-[11px] leading-relaxed ${textMuted}`}>
+                        Töltsd fel a Neptun Törzslapból kiexportált <strong>.xlsx</strong> fájlt (a tárgy neve, kreditje és a jegy számértéke automatikusan betöltődik), vagy írd be kézzel a tárgyakat alább!
+                      </p>
                     </div>
 
                     <div className="space-y-3">
@@ -6668,6 +6863,131 @@ export default function App() {
         );
       })()}
 
+      {/* NEPTUN EXCEL EXPORT ÚTMUTATÓ & FELTÖLTŐ PÁRBESZÉDABLAK */}
+      {excelImportTargetSemCode && (() => {
+        const targetSemObj = wizardPastSemesters.find(s => s.code === excelImportTargetSemCode);
+        const targetSemLabel = targetSemObj ? targetSemObj.fullLabel : excelImportTargetSemCode;
+
+        const neptunExportSteps = [
+          'Lépj be a Neptunba, és nyisd meg a bal oldali Menü pontot.',
+          'Válaszd a Tanulmányok menüpontot.',
+          'Kattints a Törzslap almenüre.',
+          'Válaszd ki a fenti listából a megfelelő félévet (' + targetSemLabel + ').',
+          'A felvett tárgyak táblázat mellett, a Szűrés gomb mellett található 3 db pontra (⋮) kattintva érhető el az Export gomb — töltsd le az Excel (.xlsx) fájlt!'
+        ];
+
+        return (
+          <div
+            data-top-modal="true"
+            onClick={() => !isParsingExcel && setExcelImportTargetSemCode(null)}
+            className="fixed inset-0 bg-black/85 backdrop-blur-sm z-[60] flex items-center justify-center p-2.5 sm:p-4 overscroll-none"
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              className={`rounded-2xl max-w-lg w-full max-h-[92dvh] flex flex-col shadow-2xl overflow-hidden border-2 border-amber-400 ${bgCard}`}
+            >
+              <div className="px-4 sm:px-6 py-3.5 sm:py-4 bg-slate-900 text-white flex justify-between items-center border-b border-slate-800 shrink-0">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-9 h-9 rounded-xl bg-amber-400 text-slate-950 flex items-center justify-center shrink-0">
+                    <FileSpreadsheet className="w-5 h-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <h2 className="font-extrabold text-sm sm:text-base leading-tight truncate">
+                      Neptun Excel fájl feltöltése
+                    </h2>
+                    <p className="text-[11px] text-amber-400 font-semibold truncate">
+                      Célfélév: {targetSemLabel}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  disabled={isParsingExcel}
+                  onClick={() => setExcelImportTargetSemCode(null)}
+                  className="text-slate-400 hover:text-white p-1.5 cursor-pointer shrink-0 disabled:opacity-50"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="p-4 sm:p-6 overflow-y-auto overscroll-contain space-y-4 flex-1 min-h-0">
+                <div className={`p-3.5 sm:p-4 rounded-2xl border space-y-3 ${
+                  darkMode
+                    ? 'bg-amber-400/10 border-amber-400/35 text-amber-100'
+                    : 'bg-amber-50/90 border-amber-300 text-slate-800'
+                }`}>
+                  <div className="flex items-center gap-2">
+                    <HelpCircle className="w-4 h-4 text-amber-500 shrink-0" />
+                    <p className="text-xs sm:text-sm font-extrabold text-amber-500">
+                      Hol tudod kiexportálni az Excel fájlt a Neptunból?
+                    </p>
+                  </div>
+
+                  <div className={`px-3 py-2 rounded-xl border text-[11px] sm:text-xs font-extrabold leading-relaxed ${
+                    darkMode
+                      ? 'bg-slate-900/90 border-slate-700 text-amber-300'
+                      : 'bg-white border-amber-300 text-slate-900'
+                  }`}>
+                    Menü &gt; Tanulmányok &gt; Törzslap &gt; Félév kiválasztása a listából &gt; A felvett tárgyak mellett a szűrés gomb mellett a 3db pontra kattintva érhető el az export gomb.
+                  </div>
+
+                  <ol className="space-y-2 pt-0.5">
+                    {neptunExportSteps.map((stepTxt, idx) => (
+                      <li key={idx} className="flex items-start gap-2.5 text-xs leading-relaxed">
+                        <span className="w-5 h-5 rounded-full bg-amber-400 text-slate-950 font-extrabold text-[11px] flex items-center justify-center shrink-0 mt-0.5">
+                          {idx + 1}
+                        </span>
+                        <span className={darkMode ? 'text-slate-200' : 'text-slate-700'}>{stepTxt}</span>
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+
+                <div className={`p-3.5 rounded-xl border space-y-1.5 text-xs ${bgSubCard}`}>
+                  <p className={`font-bold ${textStrong}`}>Mit olvas be automatikusan az alkalmazás?</p>
+                  <p className={textMuted}>
+                    A letöltött táblázatból kinyerjük a <strong>tárgy nevét</strong>, a <strong>kredit értékét</strong>, a <strong>kötelező / szabadon választott besorolást</strong>, valamint a szöveges érdemjegyből (pl. <em>„Elégséges (2)”</em>, <em>„Jeles (5)”</em>) kizárólag az <strong>1–5 számértéket</strong>.
+                  </p>
+                </div>
+
+                {excelImportError && (
+                  <div className={`p-3 rounded-xl border text-xs font-semibold flex items-start gap-2 ${
+                    darkMode
+                      ? 'bg-rose-950/40 border-rose-500/60 text-rose-200'
+                      : 'bg-rose-50 border-rose-300 text-rose-800'
+                  }`}>
+                    <AlertTriangle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
+                    <span>{excelImportError}</span>
+                  </div>
+                )}
+
+                <button
+                  type="button"
+                  disabled={isParsingExcel}
+                  onClick={() => neptunExcelInputRef.current?.click()}
+                  className="w-full py-3.5 px-4 rounded-2xl text-xs sm:text-sm font-extrabold bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-white shadow-lg flex items-center justify-center gap-2 transition cursor-pointer"
+                >
+                  <Upload className="w-5 h-5" />
+                  <span>{isParsingExcel ? 'Excel feldolgozása...' : 'Neptun Excel fájl (.xlsx) kiválasztása és feltöltése'}</span>
+                </button>
+              </div>
+
+              <div className={`px-4 sm:px-6 py-3 border-t flex justify-end shrink-0 ${
+                darkMode ? 'border-slate-800 bg-slate-900/75' : 'border-slate-200 bg-slate-50'
+              }`}>
+                <button
+                  type="button"
+                  disabled={isParsingExcel}
+                  onClick={() => setExcelImportTargetSemCode(null)}
+                  className={`px-4 py-2 text-xs sm:text-sm font-semibold rounded-xl cursor-pointer ${textMuted}`}
+                >
+                  Mégse
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
       {/* APP STATISZTIKA MODAL */}
       {isStatsModalOpen && (
         <div
@@ -7778,7 +8098,7 @@ export default function App() {
                       <input
                         type="text"
                         required
-                        placeholder="Pl. v1.27.0"
+                        placeholder="Pl. v1.28.0"
                         value={newReleaseVersion}
                         onChange={e => setNewReleaseVersion(e.target.value)}
                         className={`w-full border rounded-lg px-3 py-1.5 font-semibold focus:outline-none ${inputStyle}`}
@@ -8408,373 +8728,490 @@ export default function App() {
                       {st.disablePointCalc
                         ? `${formatSemesterLabel(activeSubject.semester)} • ${activeSubject.credits} kredit • Pontszámítás kikapcsolva`
                         : st.isExamCourse
-                          ? `${formatSemesterLabel(activeSubject.semester)} • ${activeSubject.credits} kredit • Vizsgakurzus`
-                          : `${formatSemesterLabel(activeSubject.semester)} • ${activeSubject.credits} kredit • Aláírás: ${formatHu(activeSubject.alairasMin)} p • Megajánlott: ${formatHu(st.megajanlottMin)} p`}
+                          ? `${formatSemesterLabel(activeSubject.semester)} • ${activeSubject.credits} kredit • Vizsgakurzus (2-es határ: 59,5 p)`
+                          : `${formatSemesterLabel(activeSubject.semester)} • ${activeSubject.credits} kredit • Aláírás: ${formatHu(activeSubject.alairasMin)} p | ZH min: ${formatHu(activeSubject.megajanlottMinZH)} p | Megajánlott: ${formatHu(activeSubject.megajanlottMin)} p`}
                     </p>
                   </div>
 
                   <button
-                    type="button"
                     onClick={() => setActiveSubjectId(null)}
-                    title="Bezárás"
-                    className="text-slate-400 hover:text-white p-1.5 -mr-1 -mt-1 cursor-pointer shrink-0"
+                    className="p-2 text-slate-400 hover:text-white cursor-pointer shrink-0 -mr-1 -mt-1"
                   >
                     <X className="w-5 h-5" />
                   </button>
                 </div>
 
-                <div className="flex items-center gap-2 flex-wrap">
+                <div className="flex items-center gap-2 pt-1 border-t border-slate-800/80 overflow-x-auto">
                   {isAdmin && (
                     <button
-                      type="button"
                       onClick={() => handlePublishTemplate(activeSubject)}
-                      title="Sablonként közzététel / frissítés mindenki számára"
-                      className="flex-1 sm:flex-initial justify-center text-xs bg-amber-400/15 hover:bg-amber-400/25 text-amber-300 px-3 py-1.5 rounded-lg border border-amber-400/40 flex items-center gap-1.5 transition cursor-pointer"
+                      title="Közzététel a többiek számára sablonként"
+                      className={`px-3 py-1.5 text-xs font-bold rounded-lg flex items-center gap-1.5 transition cursor-pointer shrink-0 ${
+                        alreadyPublished
+                          ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-500/30'
+                          : 'bg-amber-400 text-slate-950 hover:bg-amber-300'
+                      }`}
                     >
-                      <UploadCloud className="w-3.5 h-3.5 shrink-0" />
-                      <span>
-                        {alreadyPublished ? 'Sablon frissítése' : 'Sablonként közzététel'}
-                      </span>
+                      <UploadCloud className="w-3.5 h-3.5" />
+                      {alreadyPublished ? 'Sablon frissítése' : 'Közzététel sablonként'}
                     </button>
                   )}
                   <button
-                    type="button"
                     onClick={() => {
                       setEditingSubject({
                         ...activeSubject,
-                        manualGrade: getEffectiveManualGrade(activeSubject)
+                        courseKind: activeSubject.courseKind || 'regular',
+                        courseType: activeSubject.courseType || 'mandatory',
+                        disablePointCalc: Boolean(activeSubject.disablePointCalc),
+                        isFailed: Boolean(activeSubject.isFailed),
+                        manualGrade: getEffectiveManualGrade(activeSubject),
+                        customBuckets: activeSubject.customBuckets || [],
+                        totalClasses: activeSubject.totalClasses ?? (activeSubject.attendanceSessions || []).length,
+                        minAttendanceAlairas: activeSubject.minAttendanceAlairas ?? 0,
+                        minAttendanceMegajanlott: activeSubject.minAttendanceMegajanlott ?? 0
                       });
-                      setSelectedSubjectMajorId(null);
-                      setSubjectModalMode('custom');
                       setIsSubjectModalOpen(true);
                     }}
-                    className="flex-1 sm:flex-initial justify-center text-xs bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg border border-slate-700 flex items-center gap-1.5 transition cursor-pointer"
+                    className="px-3 py-1.5 text-xs bg-slate-800 hover:bg-slate-700 rounded-lg flex items-center gap-1.5 cursor-pointer shrink-0"
                   >
-                    <Settings className="w-3.5 h-3.5 shrink-0" /> Beállítások
+                    <Settings className="w-3.5 h-3.5" /> Beállítások
+                  </button>
+                  <button
+                    onClick={() => handleDeleteSubject(activeSubject.id)}
+                    className="px-3 py-1.5 text-xs bg-rose-500/20 text-rose-300 hover:bg-rose-500/30 rounded-lg flex items-center gap-1.5 cursor-pointer shrink-0 ml-auto"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" /> Törlés
                   </button>
                 </div>
               </div>
 
-              {!st.isExamCourse && (
-                <div className={`grid grid-cols-2 sm:flex sm:px-6 border-b shrink-0 ${darkMode ? 'border-slate-800 bg-slate-900/70' : 'border-slate-200 bg-slate-50'}`}>
+              {!st.isExamCourse && !st.disablePointCalc && (
+                <div className={`flex border-b px-3 sm:px-6 shrink-0 ${darkMode ? 'border-slate-800 bg-slate-900/50' : 'border-slate-200 bg-slate-50'}`}>
                   <button
-                    type="button"
                     onClick={() => setDetailTab('points')}
-                    className={`py-3 px-2 sm:px-4 text-xs sm:text-sm font-bold border-b-2 transition cursor-pointer text-center truncate ${
+                    className={`py-3 px-3 sm:px-4 text-xs sm:text-sm font-semibold border-b-2 transition cursor-pointer ${
                       detailTab === 'points'
-                        ? 'border-amber-400 text-amber-500 bg-amber-400/5 sm:bg-transparent'
+                        ? 'border-amber-400 text-amber-500'
                         : `border-transparent ${textMuted}`
                     }`}
                   >
-                    Pontszámok ({(activeSubject.assessments || []).length})
+                    Pontszámok és ZH-k
                   </button>
                   <button
-                    type="button"
                     onClick={() => setDetailTab('attendance')}
-                    className={`py-3 px-2 sm:px-4 text-xs sm:text-sm font-bold border-b-2 transition cursor-pointer text-center truncate ${
+                    className={`py-3 px-3 sm:px-4 text-xs sm:text-sm font-semibold border-b-2 transition cursor-pointer flex items-center gap-2 ${
                       detailTab === 'attendance'
-                        ? 'border-amber-400 text-amber-500 bg-amber-400/5 sm:bg-transparent'
+                        ? 'border-amber-400 text-amber-500'
                         : `border-transparent ${textMuted}`
                     }`}
                   >
-                    Jelenlét ({st.presentCount}/{st.totalClasses})
+                    <span>Jelenlét</span>
+                    {st.totalClasses > 0 && (
+                      <span className={`text-xs px-2 py-0.5 rounded-full ${
+                        !st.attendanceAlairasPossible
+                          ? 'bg-rose-500/20 text-rose-400'
+                          : 'bg-emerald-500/20 text-emerald-500'
+                      }`}>
+                        {st.presentCount}/{st.totalClasses}
+                      </span>
+                    )}
                   </button>
                 </div>
               )}
 
-              <div className="p-3.5 sm:p-6 overflow-y-auto overscroll-contain space-y-5 flex-1 min-h-0">
-                {st.isFailed && (
-                  <div className={`p-3 rounded-xl border text-xs flex items-center justify-between gap-2 ${
-                    darkMode
-                      ? 'bg-rose-950/40 border-rose-500/50 text-rose-200'
-                      : 'bg-rose-50 border-rose-300 text-rose-900'
-                  }`}>
-                    <span>
-                      Ez a tárgy <strong>Megbuktam☹️</strong> állapotban van: halvány pirossal jelenik meg, <strong>nem számít bele az átlagba</strong>, de a felvett kreditekbe beszámít.
-                    </span>
-                  </div>
-                )}
+              <div className="p-4 sm:p-6 overflow-y-auto overscroll-contain space-y-5 sm:space-y-6 flex-1 min-h-0">
+                {st.disablePointCalc ? (
+                  <div className="space-y-4">
+                    <div className={`p-5 rounded-2xl border-2 text-center space-y-3 ${
+                      st.isFailed
+                        ? darkMode
+                          ? 'bg-rose-950/35 border-rose-500/60'
+                          : 'bg-rose-50 border-rose-300'
+                        : st.projectedGrade
+                          ? darkMode
+                            ? 'bg-emerald-950/25 border-emerald-500/50'
+                            : 'bg-emerald-50/80 border-emerald-300'
+                          : bgSubCard
+                    }`}>
+                      <p className={`text-xs font-bold uppercase tracking-wider ${textMuted}`}>
+                        Pontszámítás kikapcsolva • Közvetlen jegy alapú tárgy
+                      </p>
 
-                {!st.isExamCourse && (
-                  <div className={`grid grid-cols-2 sm:grid-cols-4 gap-2 p-2.5 sm:p-3 rounded-xl border text-center ${bgSubCard}`}>
-                    <div className="py-0.5">
-                      <span className={`text-[10px] sm:text-xs block ${textMuted}`}>ZH összesen</span>
-                      <strong className={`text-sm sm:text-base ${textStrong}`}>
-                        {st.zhMax > 0 ? `${formatHu(st.zhElert)} / ${formatHu(st.zhMax)}` : `${formatHu(st.zhElert)} p`}
-                      </strong>
-                      {zhSummaryPct !== null && (
-                        <span className={`block text-[10px] sm:text-[11px] font-semibold ${textMuted}`}>{formatHu(zhSummaryPct)}%</span>
+                      {st.isFailed ? (
+                        <p className="text-2xl sm:text-3xl font-extrabold text-rose-500">
+                          Megbuktam☹️
+                        </p>
+                      ) : st.projectedGrade ? (
+                        <div>
+                          <span className="text-4xl sm:text-5xl font-black text-emerald-500">
+                            {st.projectedGrade}
+                          </span>
+                          <p className={`text-xs mt-1 ${textMuted}`}>
+                            {st.isSimulatedGrade ? 'Szimulált megajánlott / végleges jegy' : 'Beállított megajánlott / végleges jegy'}
+                          </p>
+                        </div>
+                      ) : (
+                        <p className={`text-base font-bold ${textMuted}`}>
+                          Még nincs beállítva jegy
+                        </p>
                       )}
-                    </div>
-                    <div className="py-0.5">
-                      <span className={`text-[10px] sm:text-xs block ${textMuted}`}>Pluszpontok (max 10)</span>
-                      <strong className="text-sm sm:text-base text-emerald-500">+{formatHu(st.pluszElert)} / 10</strong>
-                      {pluszSummaryPct !== null && (
-                        <span className={`block text-[10px] sm:text-[11px] font-semibold ${textMuted}`}>{formatHu(pluszSummaryPct)}%</span>
-                      )}
-                    </div>
-                    <div className="py-0.5">
-                      <span className={`text-[10px] sm:text-xs block ${textMuted}`}>Egyéb gyűjtők össz.</span>
-                      <strong className={`text-sm sm:text-base ${textStrong}`}>
-                        {st.egyebMax > 0 ? `${formatHu(st.egyebElert)} / ${formatHu(st.egyebMax)}` : `${formatHu(st.egyebElert)} p`}
-                      </strong>
-                      {egyebSummaryPct !== null && (
-                        <span className={`block text-[10px] sm:text-[11px] font-semibold ${textMuted}`}>{formatHu(egyebSummaryPct)}%</span>
-                      )}
-                    </div>
-                    <div className="py-0.5">
-                      <span className={`text-[10px] sm:text-xs block ${textMuted}`}>Mindösszesen</span>
-                      <strong className={`text-sm sm:text-base ${textStrong}`}>
-                        {st.osszMax > 0 ? `${formatHu(st.osszElert)} / ${formatHu(st.osszMax)}` : `${formatHu(st.osszElert)} p`}
-                      </strong>
-                      {osszSummaryPct !== null && (
-                        <span className={`block text-[10px] sm:text-[11px] font-semibold ${textMuted}`}>{formatHu(osszSummaryPct)}%</span>
-                      )}
-                    </div>
-                  </div>
-                )}
 
-                {st.isExamCourse ? (
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between gap-2">
-                      <h3 className={`text-sm font-bold ${textStrong}`}>Vizsgaeredmény (max 100 p)</h3>
-                      <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full border ${
-                        darkMode
-                          ? 'bg-amber-400/15 text-amber-300 border-amber-400/30'
-                          : 'bg-amber-50 text-amber-800 border-amber-300'
-                      }`}>
-                        {st.hasExamScore ? formatHu(st.osszElert) : '?'} / 100 p{osszSummaryPct !== null ? ` (${formatHu(osszSummaryPct)}%)` : ''}
-                      </span>
-                    </div>
-                    <div className="space-y-3">
-                      {(zhItems.length > 0
-                        ? [zhItems[0]]
-                        : [{ id: `exam_${activeSubject.id}`, category: 'ZH', title: 'Vizsga', date: '', max: 100, achieved: null }]
-                      ).map(item => renderItemRow(item))}
+                      <div className="pt-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingSubject({
+                              ...activeSubject,
+                              courseKind: activeSubject.courseKind || 'regular',
+                              courseType: activeSubject.courseType || 'mandatory',
+                              disablePointCalc: Boolean(activeSubject.disablePointCalc),
+                              isFailed: Boolean(activeSubject.isFailed),
+                              manualGrade: getEffectiveManualGrade(activeSubject),
+                              customBuckets: activeSubject.customBuckets || [],
+                              totalClasses: activeSubject.totalClasses ?? (activeSubject.attendanceSessions || []).length,
+                              minAttendanceAlairas: activeSubject.minAttendanceAlairas ?? 0,
+                              minAttendanceMegajanlott: activeSubject.minAttendanceMegajanlott ?? 0
+                            });
+                            setIsSubjectModalOpen(true);
+                          }}
+                          className="px-4 py-2 rounded-xl text-xs sm:text-sm font-bold bg-amber-400 hover:bg-amber-300 text-slate-950 inline-flex items-center gap-1.5 transition cursor-pointer"
+                        >
+                          <Pencil className="w-3.5 h-3.5" /> Jegy beállítása / módosítása
+                        </button>
+                      </div>
                     </div>
                   </div>
+                ) : st.isExamCourse ? (
+                  <>
+                    <div className="grid grid-cols-1 gap-3 text-center">
+                      <div className={`p-4 rounded-xl border-2 ${darkMode ? 'bg-slate-800 border-amber-400/50' : 'bg-amber-50/60 border-amber-400'}`}>
+                        <p className={`text-xs font-semibold uppercase ${textMuted}`}>Vizsgakurzus összpontszám</p>
+                        <p className={`text-2xl font-extrabold mt-1 ${textStrong}`}>
+                          {st.hasExamScore ? formatHu(st.osszElert) : '?'}
+                          <span className={`text-sm font-normal ${textMuted}`}> / 100 p</span>
+                        </p>
+                        {osszSummaryPct !== null && st.hasExamScore && (
+                          <p className="text-xs font-bold text-amber-500 mt-1">{formatHu(osszSummaryPct)}%</p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="flex items-center justify-between gap-2 mb-3">
+                        <h3 className={`font-bold text-sm sm:text-base ${textStrong}`}>Vizsgaeredmény</h3>
+                        <span className={`text-xs ${textMuted}`}>2-es határ: 59,5 pont • Max: 100 pont</span>
+                      </div>
+
+                      {zhItems.length === 0 ? (
+                        <div className={`p-4 rounded-xl border text-center space-y-2 ${bgSubCard}`}>
+                          <p className={`text-xs ${textMuted}`}>Még nincs rögzített vizsga tétel ehhez a kurzushoz.</p>
+                          <button
+                            type="button"
+                            onClick={() => setItemModal({
+                              id: `exam_${Date.now()}`,
+                              category: 'ZH',
+                              bucketId: '',
+                              title: 'Vizsga',
+                              date: '',
+                              max: 100,
+                              achieved: '',
+                              bonusPoints: ''
+                            })}
+                            className="px-3.5 py-2 text-xs font-bold rounded-lg bg-amber-400 hover:bg-amber-300 text-slate-950 inline-flex items-center gap-1.5 cursor-pointer"
+                          >
+                            <Plus className="w-3.5 h-3.5" /> Vizsga tétel létrehozása
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="space-y-2.5">
+                          {zhItems.map(item => renderItemRow(item, null))}
+                        </div>
+                      )}
+                    </div>
+                  </>
                 ) : detailTab === 'points' ? (
-                  <div className="space-y-6">
-                    {st.needsAutoExam && (() => {
-                      const autoExamItemId = `auto_exam_${activeSubject.id}`;
-                      const autoEff = getEffectiveScore({ id: autoExamItemId, achieved: activeSubject.autoExamScore });
-                      const hasAutoScore = autoEff !== null && autoEff !== undefined && autoEff !== '' && !isNaN(Number(autoEff));
-                      const autoPct = formatPct(autoEff, 100);
-                      return (
-                        <div className={`p-4 rounded-2xl border-2 space-y-3 ${
+                  <>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3 text-center">
+                      <div className={`p-3 rounded-xl border ${bgSubCard}`}>
+                        <p className={`text-[11px] sm:text-xs ${textMuted}`}>ZH összpont</p>
+                        <p className={`text-base sm:text-lg font-bold ${textStrong}`}>
+                          {formatHu(st.zhElert)}{st.zhMax > 0 && <span className={`text-xs font-normal ${textMuted}`}> / {formatHu(st.zhMax)}</span>}
+                        </p>
+                        {zhSummaryPct !== null && (
+                          <p className="text-[11px] font-semibold text-amber-500 mt-0.5">{formatHu(zhSummaryPct)}%</p>
+                        )}
+                      </div>
+
+                      <div className={`p-3 rounded-xl border ${bgSubCard}`}>
+                        <p className={`text-[11px] sm:text-xs ${textMuted}`}>Pluszpont (max {BONUS_POINTS_CAP})</p>
+                        <p className="text-base sm:text-lg font-bold text-emerald-500">
+                          +{formatHu(st.pluszElert)} <span className={`text-xs font-normal ${textMuted}`}>/ {BONUS_POINTS_CAP}</span>
+                        </p>
+                        {st.rawPluszElert > BONUS_POINTS_CAP && (
+                          <p className="text-[10px] font-semibold text-amber-500 mt-0.5">
+                            (Nyers: +{formatHu(st.rawPluszElert)} p)
+                          </p>
+                        )}
+                        {pluszSummaryPct !== null && (
+                          <p className="text-[11px] font-semibold text-emerald-500 mt-0.5">{formatHu(pluszSummaryPct)}%</p>
+                        )}
+                      </div>
+
+                      <div className={`p-3 rounded-xl border ${bgSubCard}`}>
+                        <p className={`text-[11px] sm:text-xs ${textMuted}`}>Egyéb gyűjtők</p>
+                        <p className="text-base sm:text-lg font-bold text-sky-500">
+                          +{formatHu(st.egyebElert)}{st.egyebMax > 0 && <span className={`text-xs font-normal ${textMuted}`}> / {formatHu(st.egyebMax)}</span>}
+                        </p>
+                        {egyebSummaryPct !== null && (
+                          <p className="text-[11px] font-semibold text-sky-500 mt-0.5">{formatHu(egyebSummaryPct)}%</p>
+                        )}
+                      </div>
+
+                      <div className={`p-3 rounded-xl border ${darkMode ? 'bg-slate-800 border-amber-400/50' : 'bg-amber-50/60 border-amber-400'}`}>
+                        <p className={`text-[11px] sm:text-xs ${textMuted}`}>
+                          {st.needsAutoExam ? 'Vizsgapontszám' : 'Összesen'}
+                        </p>
+                        <p className={`text-base sm:text-lg font-extrabold ${textStrong}`}>
+                          {st.needsAutoExam && !st.hasAutoExamScore ? '?' : formatHu(st.osszElert)}
+                          {st.osszMax > 0 && <span className={`text-xs font-normal ${textMuted}`}> / {formatHu(st.osszMax)}</span>}
+                        </p>
+                        {osszSummaryPct !== null && !(st.needsAutoExam && !st.hasAutoExamScore) && (
+                          <p className="text-[11px] font-bold text-amber-500 mt-0.5">{formatHu(osszSummaryPct)}%</p>
+                        )}
+                      </div>
+                    </div>
+
+                    {st.needsAutoExam && (
+                      <div className={`p-4 rounded-2xl border-2 space-y-3 ${
+                        darkMode
+                          ? 'bg-amber-950/45 border-amber-600/80 text-amber-100'
+                          : 'bg-amber-100/85 border-amber-600/80 text-amber-950'
+                      }`}>
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <span className="px-2.5 py-0.5 rounded-md text-xs font-extrabold uppercase tracking-wider bg-amber-700 text-white">
+                              VIZSGA
+                            </span>
+                            <span className="text-xs sm:text-sm font-extrabold">
+                              Automatikus vizsga mód (Max: 100 p)
+                            </span>
+                          </div>
+                          <span className="text-xs font-bold">
+                            2-es határ: 59,5 pont
+                          </span>
+                        </div>
+
+                        <p className={`text-xs leading-relaxed ${
+                          darkMode ? 'text-amber-200/90' : 'text-amber-950/90'
+                        }`}>
+                          Minden ZH eredményed rögzítve lett, de a ZH minimum vagy a megajánlott jegy ponthatára nem teljesült (félévközi összpont: <strong>{formatHu(st.regularOsszElert)} p</strong>). Írd be a vizsgán elért pontszámodat a ceruza ikonra kattintva:
+                        </p>
+
+                        <div className={`flex flex-wrap items-center justify-between gap-3 p-3 rounded-xl border ${
                           darkMode
-                            ? 'bg-amber-950/35 border-amber-600/70'
-                            : 'bg-amber-100/75 border-amber-500/80'
+                            ? 'bg-slate-900/85 border-amber-600/60'
+                            : 'bg-white/95 border-amber-600/60'
                         }`}>
-                          <div className="flex flex-wrap items-center justify-between gap-2">
-                            <div className="flex items-center gap-2">
-                              <span className="px-2.5 py-0.5 rounded-md text-xs font-extrabold uppercase tracking-wider bg-amber-700 text-white">
-                                VIZSGA
-                              </span>
-                              <span className={`text-xs font-semibold ${darkMode ? 'text-amber-200' : 'text-amber-950'}`}>
-                                Félévközi eredmények alapján vizsgára bocsátva (max 100 p)
-                              </span>
-                            </div>
+                          <div>
+                            <p className={`text-sm font-extrabold ${textStrong}`}>Vizsgaeredmény</p>
+                            <p className={`text-[11px] ${textMuted}`}>
+                              59,5 pont alatt automatikusan „Megbuktam☹️” állapotba kerül
+                            </p>
                           </div>
 
-                          <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-xl border ${
-                            darkMode
-                              ? 'bg-amber-900/25 border-amber-700/50'
-                              : 'bg-amber-50/90 border-amber-300'
-                          }`}>
-                            <div>
-                              <p className={`text-sm font-extrabold ${darkMode ? 'text-amber-100' : 'text-amber-950'}`}>
-                                VIZSGA
-                              </p>
-                              <p className={`text-[11px] ${darkMode ? 'text-amber-200/80' : 'text-amber-900/80'}`}>
-                                59,5 ponttól sikeres vizsgajegy (2–5), alatta automatikus bukás
-                              </p>
-                            </div>
+                          <div className="flex items-center gap-2 ml-auto">
+                            <span className={`min-w-[4.75rem] text-right border rounded-lg px-2.5 py-1.5 text-xs sm:text-sm font-extrabold ${
+                              darkMode
+                                ? 'bg-slate-800 border-amber-500/60 text-white'
+                                : 'bg-amber-50 border-amber-500 text-slate-950'
+                            }`}>
+                              {st.hasAutoExamScore ? formatHu(st.osszElert) : '?'}
+                              <span className={`font-medium text-xs ${textMuted}`}> / 100 p</span>
+                            </span>
 
-                            <div className="flex items-center justify-between sm:justify-end gap-2.5">
-                              <span className={`min-w-[4.75rem] text-right border rounded-lg px-2.5 py-1.5 text-xs sm:text-sm font-extrabold ${
+                            <span
+                              className={`min-w-[3.5rem] px-2 text-center text-xs font-bold py-1.5 rounded-lg ${
+                                st.hasAutoExamScore
+                                  ? st.osszElert >= 59.5
+                                    ? 'bg-emerald-500 text-white'
+                                    : 'bg-rose-500 text-white'
+                                  : darkMode ? 'bg-slate-800 text-slate-400' : 'bg-slate-100 text-slate-500'
+                              }`}
+                            >
+                              {st.hasAutoExamScore ? `${formatHu(st.osszElert)}%` : '—'}
+                            </span>
+
+                            <button
+                              type="button"
+                              onClick={() => setItemModal({
+                                id: `auto_exam_${activeSubject.id}`,
+                                isAutoExam: true,
+                                category: 'ZH',
+                                bucketId: '',
+                                title: 'Vizsga',
+                                date: '',
+                                max: 100,
+                                achieved: st.hasAutoExamScore ? st.osszElert : '',
+                                bonusPoints: ''
+                              })}
+                              title="Vizsgapontszám szerkesztése"
+                              className={`p-2 sm:p-1.5 rounded-lg border transition cursor-pointer ${
                                 darkMode
-                                  ? 'bg-slate-900/80 border-amber-700/70 text-amber-100'
-                                  : 'bg-white border-amber-300 text-amber-950'
-                              }`}>
-                                {hasAutoScore ? formatHu(autoEff) : '?'}
-                                <span className="font-medium text-xs opacity-75"> / 100 p</span>
-                              </span>
-
-                              <span className={`min-w-[3.5rem] px-2 text-center text-xs font-bold py-1.5 rounded-lg ${
-                                autoPct !== null
-                                  ? autoPct >= 59.5
-                                    ? 'bg-emerald-500/25 text-emerald-500'
-                                    : 'bg-rose-500/25 text-rose-500'
-                                  : darkMode
-                                    ? 'bg-slate-800/70 text-slate-400'
-                                    : 'bg-amber-200/60 text-amber-900'
-                              }`}>
-                                {autoPct !== null ? `${formatHu(autoPct)}%` : '—'}
-                              </span>
-
-                              <button
-                                type="button"
-                                onClick={() => setItemModal({
-                                  isAutoExam: true,
-                                  category: 'ZH',
-                                  title: 'VIZSGA',
-                                  date: '',
-                                  max: 100,
-                                  achieved: hasAutoScore ? autoEff : ''
-                                })}
-                                title="Vizsgaeredmény szerkesztése"
-                                className={`p-2 sm:p-1.5 rounded-lg border transition cursor-pointer ${
-                                  darkMode
-                                    ? 'bg-slate-800 border-amber-600/60 text-amber-400 hover:bg-slate-700'
-                                    : 'bg-white border-amber-400 text-amber-800 hover:bg-amber-100'
-                                }`}
-                              >
-                                <Pencil className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
-                              </button>
-                            </div>
+                                  ? 'bg-slate-800 border-slate-700 text-amber-400 hover:bg-slate-700'
+                                  : 'bg-white border-slate-200 text-slate-700 hover:bg-amber-50 hover:text-amber-600'
+                              }`}
+                            >
+                              <Pencil className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
+                            </button>
                           </div>
                         </div>
-                      );
-                    })()}
+                      </div>
+                    )}
 
-                    <div className="space-y-6">
-                      <div className="space-y-2.5">
-                        <div className={`flex flex-wrap items-center justify-between gap-2 transition-opacity ${
-                          st.needsAutoExam ? 'opacity-45 grayscale' : ''
-                        }`}>
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <h3 className={`text-sm font-bold ${textStrong}`}>ZH-k / Vizsgák</h3>
-                            <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full border ${
-                              darkMode
-                                ? 'bg-amber-400/15 text-amber-300 border-amber-400/30'
-                                : 'bg-amber-50 text-amber-800 border-amber-300'
-                            }`}>
-                              {st.zhMax > 0
-                                ? `${formatHu(st.zhElert)} / ${formatHu(st.zhMax)} p (${formatHu(zhSummaryPct)}%)`
-                                : `${formatHu(st.zhElert)} p`}
-                            </span>
-                          </div>
-                          <button
-                            onClick={() => setItemModal({ category: 'ZH', title: '', date: '', max: '', achieved: '', bonusPoints: '' })}
-                            className="text-xs font-semibold px-3.5 py-2 sm:py-1.5 rounded-lg bg-amber-400 hover:bg-amber-300 text-slate-950 flex items-center gap-1 transition cursor-pointer"
-                          >
-                            <Plus className="w-3.5 h-3.5" /> ZH hozzáadása
-                          </button>
-                        </div>
-                        {zhItems.length === 0 ? (
-                          <p className={`text-xs italic ${textMuted}`}>Nincs még rögzített ZH vagy vizsga.</p>
-                        ) : (
-                          <div className="space-y-3">{zhItems.map(item => renderItemRow(item))}</div>
-                        )}
+                    <div>
+                      <div className="flex items-center justify-between gap-2 mb-3">
+                        <h3 className={`font-bold text-sm sm:text-base ${textStrong} ${st.needsAutoExam ? 'opacity-50' : ''}`}>
+                          ZH-k (Zárthelyi dolgozatok)
+                        </h3>
+                        <button
+                          onClick={() => setItemModal({
+                            category: 'ZH',
+                            bucketId: '',
+                            title: getNextZhTitle(activeSubject.assessments),
+                            date: '',
+                            max: '',
+                            achieved: '',
+                            bonusPoints: ''
+                          })}
+                          className={`px-3 py-1.5 text-xs font-semibold rounded-lg flex items-center gap-1 cursor-pointer shrink-0 ${
+                            darkMode ? 'bg-slate-800 hover:bg-slate-700 text-amber-400' : 'bg-slate-900 hover:bg-slate-800 text-white'
+                          }`}
+                        >
+                          <Plus className="w-3.5 h-3.5" /> ZH hozzáadása
+                        </button>
                       </div>
 
-                      <div className="space-y-2.5">
-                        <div className={`flex flex-wrap items-center justify-between gap-2 transition-opacity ${
-                          st.needsAutoExam ? 'opacity-45 grayscale' : ''
-                        }`}>
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <h3 className={`text-sm font-bold ${textStrong}`}>Pluszpontok</h3>
-                            <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full border ${
-                              darkMode
-                                ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
-                                : 'bg-emerald-50 text-emerald-800 border-emerald-300'
-                            }`}>
-                              +{formatHu(st.pluszElert)} / {BONUS_POINTS_CAP} p ({formatHu(pluszSummaryPct)}%)
-                              {st.rawPluszElert > st.pluszElert && ` • gyűjtött: ${formatHu(st.rawPluszElert)} p`}
-                            </span>
-                          </div>
-                          <button
-                            onClick={() => setItemModal({ category: 'Pluszpont', title: '', date: '', max: '', achieved: '' })}
-                            className="text-xs font-semibold px-3.5 py-2 sm:py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-white flex items-center gap-1 transition cursor-pointer"
-                          >
-                            <Plus className="w-3.5 h-3.5" /> Pluszpont hozzáadása
-                          </button>
+                      {zhItems.length === 0 ? (
+                        <p className={`text-xs italic ${textMuted}`}>Még nincs rögzített ZH.</p>
+                      ) : (
+                        <div className="space-y-2.5">
+                          {zhItems.map(item => renderItemRow(item, null))}
                         </div>
-                        {st.pluszProcessed.length === 0 ? (
-                          <p className={`text-xs italic ${textMuted}`}>Nincs még rögzített pluszpont.</p>
-                        ) : (
-                          <div className="space-y-3">
-                            {st.pluszProcessed.map(({ item, capMeta }) => renderItemRow(item, capMeta))}
-                          </div>
-                        )}
+                      )}
+                    </div>
+
+                    <div>
+                      <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                        <div className={st.needsAutoExam ? 'opacity-50' : ''}>
+                          <h3 className={`font-bold text-sm sm:text-base ${textStrong}`}>Pluszpontok</h3>
+                          <p className={`text-xs ${textMuted}`}>
+                            Ebben a kategóriában maximum <strong>{BONUS_POINTS_CAP} pont</strong> számítható be az összpontszámba.
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => setItemModal({ category: 'Pluszpont', bucketId: '', title: '', date: '', max: '', achieved: '' })}
+                          className={`px-3 py-1.5 text-xs font-semibold rounded-lg flex items-center gap-1 cursor-pointer shrink-0 ${
+                            darkMode ? 'bg-slate-800 hover:bg-slate-700 text-emerald-400' : 'bg-emerald-600 hover:bg-emerald-500 text-white'
+                          }`}
+                        >
+                          <Plus className="w-3.5 h-3.5" /> Pluszpont hozzáadása
+                        </button>
                       </div>
+
+                      {st.pluszProcessed.length === 0 ? (
+                        <p className={`text-xs italic ${textMuted}`}>Még nincs rögzített pluszpont.</p>
+                      ) : (
+                        <div className="space-y-2.5">
+                          {st.pluszProcessed.map(({ item, capMeta }) => renderItemRow(item, capMeta))}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="space-y-4">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className={st.needsAutoExam ? 'opacity-50' : ''}>
+                          <h3 className={`font-bold text-sm sm:text-base ${textStrong}`}>Egyéb számonkérések / Gyűjtők</h3>
+                          <p className={`text-xs ${textMuted}`}>
+                            Hozz létre saját pontgyűjtőket (pl. Órai munka, Beadandó) opcionális ponthatárral.
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => setBucketModal({ title: '', maxPoints: '' })}
+                          className={`px-3 py-1.5 text-xs font-semibold rounded-lg flex items-center gap-1 cursor-pointer shrink-0 ${
+                            darkMode ? 'bg-sky-500/20 text-sky-300 border border-sky-500/30 hover:bg-sky-500/30' : 'bg-sky-600 hover:bg-sky-500 text-white'
+                          }`}
+                        >
+                          <FolderPlus className="w-3.5 h-3.5" /> Új gyűjtő létrehozása
+                        </button>
+                      </div>
+
+                      {customBuckets.length === 0 && st.unassignedEgyebEval.processed.length === 0 && (
+                        <p className={`text-xs italic ${textMuted}`}>
+                          Még nincs létrehozott egyéb gyűjtő. Kattints az „Új gyűjtő létrehozása” gombra!
+                        </p>
+                      )}
 
                       {customBuckets.map(bucket => {
-                        const bEval = st.bucketStatsMap[bucket.id] || {
-                          processed: [],
-                          countedElert: 0,
-                          rawElert: 0,
-                          effectiveMax: 0
-                        };
-                        const bPct = formatPct(bEval.countedElert, bEval.effectiveMax);
+                        const bStats = st.bucketStatsMap[bucket.id] || { processed: [], countedElert: 0, rawElert: 0, effectiveMax: 0 };
+                        const bPct = bStats.effectiveMax > 0 ? formatPct(bStats.countedElert, bStats.effectiveMax) : null;
+                        const hasBucketCap = bucket.maxPoints !== null && bucket.maxPoints !== undefined && bucket.maxPoints !== '' && Number(bucket.maxPoints) > 0;
 
                         return (
                           <div
                             key={bucket.id}
-                            className={`space-y-2.5 pt-4 border-t ${darkMode ? 'border-slate-800' : 'border-slate-200'}`}
+                            className={`rounded-2xl border p-3.5 sm:p-4 space-y-3 transition-opacity ${bgSubCard} ${
+                              st.needsAutoExam ? 'opacity-50' : ''
+                            }`}
                           >
                             <div className="flex flex-wrap items-center justify-between gap-2">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <h3 className={`text-sm font-bold transition-opacity ${textStrong} ${
-                                  st.needsAutoExam ? 'opacity-45 grayscale' : ''
-                                }`}>
-                                  {bucket.title}
-                                </h3>
-                                <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full border transition-opacity ${
-                                  darkMode
-                                    ? 'bg-slate-800 text-slate-200 border-slate-700'
-                                    : 'bg-slate-100 text-slate-800 border-slate-300'
-                                } ${st.needsAutoExam ? 'opacity-45 grayscale' : ''}`}>
-                                  {bEval.effectiveMax > 0
-                                    ? `${formatHu(bEval.countedElert)} / ${formatHu(bEval.effectiveMax)} p${bPct !== null ? ` (${formatHu(bPct)}%)` : ''}`
-                                    : `${formatHu(bEval.countedElert)} p`}
-                                </span>
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <h4 className={`font-bold text-sm ${textStrong}`}>{bucket.title}</h4>
+                                  <span className={`px-2 py-0.5 text-xs font-bold rounded-full ${
+                                    darkMode ? 'bg-sky-500/20 text-sky-300' : 'bg-sky-100 text-sky-800'
+                                  }`}>
+                                    {formatHu(bStats.countedElert)}{hasBucketCap ? ` / ${formatHu(bucket.maxPoints)} p` : ' p'}
+                                    {bPct !== null && ` (${formatHu(bPct)}%)`}
+                                  </span>
+                                  {hasBucketCap && bStats.rawElert > Number(bucket.maxPoints) && (
+                                    <span className="text-[11px] font-semibold text-amber-500">
+                                      (Nyers: {formatHu(bStats.rawElert)} p)
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-1.5 flex-wrap">
                                 <button
-                                  onClick={() => setBucketModal({
-                                    id: bucket.id,
-                                    title: bucket.title,
-                                    maxPoints: bucket.maxPoints ?? ''
-                                  })}
+                                  onClick={() => setItemModal({ category: 'Egyeb', bucketId: bucket.id, title: '', date: '', max: '', achieved: '' })}
+                                  className={`px-2.5 py-1.5 sm:py-1 text-xs font-semibold rounded-lg flex items-center gap-1 cursor-pointer ${
+                                    darkMode ? 'bg-slate-800 hover:bg-slate-700 text-sky-400' : 'bg-slate-900 hover:bg-slate-800 text-white'
+                                  }`}
+                                >
+                                  <Plus className="w-3 h-3" /> Tétel hozzáadása
+                                </button>
+                                <button
+                                  onClick={() => setBucketModal({ id: bucket.id, title: bucket.title, maxPoints: bucket.maxPoints ?? '' })}
                                   title="Gyűjtő szerkesztése"
-                                  className={`p-1.5 rounded-lg transition cursor-pointer ${darkMode ? 'text-amber-400 hover:bg-slate-800' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'}`}
+                                  className="p-2 sm:p-1.5 text-slate-400 hover:text-amber-500 cursor-pointer"
                                 >
                                   <Pencil className="w-3.5 h-3.5" />
                                 </button>
                                 <button
                                   onClick={() => handleDeleteBucket(bucket.id)}
                                   title="Gyűjtő törlése"
-                                  className="p-1.5 text-rose-500 hover:bg-rose-500/10 rounded-lg transition cursor-pointer"
+                                  className="p-2 sm:p-1.5 text-slate-400 hover:text-rose-500 cursor-pointer"
                                 >
                                   <Trash2 className="w-3.5 h-3.5" />
                                 </button>
                               </div>
-                              <button
-                                onClick={() => setItemModal({
-                                  category: 'Egyeb',
-                                  bucketId: bucket.id,
-                                  title: '',
-                                  date: '',
-                                  max: '',
-                                  achieved: ''
-                                })}
-                                className={`text-xs font-semibold px-3.5 py-2 sm:py-1.5 rounded-lg flex items-center gap-1 transition cursor-pointer ${
-                                  darkMode
-                                    ? 'bg-slate-800 hover:bg-slate-700 text-white border border-slate-700'
-                                    : 'bg-slate-200 hover:bg-slate-300 text-slate-900'
-                                } ${st.needsAutoExam ? 'opacity-45 grayscale' : ''}`}
-                              >
-                                <Plus className="w-3.5 h-3.5" /> Tétel hozzáadása
-                              </button>
                             </div>
 
-                            {bEval.processed.length === 0 ? (
-                              <p className={`text-xs italic ${textMuted}`}>
-                                Még üres ez a gyűjtő. Kattints a „+ Tétel hozzáadása” gombra.
-                              </p>
+                            {bStats.processed.length === 0 ? (
+                              <p className={`text-xs italic ${textMuted}`}>Még nincs tétel ebben a gyűjtőben.</p>
                             ) : (
-                              <div className="space-y-3">
-                                {bEval.processed.map(({ item, capMeta }) => renderItemRow(item, capMeta))}
+                              <div className="space-y-2.5">
+                                {bStats.processed.map(({ item, capMeta }) => renderItemRow(item, capMeta))}
                               </div>
                             )}
                           </div>
@@ -8782,135 +9219,109 @@ export default function App() {
                       })}
 
                       {st.unassignedEgyebEval.processed.length > 0 && (
-                        <div className={`space-y-2.5 pt-4 border-t ${darkMode ? 'border-slate-800' : 'border-slate-200'}`}>
-                          <div className={`flex flex-wrap items-center justify-between gap-2 transition-opacity ${
-                            st.needsAutoExam ? 'opacity-45 grayscale' : ''
-                          }`}>
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <h3 className={`text-sm font-bold ${textStrong}`}>Egyéb pontszámítási tételek</h3>
-                              <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full border ${
-                                darkMode
-                                  ? 'bg-slate-800 text-slate-300 border-slate-700'
-                                  : 'bg-slate-100 text-slate-700 border-slate-300'
-                              }`}>
-                                {st.unassignedEgyebEval.effectiveMax > 0
-                                  ? `${formatHu(st.unassignedEgyebEval.countedElert)} / ${formatHu(st.unassignedEgyebEval.effectiveMax)} p`
-                                  : `${formatHu(st.unassignedEgyebEval.countedElert)} p`}
-                              </span>
-                            </div>
-                            <button
-                              onClick={() => setItemModal({
-                                category: 'Egyeb',
-                                bucketId: '',
-                                title: '',
-                                date: '',
-                                max: '',
-                                achieved: ''
-                              })}
-                              className={`text-xs font-semibold px-3.5 py-2 sm:py-1.5 rounded-lg flex items-center gap-1 transition cursor-pointer ${
-                                darkMode ? 'bg-slate-800 hover:bg-slate-700 text-white border border-slate-700' : 'bg-slate-200 hover:bg-slate-300 text-slate-900'
-                              }`}
-                            >
-                              <Plus className="w-3.5 h-3.5" /> Egyéb tétel hozzáadása
-                            </button>
-                          </div>
-                          <div className="space-y-3">
-                            {st.unassignedEgyebEval.processed.map(({ item }) => renderItemRow(item))}
+                        <div className={`rounded-2xl border p-3.5 sm:p-4 space-y-3 transition-opacity ${bgSubCard} ${
+                          st.needsAutoExam ? 'opacity-50' : ''
+                        }`}>
+                          <h4 className={`font-bold text-sm ${textStrong}`}>Besorolatlan egyéb tételek</h4>
+                          <div className="space-y-2.5">
+                            {st.unassignedEgyebEval.processed.map(({ item, capMeta }) => renderItemRow(item, capMeta))}
                           </div>
                         </div>
                       )}
-
-                      <div className={`pt-3 border-t border-dashed transition-opacity ${
-                        darkMode ? 'border-slate-800' : 'border-slate-300'
-                      } ${st.needsAutoExam ? 'opacity-45 grayscale' : ''}`}>
-                        <button
-                          type="button"
-                          onClick={() => setBucketModal({ title: '', maxPoints: '' })}
-                          className={`w-full py-3 sm:py-2.5 px-4 rounded-xl text-xs sm:text-sm font-semibold border border-dashed flex items-center justify-center gap-2 transition cursor-pointer ${
-                            darkMode
-                              ? 'border-slate-700 text-amber-400 hover:bg-slate-800/70 hover:border-amber-400/50'
-                              : 'border-slate-300 text-slate-800 hover:bg-slate-100 hover:border-slate-400'
-                          }`}
-                        >
-                          <Layers className="w-4 h-4 shrink-0" />
-                          <span>+ Új gyűjtő létrehozása (pl. Gyakorlati feladatok, Heti ellenőrzők)</span>
-                        </button>
-                      </div>
                     </div>
-                  </div>
+                  </>
                 ) : (
-                  <div className="space-y-3.5">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className={`text-xs ${textMuted}`}>
-                        Kötelező jelenlét aláíráshoz: <strong className={textStrong}>{st.minAttAlairas} alkalom</strong> • Megajánlotthoz: <strong className={textStrong}>{st.minAttMegajanlott} alkalom</strong>
-                      </p>
-                      <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${
-                        st.presentCount >= st.minAttAlairas
-                          ? 'bg-emerald-500/20 text-emerald-500'
-                          : 'bg-amber-400/20 text-amber-500'
-                      }`}>
-                        Jelen: {st.presentCount} • Hiányzás: {st.absentCount} / {st.totalClasses}
-                      </span>
+                  <div className="space-y-4">
+                    <div className={`p-4 rounded-xl border flex flex-wrap items-center justify-between gap-3 ${bgSubCard}`}>
+                      <div>
+                        <p className={`text-sm font-bold ${textStrong}`}>
+                          Gyakorlati jelenlét: {st.presentCount} / {st.totalClasses} alkalom
+                        </p>
+                        <p className={`text-xs mt-0.5 ${textMuted}`}>
+                          Aláírás minimum: <strong>{st.minAttAlairas} jelenlét</strong> (max. {Math.max(0, st.totalClasses - st.minAttAlairas)} hiányzás)
+                          {st.minAttMegajanlott > 0 && (
+                            <> • Megajánlott minimum: <strong>{st.minAttMegajanlott} jelenlét</strong></>
+                          )}
+                        </p>
+                      </div>
+                      {st.totalClasses > 0 && (
+                        <span className={`px-3 py-1 rounded-full text-xs font-bold ${
+                          !st.attendanceAlairasPossible
+                            ? 'bg-rose-500/20 text-rose-400'
+                            : st.presentCount >= st.minAttAlairas
+                              ? 'bg-emerald-500/20 text-emerald-500'
+                              : 'bg-amber-400/20 text-amber-500'
+                        }`}>
+                          {!st.attendanceAlairasPossible
+                            ? 'Túl sok hiányzás (aláírás veszélyben)'
+                            : st.presentCount >= st.minAttAlairas
+                              ? 'Jelenléti minimum teljesítve'
+                              : `Még ${st.minAttAlairas - st.presentCount} jelenlét kell`}
+                        </span>
+                      )}
                     </div>
 
-                    {sessions.length === 0 ? (
-                      <p className={`text-sm italic py-4 ${textMuted}`}>
-                        Ehhez a tárgyhoz 0 gyakorlati óra van beállítva. A „Beállítások” gombbal módosíthatod az óraszámot.
+                    {st.totalClasses === 0 ? (
+                      <p className={`text-sm text-center py-6 ${textMuted}`}>
+                        Ehhez a tantárgyhoz nincs beállítva kötelező gyakorlati óraszám. A „Beállítások” gombra kattintva adhatod meg az alkalmak számát.
                       </p>
                     ) : (
-                      <div className="space-y-3">
+                      <div className="space-y-2.5">
                         {sessions.map((sess, idx) => (
                           <div
                             key={sess.id || idx}
-                            className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 sm:p-3 rounded-xl border ${bgSubCard}`}
+                            className={`flex flex-wrap sm:flex-nowrap items-center justify-between gap-2.5 p-3 rounded-xl border ${
+                              sess.status === 'present'
+                                ? darkMode ? 'border-emerald-500/40 bg-emerald-500/10' : 'border-emerald-200 bg-emerald-50/70'
+                                : sess.status === 'absent'
+                                  ? darkMode ? 'border-rose-500/40 bg-rose-500/10' : 'border-rose-200 bg-rose-50/70'
+                                  : darkMode ? 'border-slate-800 bg-slate-800/40' : 'border-slate-200 bg-white'
+                            }`}
                           >
-                            <div className="flex items-center justify-between sm:justify-start gap-3">
-                              <span className={`w-24 text-xs sm:text-sm font-semibold ${textStrong}`}>
-                                {idx + 1}. alkalom
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <span className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold shrink-0 ${
+                                darkMode ? 'bg-slate-800 text-slate-300' : 'bg-slate-100 text-slate-700'
+                              }`}>
+                                {idx + 1}.
                               </span>
-                              <div className="flex items-center gap-1.5">
-                                <Calendar className={`w-4 h-4 shrink-0 ${textMuted}`} />
-                                <input
-                                  type="date"
-                                  value={sess.date || ''}
-                                  onChange={(e) => handleUpdateSession(idx, { date: e.target.value })}
-                                  className={`border rounded-lg px-2.5 py-1.5 text-xs focus:outline-none ${inputStyle}`}
-                                />
-                              </div>
+                              <input
+                                type="date"
+                                value={sess.date || ''}
+                                onChange={(e) => handleUpdateSession(idx, { date: e.target.value })}
+                                className={`border rounded-lg px-2.5 py-2 sm:py-1.5 text-sm sm:text-xs focus:outline-none ${inputStyle}`}
+                              />
                             </div>
 
-                            <div className={`grid grid-cols-2 sm:flex items-center gap-2.5 sm:gap-2 w-full sm:w-auto pt-2.5 sm:pt-0 border-t sm:border-t-0 ${darkMode ? 'border-slate-700/60' : 'border-slate-200/80'}`}>
+                            <div className="flex items-center gap-2 w-full sm:w-auto">
                               <button
                                 type="button"
                                 onClick={() =>
-                                  handleUpdateSession(idx, { status: sess.status === 'present' ? null : 'present' })
+                                  handleUpdateSession(idx, {
+                                    status: sess.status === 'present' ? null : 'present'
+                                  })
                                 }
-                                title="Jelen voltam"
-                                className={`px-3.5 py-2.5 sm:py-1.5 rounded-lg flex items-center justify-center gap-1.5 text-xs font-bold transition cursor-pointer ${
+                                className={`flex-1 sm:flex-initial justify-center px-3 py-2 sm:py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 transition cursor-pointer ${
                                   sess.status === 'present'
                                     ? 'bg-emerald-500 text-white shadow-sm'
-                                    : darkMode
-                                      ? 'bg-slate-800 text-slate-400 hover:text-emerald-400 border border-slate-700'
-                                      : 'bg-white text-slate-400 hover:text-emerald-600 border border-slate-200'
+                                    : darkMode ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                                 }`}
                               >
-                                <Check className="w-4 h-4" /> Jelen
+                                <Check className="w-3.5 h-3.5" /> Jelen
                               </button>
                               <button
                                 type="button"
                                 onClick={() =>
-                                  handleUpdateSession(idx, { status: sess.status === 'absent' ? null : 'absent' })
+                                  handleUpdateSession(idx, {
+                                    status: sess.status === 'absent' ? null : 'absent'
+                                  })
                                 }
-                                title="Hiányoztam"
-                                className={`px-3.5 py-2.5 sm:py-1.5 rounded-lg flex items-center justify-center gap-1.5 text-xs font-bold transition cursor-pointer ${
+                                className={`flex-1 sm:flex-initial justify-center px-3 py-2 sm:py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 transition cursor-pointer ${
                                   sess.status === 'absent'
                                     ? 'bg-rose-500 text-white shadow-sm'
-                                    : darkMode
-                                      ? 'bg-slate-800 text-slate-400 hover:text-rose-400 border border-slate-700'
-                                      : 'bg-white text-slate-400 hover:text-rose-600 border border-slate-200'
+                                    : darkMode ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                                 }`}
                               >
-                                <X className="w-4 h-4" /> Hiányzás
+                                <X className="w-3.5 h-3.5" /> Hiányzás
                               </button>
                             </div>
                           </div>
@@ -8920,36 +9331,33 @@ export default function App() {
                   </div>
                 )}
 
-                <div className={`pt-4 border-t flex flex-col-reverse sm:flex-row sm:items-center justify-between gap-3 ${darkMode ? 'border-slate-800' : 'border-slate-100'}`}>
+                <div className={`pt-4 border-t flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 ${
+                  darkMode ? 'border-slate-800' : 'border-slate-200'
+                }`}>
+                  <div className="text-xs">
+                    {activeSubject.isFailed ? (
+                      <span className="text-rose-500 font-bold">
+                        Ez a tárgy jelenleg bukottként van jelölve (nem számít az átlagba).
+                      </span>
+                    ) : (
+                      <span className={textMuted}>
+                        Nem sikerült a tárgy vagy az aláírás? Jelöld meg bukottként:
+                      </span>
+                    )}
+                  </div>
                   <button
                     type="button"
-                    onClick={() => handleDeleteSubject(activeSubject.id)}
-                    className="text-xs text-rose-500 hover:underline py-2 sm:py-1.5 text-center sm:text-left cursor-pointer"
+                    onClick={() => handleToggleSubjectFailed(activeSubject)}
+                    className={`w-full sm:w-auto px-4 py-2.5 sm:py-2 rounded-xl text-xs font-extrabold border transition cursor-pointer flex items-center justify-center gap-1.5 shrink-0 ${
+                      activeSubject.isFailed
+                        ? darkMode
+                          ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
+                          : 'bg-slate-100 hover:bg-slate-200 text-slate-800 border-slate-300'
+                        : 'bg-rose-600 hover:bg-rose-500 text-white border-rose-600 shadow-sm'
+                    }`}
                   >
-                    Tantárgy törlése
+                    {activeSubject.isFailed ? 'Bukott jelölés visszavonása' : 'Megbuktam☹️'}
                   </button>
-                  <div className="grid grid-cols-2 sm:flex items-center gap-2.5 sm:gap-2 w-full sm:w-auto">
-                    <button
-                      type="button"
-                      onClick={() => handleToggleSubjectFailed(activeSubject)}
-                      className={`px-3.5 py-2.5 sm:py-1.5 rounded-lg text-xs sm:text-sm font-bold border text-center transition cursor-pointer ${
-                        activeSubject.isFailed
-                          ? 'bg-rose-600 hover:bg-rose-500 text-white border-rose-500 shadow-sm'
-                          : darkMode
-                            ? 'bg-rose-950/40 hover:bg-rose-900/50 text-rose-300 border-rose-500/40'
-                            : 'bg-rose-50 hover:bg-rose-100 text-rose-700 border-rose-300'
-                      }`}
-                    >
-                      {activeSubject.isFailed ? 'Megbuktam☹️ (Aktív)' : 'Megbuktam☹️'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setActiveSubjectId(null)}
-                      className="px-5 py-2.5 sm:py-1.5 rounded-lg text-xs sm:text-sm font-semibold bg-amber-400 text-slate-950 hover:bg-amber-300 text-center transition cursor-pointer"
-                    >
-                      Kész
-                    </button>
-                  </div>
                 </div>
               </div>
             </div>
@@ -8957,317 +9365,258 @@ export default function App() {
         );
       })()}
 
-      {/* EGYÉNI GYŰJTŐ MODAL */}
+      {/* EGYÉB GYŰJTŐ LÉTREHOZÁSA / SZERKESZTÉSE MODAL */}
       {bucketModal && (
         <div
           data-top-modal="true"
           onClick={() => setBucketModal(null)}
-          className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-2.5 sm:p-4 overscroll-none"
+          className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-2.5 sm:p-4 overscroll-none"
         >
           <div
             onClick={(e) => e.stopPropagation()}
             className={`rounded-2xl max-w-md w-full shadow-2xl overflow-hidden border ${bgCard}`}
           >
-            <div className="px-4 sm:px-6 py-3.5 sm:py-4 bg-slate-900 text-white flex justify-between items-center border-b border-slate-800">
-              <h2 className="font-bold text-base">
-                {bucketModal.id ? 'Gyűjtő szerkesztése' : 'Új egyéni gyűjtő létrehozása'}
-              </h2>
-              <button onClick={() => setBucketModal(null)} className="text-slate-400 hover:text-white p-1 cursor-pointer">
-                <X className="w-5 h-5" />
-              </button>
+            <div className="px-4 sm:px-6 py-3.5 sm:py-4 bg-slate-900 text-white flex justify-between items-center">
+              <h2 className="font-bold text-sm sm:text-base">{bucketModal.id ? 'Gyűjtő szerkesztése' : 'Új egyéb gyűjtő létrehozása'}</h2>
+              <button onClick={() => setBucketModal(null)} className="text-slate-400 hover:text-white p-1 cursor-pointer"><X className="w-5 h-5" /></button>
             </div>
-            <form noValidate onSubmit={handleSaveBucketModal} className="p-4 sm:p-6 space-y-4">
+            <form onSubmit={handleSaveBucketModal} className="p-4 sm:p-6 space-y-4">
               <div>
-                <label className={`block text-xs font-semibold mb-1 ${textMuted}`}>Gyűjtő elnevezése</label>
+                <label className={`block text-xs font-semibold mb-1 ${textMuted}`}>Gyűjtő megnevezése</label>
                 <input
                   type="text"
                   required
-                  placeholder="Pl. Gyakorlati feladatok"
+                  placeholder="Pl. Órai aktivitás, Beadandó feladatok"
                   value={bucketModal.title}
                   onChange={e => setBucketModal({ ...bucketModal, title: e.target.value })}
                   className={`w-full border rounded-lg px-3 py-2.5 sm:py-2 focus:outline-none ${inputStyle}`}
                 />
               </div>
               <div>
-                <label className={`block text-xs font-semibold mb-1 ${textMuted}`}>Max beszámítható pont (opcionális)</label>
+                <label className={`block text-xs font-semibold mb-1 ${textMuted}`}>
+                  Maximum beszámítható pont (opcionális)
+                </label>
                 <input
                   type="number"
                   step="1"
-                  placeholder="Pl. 20 (üresen hagyva nincs felső limit)"
+                  placeholder="Hagyd üresen, ha nincs felső limit"
                   value={bucketModal.maxPoints}
                   onChange={e => setBucketModal({ ...bucketModal, maxPoints: e.target.value })}
                   className={`w-full border rounded-lg px-3 py-2.5 sm:py-2 focus:outline-none ${inputStyle}`}
                 />
+                <p className={`text-[11px] mt-1 ${textMuted}`}>
+                  Ha megadsz egy maximum értéket (pl. 10), a felette szerzett pontok automatikusan elszürkülnek és nem számítanak bele az összpontszámba.
+                </p>
               </div>
               <div className="flex justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setBucketModal(null)}
-                  className={`px-4 py-2 text-sm rounded-lg cursor-pointer ${textMuted}`}
-                >
-                  Mégse
-                </button>
-                <button
-                  type="submit"
-                  disabled={!bucketModal.title.trim()}
-                  className="px-4 py-2 text-sm font-bold bg-amber-400 hover:bg-amber-300 disabled:opacity-50 text-slate-950 rounded-lg cursor-pointer"
-                >
-                  {bucketModal.id ? 'Mentés' : 'Létrehozás'}
-                </button>
+                <button type="button" onClick={() => setBucketModal(null)} className={`px-4 py-2 text-sm rounded-lg cursor-pointer ${textMuted}`}>Mégse</button>
+                <button type="submit" className="px-4 py-2 text-sm font-bold bg-amber-400 hover:bg-amber-300 text-slate-950 rounded-lg cursor-pointer">Mentés</button>
               </div>
             </form>
           </div>
         </div>
       )}
 
-      {/* TÉTEL HOZZÁADÁSA / SZERKESZTÉSE MODAL */}
-      {itemModal && (() => {
-        const autoZhPlaceholder = (!itemModal.id && itemModal.category === 'ZH' && activeSubject)
-          ? getNextZhTitle(activeSubject.assessments || [])
-          : 'Pl. 1. ZH';
-
-        return (
+      {/* TÉTEL (ZH / PLUSZPONT / EGYÉB / VIZSGA) HOZZÁADÁSA ÉS SZERKESZTÉSE MODAL */}
+      {itemModal && (
+        <div
+          data-top-modal="true"
+          onClick={() => setItemModal(null)}
+          className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-2.5 sm:p-4 overscroll-none"
+        >
           <div
-            data-top-modal="true"
-            onClick={() => setItemModal(null)}
-            className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-2.5 sm:p-4 overscroll-none"
+            onClick={(e) => e.stopPropagation()}
+            className={`rounded-2xl max-w-md w-full max-h-[92dvh] flex flex-col shadow-2xl overflow-hidden border ${bgCard}`}
           >
-            <div
-              onClick={(e) => e.stopPropagation()}
-              className={`rounded-2xl max-w-md w-full max-h-[92dvh] flex flex-col shadow-2xl overflow-hidden border ${bgCard}`}
-            >
-              <div className="px-4 sm:px-6 py-3.5 sm:py-4 bg-slate-900 text-white flex justify-between items-center border-b border-slate-800 shrink-0">
-                <h2 className="font-bold text-base">
-                  {itemModal.isAutoExam
-                    ? 'Vizsgaeredmény szerkesztése'
-                    : itemModal.id
-                      ? 'Tétel szerkesztése'
-                      : itemModal.category === 'ZH'
-                        ? 'Új ZH hozzáadása'
-                        : itemModal.category === 'Pluszpont'
-                          ? 'Új pluszpont hozzáadása'
-                          : 'Új tétel hozzáadása'}
-                </h2>
-                <button onClick={() => setItemModal(null)} className="text-slate-400 hover:text-white p-1 cursor-pointer">
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-              <form noValidate onSubmit={handleSaveItemModal} className="p-4 sm:p-6 overflow-y-auto overscroll-contain space-y-4 flex-1 min-h-0">
-                {!itemModal.isAutoExam && activeSubject?.courseKind !== 'exam' && (
+            <div className="px-4 sm:px-6 py-3.5 sm:py-4 bg-slate-900 text-white flex justify-between items-center shrink-0">
+              <h2 className="font-bold text-sm sm:text-base">
+                {itemModal.isAutoExam
+                  ? 'Vizsgapontszám rögzítése (Max: 100 p)'
+                  : activeSubject?.courseKind === 'exam'
+                    ? 'Vizsgapontszám rögzítése (Max: 100 p)'
+                    : `${itemModal.id ? 'Tétel szerkesztése' : 'Új tétel'} (${itemModal.category === 'Egyeb' ? 'Egyéb gyűjtő' : itemModal.category})`}
+              </h2>
+              <button onClick={() => setItemModal(null)} className="text-slate-400 hover:text-white p-1 cursor-pointer"><X className="w-5 h-5" /></button>
+            </div>
+            <form noValidate onSubmit={handleSaveItemModal} className="p-4 sm:p-6 overflow-y-auto overscroll-contain space-y-4 flex-1 min-h-0">
+              {!itemModal.isAutoExam && activeSubject?.courseKind !== 'exam' && (
+                <>
                   <div>
                     <label className={`block text-xs font-semibold mb-1 ${textMuted}`}>
-                      Megnevezés {itemModal.category === 'ZH' && <span className="font-normal">(üresen hagyva: {autoZhPlaceholder})</span>}
+                      Megnevezés {itemModal.category === 'ZH' && <span className="font-normal">(üresen hagyva: {getNextZhTitle(activeSubject?.assessments)})</span>}
                     </label>
                     <input
                       type="text"
                       required={itemModal.category !== 'ZH'}
-                      placeholder={
-                        itemModal.category === 'ZH'
-                          ? autoZhPlaceholder
-                          : itemModal.category === 'Pluszpont'
-                            ? 'Pl. Órai aktivitás'
-                            : 'Pl. 1. beadandó feladat'
-                      }
+                      placeholder={itemModal.category === 'ZH' ? getNextZhTitle(activeSubject?.assessments) : 'Pl. Órai aktivitás, Beadandó'}
                       value={itemModal.title}
                       onChange={e => setItemModal({ ...itemModal, title: e.target.value })}
                       className={`w-full border rounded-lg px-3 py-2.5 sm:py-2 focus:outline-none ${inputStyle}`}
                     />
                   </div>
-                )}
-
-                {itemModal.isAutoExam || activeSubject?.courseKind === 'exam' ? (
                   <div>
-                    <label className={`block text-xs font-semibold mb-1 ${textMuted}`}>
-                      Elért pontszám (max 100 p)
-                    </label>
+                    <label className={`block text-xs font-semibold mb-1 ${textMuted}`}>Dátum (opcionális)</label>
                     <input
-                      type="number"
-                      step="1"
-                      placeholder="Üresen hagyható"
-                      value={itemModal.achieved}
-                      onChange={e => setItemModal({ ...itemModal, achieved: e.target.value })}
+                      type="date"
+                      value={itemModal.date}
+                      onChange={e => setItemModal({ ...itemModal, date: e.target.value })}
                       className={`w-full border rounded-lg px-3 py-2.5 sm:py-2 focus:outline-none ${inputStyle}`}
                     />
                   </div>
-                ) : (
-                  <>
-                    <div className={`grid gap-3 ${itemModal.category === 'ZH' ? 'grid-cols-1 sm:grid-cols-3' : 'grid-cols-2'}`}>
-                      <div>
-                        <label className={`block text-xs font-semibold mb-1 ${textMuted}`}>Elért pont</label>
-                        <input
-                          type="number"
-                          step="1"
-                          placeholder="Üresen hagyható"
-                          value={itemModal.achieved}
-                          onChange={e => setItemModal({ ...itemModal, achieved: e.target.value })}
-                          className={`w-full border rounded-lg px-3 py-2.5 sm:py-2 focus:outline-none ${inputStyle}`}
-                        />
-                      </div>
-                      <div>
-                        <label className={`block text-xs font-semibold mb-1 ${textMuted}`}>Max pont (opcionális)</label>
-                        <input
-                          type="number"
-                          step="1"
-                          placeholder="Pl. 30"
-                          value={itemModal.max}
-                          onChange={e => setItemModal({ ...itemModal, max: e.target.value })}
-                          className={`w-full border rounded-lg px-3 py-2.5 sm:py-2 focus:outline-none ${inputStyle}`}
-                        />
-                      </div>
-                      {itemModal.category === 'ZH' && (
-                        <div>
-                          <label className={`block text-xs font-semibold mb-1 ${textMuted}`}>Többletpont (opt.)</label>
-                          <input
-                            type="number"
-                            step="1"
-                            placeholder="Pl. 2"
-                            value={itemModal.bonusPoints ?? ''}
-                            onChange={e => setItemModal({ ...itemModal, bonusPoints: e.target.value })}
-                            className={`w-full border rounded-lg px-3 py-2.5 sm:py-2 focus:outline-none ${inputStyle}`}
-                          />
-                        </div>
-                      )}
-                    </div>
-                    <div>
-                      <label className={`block text-xs font-semibold mb-1 ${textMuted}`}>Dátum (opcionális)</label>
-                      <input
-                        type="date"
-                        value={itemModal.date}
-                        onChange={e => setItemModal({ ...itemModal, date: e.target.value })}
-                        className={`w-full border rounded-lg px-3 py-2.5 sm:py-2 focus:outline-none ${inputStyle}`}
-                      />
-                    </div>
-                  </>
-                )}
+                </>
+              )}
 
-                <div className="flex justify-end gap-2 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => setItemModal(null)}
-                    className={`px-4 py-2 text-sm rounded-lg cursor-pointer ${textMuted}`}
-                  >
-                    Mégse
-                  </button>
-                  <button
-                    type="submit"
-                    className="px-4 py-2 text-sm font-bold bg-amber-400 hover:bg-amber-300 text-slate-950 rounded-lg cursor-pointer"
-                  >
-                    Mentés
-                  </button>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className={`block text-xs font-semibold mb-1 ${textMuted}`}>Elért pont</label>
+                  <input
+                    type="number"
+                    step="1"
+                    autoFocus
+                    placeholder="Üresen hagyható"
+                    value={itemModal.achieved}
+                    onChange={e => setItemModal({ ...itemModal, achieved: e.target.value })}
+                    className={`w-full border rounded-lg px-3 py-2.5 sm:py-2 font-bold focus:outline-none ${inputStyle}`}
+                  />
                 </div>
-              </form>
-            </div>
+                <div>
+                  <label className={`block text-xs font-semibold mb-1 ${textMuted}`}>
+                    Max pont {(itemModal.isAutoExam || activeSubject?.courseKind === 'exam') ? '(fix)' : '(opcionális)'}
+                  </label>
+                  <input
+                    type="number"
+                    step="1"
+                    disabled={Boolean(itemModal.isAutoExam || activeSubject?.courseKind === 'exam')}
+                    placeholder="Üresen hagyható"
+                    value={(itemModal.isAutoExam || activeSubject?.courseKind === 'exam') ? 100 : itemModal.max}
+                    onChange={e => setItemModal({ ...itemModal, max: e.target.value })}
+                    className={`w-full border rounded-lg px-3 py-2.5 sm:py-2 focus:outline-none disabled:opacity-60 ${inputStyle}`}
+                  />
+                </div>
+              </div>
+
+              {!itemModal.isAutoExam && itemModal.category === 'ZH' && activeSubject?.courseKind !== 'exam' && (
+                <div>
+                  <label className={`block text-xs font-semibold mb-1 ${textMuted}`}>
+                    ZH-hoz kapcsolódó többletpont (opcionális)
+                  </label>
+                  <input
+                    type="number"
+                    step="1"
+                    placeholder="Pl. 2 (szabadon megadható, korlátlan)"
+                    value={itemModal.bonusPoints ?? ''}
+                    onChange={e => setItemModal({ ...itemModal, bonusPoints: e.target.value })}
+                    className={`w-full border rounded-lg px-3 py-2.5 sm:py-2 focus:outline-none ${inputStyle}`}
+                  />
+                  <p className={`text-[11px] mt-1 ${textMuted}`}>
+                    Közvetlenül a ZH pontszámához adódik hozzá (a ZH százalékába és a ZH-minimumba is beleszámít).
+                  </p>
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button type="button" onClick={() => setItemModal(null)} className={`px-4 py-2 text-sm rounded-lg cursor-pointer ${textMuted}`}>Mégse</button>
+                <button type="submit" className="px-4 py-2 text-sm font-bold bg-amber-400 hover:bg-amber-300 text-slate-950 rounded-lg cursor-pointer">Mentés</button>
+              </div>
+            </form>
           </div>
-        );
-      })()}
+        </div>
+      )}
 
       {/* ÚJ FÉLÉV LÉTREHOZÁSA MODAL */}
       {isSemesterModalOpen && (
         <div
           data-top-modal="true"
           onClick={() => setIsSemesterModalOpen(false)}
-          className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-2.5 sm:p-4 overscroll-none"
+          className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-2.5 sm:p-4 overscroll-none"
         >
           <div
             onClick={(e) => e.stopPropagation()}
             className={`rounded-2xl max-w-md w-full shadow-2xl overflow-hidden border ${bgCard}`}
           >
-            <div className="px-4 sm:px-6 py-3.5 sm:py-4 bg-slate-900 text-white flex justify-between items-center border-b border-slate-800">
-              <h2 className="font-bold text-base">Új félév létrehozása</h2>
-              <button onClick={() => setIsSemesterModalOpen(false)} className="text-slate-400 hover:text-white p-1 cursor-pointer">
-                <X className="w-5 h-5" />
-              </button>
+            <div className="px-4 sm:px-6 py-3.5 sm:py-4 bg-slate-900 text-white flex justify-between items-center">
+              <h2 className="font-bold text-sm sm:text-base">Új félév létrehozása</h2>
+              <button onClick={() => setIsSemesterModalOpen(false)} className="text-slate-400 hover:text-white p-1 cursor-pointer"><X className="w-5 h-5" /></button>
             </div>
             <form onSubmit={handleAddSemester} className="p-4 sm:p-6 space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className={`block text-xs font-semibold mb-1 ${textMuted}`}>
-                    Félév kezdésének éve
-                  </label>
-                  <input
-                    type="number"
-                    min="2000"
-                    max="2099"
-                    required
-                    placeholder="Pl. 2026"
-                    value={newSemesterStartYear}
-                    onChange={e => setNewSemesterStartYear(e.target.value)}
-                    className={`w-full border rounded-lg px-3 py-2.5 sm:py-2 font-semibold focus:outline-none ${inputStyle}`}
-                  />
-                </div>
+              <div>
+                <label className={`block text-xs font-semibold mb-1.5 ${textMuted}`}>
+                  1. Félév kezdésének éve
+                </label>
+                <input
+                  type="number"
+                  min="2000"
+                  max="2099"
+                  step="1"
+                  required
+                  placeholder="Pl. 2026"
+                  value={newSemesterStartYear}
+                  onChange={e => setNewSemesterStartYear(e.target.value)}
+                  className={`w-full border rounded-lg px-3 py-2.5 sm:py-2 font-bold focus:outline-none ${inputStyle}`}
+                />
+              </div>
 
-                <div>
-                  <label className={`block text-xs font-semibold mb-1 ${textMuted}`}>
-                    Időszak
-                  </label>
-                  <div className={`grid grid-cols-2 gap-1 p-1 rounded-xl border ${
-                    darkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-100 border-slate-200'
-                  }`}>
-                    <button
-                      type="button"
-                      onClick={() => setNewSemesterSeason('osz')}
-                      className={`py-2 px-2 rounded-lg text-xs font-bold transition cursor-pointer ${
-                        newSemesterSeason === 'osz'
-                          ? 'bg-amber-400 text-slate-950 shadow-xs'
-                          : textMuted
-                      }`}
-                    >
-                      Ősz
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setNewSemesterSeason('tavasz')}
-                      className={`py-2 px-2 rounded-lg text-xs font-bold transition cursor-pointer ${
-                        newSemesterSeason === 'tavasz'
-                          ? 'bg-amber-400 text-slate-950 shadow-xs'
-                          : textMuted
-                      }`}
-                    >
-                      Tavasz
-                    </button>
-                  </div>
+              <div>
+                <label className={`block text-xs font-semibold mb-1.5 ${textMuted}`}>
+                  2. Időszak kiválasztása
+                </label>
+                <div className="grid grid-cols-2 gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => setNewSemesterSeason('osz')}
+                    className={`py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold border transition cursor-pointer ${
+                      newSemesterSeason === 'osz'
+                        ? 'bg-amber-400 text-slate-950 border-amber-400 shadow-sm'
+                        : darkMode
+                          ? 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
+                          : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200'
+                    }`}
+                  >
+                    Ősz (/1)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setNewSemesterSeason('tavasz')}
+                    className={`py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold border transition cursor-pointer ${
+                      newSemesterSeason === 'tavasz'
+                        ? 'bg-amber-400 text-slate-950 border-amber-400 shadow-sm'
+                        : darkMode
+                          ? 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
+                          : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200'
+                    }`}
+                  >
+                    Tavasz (/2)
+                  </button>
                 </div>
               </div>
 
-              {generatedSemesterPreview ? (
-                <div className={`p-3.5 rounded-xl border space-y-1 ${
+              {generatedSemesterPreview && (
+                <div className={`p-3.5 rounded-xl border ${
                   isGeneratedSemesterDuplicate
                     ? darkMode
                       ? 'bg-rose-500/15 border-rose-500/40 text-rose-200'
                       : 'bg-rose-50 border-rose-300 text-rose-900'
-                    : darkMode
-                      ? 'bg-amber-400/10 border-amber-400/35 text-amber-100'
-                      : 'bg-amber-50/80 border-amber-300 text-slate-800'
+                    : bgSubCard
                 }`}>
-                  <div className="flex items-center justify-between gap-2">
-                    <span className={`text-[11px] font-semibold uppercase tracking-wide ${textMuted}`}>
-                      Generált félév kód:
-                    </span>
-                    <span className="text-sm sm:text-base font-extrabold text-amber-500">
-                      {generatedSemesterPreview.fullLabel}
-                    </span>
-                  </div>
-                  <p className={`text-xs ${textMuted}`}>{generatedSemesterPreview.description}</p>
+                  <p className={`text-[11px] font-semibold uppercase ${textMuted}`}>
+                    Létrehozandó félév megnevezése:
+                  </p>
+                  <p className={`text-lg font-extrabold mt-0.5 ${textStrong}`}>
+                    {generatedSemesterPreview.fullLabel}
+                  </p>
+                  <p className={`text-xs mt-0.5 ${textMuted}`}>
+                    {generatedSemesterPreview.description}
+                  </p>
                   {isGeneratedSemesterDuplicate && (
-                    <p className="text-xs font-semibold text-rose-500 pt-1">
-                      Ez a félév már létezik a listádban!
+                    <p className="text-xs font-bold text-rose-500 mt-1.5">
+                      Ez a félév már szerepel a listádban!
                     </p>
                   )}
                 </div>
-              ) : (
-                <p className="text-xs text-rose-500">
-                  Adj meg egy érvényes négyjegyű évszámot (2000–2099 között)!
-                </p>
               )}
 
               <div className="flex justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setIsSemesterModalOpen(false)}
-                  className={`px-4 py-2 text-sm rounded-lg cursor-pointer ${textMuted}`}
-                >
-                  Mégse
-                </button>
+                <button type="button" onClick={() => setIsSemesterModalOpen(false)} className={`px-4 py-2 text-sm rounded-lg cursor-pointer ${textMuted}`}>Mégse</button>
                 <button
                   type="submit"
                   disabled={!generatedSemesterPreview || isGeneratedSemesterDuplicate}
@@ -9281,23 +9630,21 @@ export default function App() {
         </div>
       )}
 
-      {/* FÉLÉV MÓDOSÍTÁSA MODAL */}
+      {/* FÉLÉV ÉVÉNEK / IDŐSZAKÁNAK MÓDOSÍTÁSA MODAL */}
       {editingSemesterOldName && (
         <div
           data-top-modal="true"
           onClick={() => !isUpdatingSemester && setEditingSemesterOldName(null)}
-          className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-2.5 sm:p-4 overscroll-none"
+          className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-2.5 sm:p-4 overscroll-none"
         >
           <div
             onClick={(e) => e.stopPropagation()}
             className={`rounded-2xl max-w-md w-full shadow-2xl overflow-hidden border ${bgCard}`}
           >
-            <div className="px-4 sm:px-6 py-3.5 sm:py-4 bg-slate-900 text-white flex justify-between items-center border-b border-slate-800">
+            <div className="px-4 sm:px-6 py-3.5 sm:py-4 bg-slate-900 text-white flex justify-between items-center">
               <div className="min-w-0">
-                <h2 className="font-bold text-base">Félév módosítása</h2>
-                <p className="text-[11px] text-slate-400 truncate">
-                  Jelenlegi: <strong className="text-amber-400">{formatSemesterLabel(editingSemesterOldName)}</strong>
-                </p>
+                <h2 className="font-bold text-sm sm:text-base">Félév módosítása</h2>
+                <p className="text-[11px] text-slate-400 truncate">Jelenlegi: {formatSemesterLabel(editingSemesterOldName)}</p>
               </div>
               <button
                 type="button"
@@ -9309,85 +9656,80 @@ export default function App() {
               </button>
             </div>
             <form onSubmit={handleUpdateSemester} className="p-4 sm:p-6 space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className={`block text-xs font-semibold mb-1 ${textMuted}`}>
-                    Félév kezdésének éve
-                  </label>
-                  <input
-                    type="number"
-                    min="2000"
-                    max="2099"
-                    required
-                    placeholder="Pl. 2026"
-                    value={editSemesterStartYear}
-                    onChange={e => setEditSemesterStartYear(e.target.value)}
-                    className={`w-full border rounded-lg px-3 py-2.5 sm:py-2 font-semibold focus:outline-none ${inputStyle}`}
-                  />
-                </div>
+              <div>
+                <label className={`block text-xs font-semibold mb-1.5 ${textMuted}`}>
+                  1. Félév kezdésének éve
+                </label>
+                <input
+                  type="number"
+                  min="2000"
+                  max="2099"
+                  step="1"
+                  required
+                  placeholder="Pl. 2026"
+                  value={editSemesterStartYear}
+                  onChange={e => setEditSemesterStartYear(e.target.value)}
+                  className={`w-full border rounded-lg px-3 py-2.5 sm:py-2 font-bold focus:outline-none ${inputStyle}`}
+                />
+              </div>
 
-                <div>
-                  <label className={`block text-xs font-semibold mb-1 ${textMuted}`}>
-                    Időszak
-                  </label>
-                  <div className={`grid grid-cols-2 gap-1 p-1 rounded-xl border ${
-                    darkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-100 border-slate-200'
-                  }`}>
-                    <button
-                      type="button"
-                      onClick={() => setEditSemesterSeason('osz')}
-                      className={`py-2 px-2 rounded-lg text-xs font-bold transition cursor-pointer ${
-                        editSemesterSeason === 'osz'
-                          ? 'bg-amber-400 text-slate-950 shadow-xs'
-                          : textMuted
-                      }`}
-                    >
-                      Ősz
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setEditSemesterSeason('tavasz')}
-                      className={`py-2 px-2 rounded-lg text-xs font-bold transition cursor-pointer ${
-                        editSemesterSeason === 'tavasz'
-                          ? 'bg-amber-400 text-slate-950 shadow-xs'
-                          : textMuted
-                      }`}
-                    >
-                      Tavasz
-                    </button>
-                  </div>
+              <div>
+                <label className={`block text-xs font-semibold mb-1.5 ${textMuted}`}>
+                  2. Időszak kiválasztása
+                </label>
+                <div className="grid grid-cols-2 gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => setEditSemesterSeason('osz')}
+                    className={`py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold border transition cursor-pointer ${
+                      editSemesterSeason === 'osz'
+                        ? 'bg-amber-400 text-slate-950 border-amber-400 shadow-sm'
+                        : darkMode
+                          ? 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
+                          : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200'
+                    }`}
+                  >
+                    Ősz (/1)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditSemesterSeason('tavasz')}
+                    className={`py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold border transition cursor-pointer ${
+                      editSemesterSeason === 'tavasz'
+                        ? 'bg-amber-400 text-slate-950 border-amber-400 shadow-sm'
+                        : darkMode
+                          ? 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
+                          : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200'
+                    }`}
+                  >
+                    Tavasz (/2)
+                  </button>
                 </div>
               </div>
 
-              {editSemesterPreview ? (
-                <div className={`p-3.5 rounded-xl border space-y-1 ${
+              {editSemesterPreview && (
+                <div className={`p-3.5 rounded-xl border ${
                   isEditSemesterDuplicate
                     ? darkMode
                       ? 'bg-rose-500/15 border-rose-500/40 text-rose-200'
                       : 'bg-rose-50 border-rose-300 text-rose-900'
-                    : darkMode
-                      ? 'bg-amber-400/10 border-amber-400/35 text-amber-100'
-                      : 'bg-amber-50/80 border-amber-300 text-slate-800'
+                    : bgSubCard
                 }`}>
-                  <div className="flex items-center justify-between gap-2">
-                    <span className={`text-[11px] font-semibold uppercase tracking-wide ${textMuted}`}>
-                      Új félév kód:
-                    </span>
-                    <span className="text-sm sm:text-base font-extrabold text-amber-500">
-                      {editSemesterPreview.fullLabel}
-                    </span>
-                  </div>
-                  <p className={`text-xs ${textMuted}`}>{editSemesterPreview.description}</p>
+                  <p className={`text-[11px] font-semibold uppercase ${textMuted}`}>
+                    Módosított félév megnevezése:
+                  </p>
+                  <p className={`text-lg font-extrabold mt-0.5 ${textStrong}`}>
+                    {editSemesterPreview.fullLabel}
+                  </p>
+                  <p className={`text-xs mt-0.5 ${textMuted}`}>
+                    {editSemesterPreview.description}
+                  </p>
                   {isEditSemesterDuplicate && (
-                    <p className="text-xs font-semibold text-rose-500 pt-1">
-                      Ilyen félév már létezik! Válassz másik évet vagy időszakot.
+                    <p className="text-xs font-bold text-rose-500 mt-1.5">
+                      Ilyen félév már létezik a listádban!
                     </p>
                   )}
                 </div>
-              ) : (
-                <p className="text-xs text-rose-500">
-                  Adj meg egy érvényes négyjegyű évszámot (2000–2099 között)!
-                </p>
               )}
 
               <div className="flex justify-end gap-2 pt-2">
@@ -9412,105 +9754,111 @@ export default function App() {
         </div>
       )}
 
-      {/* TANTÁRGY LÉTREHOZÁSA / BEÁLLÍTÁSA MODAL */}
+      {/* TANTÁRGY LÉTREHOZÁSA (SZAKVÁLASZTÓ + SABLONOK / KÉZI) ÉS BEÁLLÍTÁSAI MODAL */}
       {isSubjectModalOpen && editingSubject && (
         <div
           data-top-modal="true"
           onClick={() => { setIsSubjectModalOpen(false); setSelectedSubjectMajorId(null); }}
-          className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-2.5 sm:p-4 overscroll-none"
+          className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-2 sm:p-4 overscroll-none"
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className={`rounded-2xl max-w-xl w-full max-h-[92dvh] flex flex-col shadow-2xl overflow-hidden border ${bgCard}`}
+            className={`rounded-2xl max-w-lg w-full max-h-[92dvh] flex flex-col shadow-2xl overflow-hidden border ${bgCard}`}
           >
-            <div className="px-4 sm:px-6 py-3.5 sm:py-4 bg-slate-900 text-white flex justify-between items-center border-b border-slate-800 shrink-0">
+            <div className="px-4 sm:px-6 py-3.5 sm:py-4 bg-slate-900 text-white flex justify-between items-center shrink-0">
               <div className="min-w-0">
-                <h2 className="font-bold text-base truncate">
+                <h2 className="font-bold text-sm sm:text-base truncate">
                   {editingSubject.id
                     ? isSim
                       ? 'Szimulált jegy beállítása'
                       : 'Tantárgy beállításai'
                     : 'Új tantárgy felvétele'}
                 </h2>
-                {!editingSubject.id && (
+                {!editingSubject.id && activeMajorObject && (
                   <p className="text-[11px] text-amber-400 font-semibold truncate">
-                    Cél félév: {formatSemesterLabel(editingSubject.semester)}
+                    Szak: {activeMajorObject.label}
                   </p>
                 )}
               </div>
               <button
                 onClick={() => { setIsSubjectModalOpen(false); setSelectedSubjectMajorId(null); }}
-                className="text-slate-400 hover:text-white p-1 cursor-pointer shrink-0"
+                className="text-slate-400 hover:text-white p-1.5 cursor-pointer shrink-0"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            {!editingSubject.id && selectedSubjectMajorId === null ? (
+            {!editingSubject.id && !selectedSubjectMajorId ? (
               <div className="p-4 sm:p-6 overflow-y-auto overscroll-contain space-y-4 flex-1 min-h-0">
-                <div className="flex items-start gap-2.5">
-                  <div className="w-9 h-9 rounded-xl bg-amber-400 text-slate-950 flex items-center justify-center shrink-0">
-                    <GraduationCap className="w-5 h-5" />
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-amber-400 text-slate-950 flex items-center justify-center shrink-0">
+                    <GraduationCap className="w-6 h-6" />
                   </div>
                   <div>
-                    <h3 className={`text-sm sm:text-base font-extrabold leading-tight ${textStrong}`}>
+                    <h3 className={`font-extrabold text-sm sm:text-base ${textStrong}`}>
                       Milyen szakon tanulsz?
                     </h3>
-                    <p className={`text-xs mt-1 leading-relaxed ${textMuted}`}>
-                      Válaszd ki a szakodat a mintatanterv szerinti tárgyak betöltéséhez, vagy hozz létre teljesen egyéni tárgyat:
+                    <p className={`text-xs mt-0.5 leading-relaxed ${textMuted}`}>
+                      Válaszd ki a BGE alapszakodat a mintatanterv szerinti tárgysablonok betöltéséhez, vagy vegyél fel saját tárgyat kézzel:
                     </p>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div className="space-y-2">
                   {BGE_MAJORS.map(major => (
                     <button
                       key={major.id}
                       type="button"
                       onClick={() => {
                         setSelectedSubjectMajorId(major.id);
+                        setSubjectModalMode('template');
                         setTemplateSemesterScope('current');
                         setTemplateSearch('');
-                        setSubjectModalMode('template');
                         if (major.isGazdinfo && templates.length === 0) {
                           fetchTemplates(true);
                         }
                       }}
-                      className={`p-3 rounded-xl border text-left flex items-center justify-between gap-2 transition cursor-pointer ${
+                      className={`w-full p-3 rounded-xl border text-left flex items-center justify-between gap-2.5 transition cursor-pointer ${
                         major.isGazdinfo
                           ? darkMode
-                            ? 'bg-amber-400/15 hover:bg-amber-400/25 border-amber-400/60 text-amber-100'
-                            : 'bg-amber-50 hover:bg-amber-100/80 border-amber-400 text-slate-900'
+                            ? 'bg-amber-400/10 hover:bg-amber-400/20 border-amber-400/50 text-amber-100'
+                            : 'bg-amber-50/90 hover:bg-amber-100/80 border-amber-400 text-slate-900'
                           : darkMode
                             ? 'bg-slate-800/80 hover:bg-slate-800 border-slate-700 text-slate-100'
-                            : 'bg-slate-50 hover:bg-amber-50/70 border-slate-200 text-slate-800'
+                            : 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-800'
                       }`}
                     >
                       <div className="min-w-0">
-                        <p className="text-xs font-extrabold leading-snug">{major.label}</p>
-                        <p className={`text-[10px] mt-0.5 ${major.isGazdinfo ? 'text-amber-500 font-bold' : textMuted}`}>
-                          {major.isGazdinfo ? 'Ellenőrzött tárgysablonok' : 'BGE mintatanterv tárgyai'}
-                        </p>
+                        <span className="text-xs sm:text-sm font-bold block leading-snug">
+                          {major.label}
+                        </span>
+                        <span className={`text-[11px] block mt-0.5 ${major.isGazdinfo ? 'text-amber-500 font-semibold' : textMuted}`}>
+                          {major.isGazdinfo
+                            ? 'Ellenőrzött ZH- és pontszámsablonok'
+                            : 'BGE mintatanterv tárgyai (kreditek és félévek szerint)'}
+                        </span>
                       </div>
                       <ChevronRight className="w-4 h-4 text-amber-500 shrink-0" />
                     </button>
                   ))}
                 </div>
 
-                <div className={`pt-3 border-t flex flex-wrap items-center justify-between gap-2 ${darkMode ? 'border-slate-800' : 'border-slate-200'}`}>
+                <div className={`pt-3 border-t flex flex-wrap items-center justify-between gap-2 ${
+                  darkMode ? 'border-slate-800' : 'border-slate-200'
+                }`}>
                   <button
                     type="button"
                     onClick={() => {
-                      setSelectedSubjectMajorId('custom_only');
-                      setSubjectModalMode('custom');
+                      setSelectedSubjectMajorId('gazdasaginformatikus');
+                      setSubjectModalMode('manual');
                     }}
-                    className={`px-3.5 py-2 rounded-xl text-xs font-bold border transition cursor-pointer ${
+                    className={`px-3.5 py-2 rounded-xl text-xs font-bold border flex items-center gap-1.5 transition cursor-pointer ${
                       darkMode
-                        ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
-                        : 'bg-white hover:bg-slate-100 text-slate-800 border-slate-300'
+                        ? 'bg-slate-800 hover:bg-slate-700 text-amber-400 border-slate-700'
+                        : 'bg-white hover:bg-amber-50 text-slate-800 border-slate-300'
                     }`}
                   >
-                    + Egyéni / Szabadon választott tárgy kézi megadása
+                    <Pencil className="w-3.5 h-3.5" /> Kézi tárgyfelvétel szakválasztás nélkül
                   </button>
 
                   <button
@@ -9522,557 +9870,599 @@ export default function App() {
                   </button>
                 </div>
               </div>
-            ) : (
+            ) : !editingSubject.id ? (
               <>
-                {!editingSubject.id && (
-                  <div className={`px-4 sm:px-6 pt-3 pb-2 border-b space-y-2 shrink-0 ${darkMode ? 'border-slate-800 bg-slate-900/50' : 'border-slate-200 bg-slate-50/70'}`}>
-                    <div className="flex items-center justify-between gap-2">
-                      <span className={`text-[11px] font-bold truncate ${textMuted}`}>
-                        Szak: <strong className={textStrong}>{activeMajorObject ? activeMajorObject.label : 'Egyéni tárgyfelvétel'}</strong>
-                      </span>
+                <div className={`px-4 sm:px-6 pt-3 pb-2 border-b flex items-center justify-between gap-2 shrink-0 ${
+                  darkMode ? 'border-slate-800 bg-slate-900/80' : 'border-slate-200 bg-slate-50'
+                }`}>
+                  <span className={`text-xs font-semibold truncate ${textMuted}`}>
+                    Szak: <strong className={textStrong}>{activeMajorObject?.label || 'Egyedi'}</strong>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedSubjectMajorId(null)}
+                    className="text-xs font-bold text-amber-500 hover:underline cursor-pointer shrink-0"
+                  >
+                    Szak váltása
+                  </button>
+                </div>
+
+                <div className={`flex border-b px-3 sm:px-6 shrink-0 ${darkMode ? 'border-slate-800 bg-slate-900/50' : 'border-slate-200 bg-slate-50'}`}>
+                  <button
+                    type="button"
+                    onClick={() => setSubjectModalMode('template')}
+                    className={`py-2.5 px-3 sm:px-4 text-xs sm:text-sm font-semibold border-b-2 transition cursor-pointer flex items-center gap-1.5 ${
+                      subjectModalMode === 'template'
+                        ? 'border-amber-400 text-amber-500'
+                        : `border-transparent ${textMuted}`
+                    }`}
+                  >
+                    <Layers className="w-3.5 h-3.5" />
+                    Sablonok ({templateSemesterScope === 'current' ? semesterMatchingTemplates.length : activeMajorTemplates.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSubjectModalMode('manual')}
+                    className={`py-2.5 px-3 sm:px-4 text-xs sm:text-sm font-semibold border-b-2 transition cursor-pointer ${
+                      subjectModalMode === 'manual'
+                        ? 'border-amber-400 text-amber-500'
+                        : `border-transparent ${textMuted}`
+                    }`}
+                  >
+                    Üres tárgy létrehozása
+                  </button>
+                </div>
+              </>
+            ) : null}
+
+            {!editingSubject.id && selectedSubjectMajorId && subjectModalMode === 'template' ? (
+              <div className="p-4 sm:p-6 overflow-y-auto overscroll-contain space-y-4 flex-1 min-h-0">
+                <div className={`p-3 rounded-xl border text-xs leading-relaxed ${bgSubCard} ${textMuted}`}>
+                  Válassz a(z) <strong className={textStrong}>{activeMajorObject?.label}</strong> szak{' '}
+                  <strong className={textStrong}>{formatSemesterLabel(editingSubject.semester || selectedSemester)}</strong> félévének sablonjaiból:
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <div className="grid grid-cols-2 gap-1.5 p-1 rounded-xl border flex-1 text-xs font-semibold bg-slate-500/5 border-slate-500/20">
+                    <button
+                      type="button"
+                      onClick={() => setTemplateSemesterScope('current')}
+                      className={`py-2 px-2 rounded-lg transition cursor-pointer truncate ${
+                        templateSemesterScope === 'current'
+                          ? 'bg-amber-400 text-slate-950 font-bold shadow-xs'
+                          : textMuted
+                      }`}
+                    >
+                      Csak ez a félév ({semesterMatchingTemplates.length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTemplateSemesterScope('all')}
+                      className={`py-2 px-2 rounded-lg transition cursor-pointer truncate ${
+                        templateSemesterScope === 'all'
+                          ? 'bg-amber-400 text-slate-950 font-bold shadow-xs'
+                          : textMuted
+                      }`}
+                    >
+                      Összes félév ({activeMajorTemplates.length})
+                    </button>
+                  </div>
+
+                  {selectedSubjectMajorId === 'gazdasaginformatikus' && (
+                    <button
+                      type="button"
+                      disabled={isRefreshingTemplates}
+                      onClick={() => fetchTemplates(true)}
+                      title="Sablonok frissítése a felhőből"
+                      className={`p-2.5 rounded-xl border transition cursor-pointer shrink-0 ${
+                        darkMode
+                          ? 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
+                          : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200'
+                      }`}
+                    >
+                      <RefreshCw className={`w-4 h-4 ${isRefreshingTemplates ? 'animate-spin text-amber-500' : ''}`} />
+                    </button>
+                  )}
+                </div>
+
+                <div className="relative">
+                  <Search className={`w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 ${textMuted}`} />
+                  <input
+                    type="text"
+                    placeholder="Keresés tantárgy neve alapján..."
+                    value={templateSearch}
+                    onChange={e => setTemplateSearch(e.target.value)}
+                    className={`w-full border rounded-lg pl-9 pr-3 py-2.5 sm:py-2 focus:outline-none ${inputStyle}`}
+                  />
+                </div>
+
+                {filteredTemplates.length === 0 ? (
+                  <div className={`p-5 rounded-xl border text-center space-y-2 ${bgSubCard}`}>
+                    <p className={`text-sm font-semibold ${textStrong}`}>
+                      {activeMajorTemplates.length === 0
+                        ? 'Még nincs közzétett sablon ehhez a szakhoz.'
+                        : templateSemesterScope === 'current' && semesterMatchingTemplates.length === 0
+                          ? `A(z) ${formatSemesterLabel(editingSubject.semester || selectedSemester)} félévhez még nincs sablon ebben a szakban.`
+                          : 'Nincs a keresésnek megfelelő sablon.'}
+                    </p>
+                    {templateSemesterScope === 'current' && activeMajorTemplates.length > 0 && (
                       <button
                         type="button"
-                        onClick={() => setSelectedSubjectMajorId(null)}
-                        className="text-[11px] font-bold text-amber-500 hover:underline cursor-pointer shrink-0"
+                        onClick={() => setTemplateSemesterScope('all')}
+                        className="px-3.5 py-2 text-xs font-bold rounded-lg bg-amber-400/20 text-amber-500 border border-amber-400/40 cursor-pointer"
                       >
-                        Szak váltása
+                        Összes félév sablonjainak mutatása ({activeMajorTemplates.length})
                       </button>
-                    </div>
-
-                    {activeMajorObject && (
-                      <div className="grid grid-cols-2 gap-1.5 pb-1">
-                        <button
-                          type="button"
-                          onClick={() => setSubjectModalMode('template')}
-                          className={`py-2 px-3 rounded-xl text-xs font-bold border transition cursor-pointer ${
-                            subjectModalMode === 'template'
-                              ? 'bg-amber-400 text-slate-950 border-amber-400'
-                              : darkMode
-                                ? 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
-                                : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
-                          }`}
-                        >
-                          Mintatantervi tárgyak ({activeMajorTemplates.length})
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setSubjectModalMode('custom')}
-                          className={`py-2 px-3 rounded-xl text-xs font-bold border transition cursor-pointer ${
-                            subjectModalMode === 'custom'
-                              ? 'bg-amber-400 text-slate-950 border-amber-400'
-                              : darkMode
-                                ? 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
-                                : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
-                          }`}
-                        >
-                          Üres / Egyéni tárgy
-                        </button>
-                      </div>
                     )}
+                    <button
+                      type="button"
+                      onClick={() => setSubjectModalMode('manual')}
+                      className="px-3.5 py-2 text-xs font-bold rounded-lg bg-amber-400 text-slate-950 cursor-pointer ml-2"
+                    >
+                      Üres tárgy létrehozása
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-2.5">
+                    {filteredTemplates.map(tpl => {
+                      const zhCount = (tpl.assessments || []).filter(a => a.category === 'ZH').length;
+                      const isAdded = Boolean(addedTemplateIds[tpl.id]);
+                      const isTplElective = (tpl.courseType || 'mandatory') === 'elective';
+                      const semDisplay = tpl.sourceSemester
+                        ? formatSemesterLabel(tpl.sourceSemester)
+                        : tpl.sourceSemesterOrdinal
+                          ? `${tpl.sourceSemesterOrdinal}. félév`
+                          : '';
+                      return (
+                        <div
+                          key={tpl.id}
+                          className={`p-3.5 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${bgSubCard}`}
+                        >
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="text-xs font-bold text-amber-500">{tpl.credits} kredit</span>
+                              <span className={`px-2 py-0.5 text-[10px] font-bold rounded-full border ${
+                                isTplElective
+                                  ? darkMode
+                                    ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/35'
+                                    : 'bg-emerald-50 text-emerald-700 border-emerald-300'
+                                  : darkMode
+                                    ? 'bg-sky-500/15 text-sky-300 border-sky-500/35'
+                                    : 'bg-sky-50 text-sky-700 border-sky-300'
+                              }`}>
+                                {isTplElective ? 'Szabadon választott' : 'Kötelező'}
+                              </span>
+                              {tpl.courseKind === 'exam' && (
+                                <span className={`px-2 py-0.5 text-[10px] font-bold rounded-full border ${
+                                  darkMode
+                                    ? 'bg-violet-500/15 text-violet-300 border-violet-500/35'
+                                    : 'bg-violet-50 text-violet-700 border-violet-300'
+                                }`}>
+                                  Vizsgakurzus
+                                </span>
+                              )}
+                              {semDisplay && (
+                                <span className={`text-[11px] px-2 py-0.5 rounded-full ${
+                                  darkMode ? 'bg-slate-800 text-slate-300' : 'bg-slate-200/80 text-slate-700'
+                                }`}>
+                                  {semDisplay}
+                                </span>
+                              )}
+                            </div>
+                            <h4 className={`font-bold text-sm mt-1 break-words ${textStrong}`}>{tpl.name}</h4>
+                            <p className={`text-[11px] mt-1 ${textMuted}`}>
+                              {tpl.courseKind === 'exam'
+                                ? 'Vizsgakurzus (2-es határ: 59,5 p • Max: 100 p)'
+                                : `Aláírás: ${formatHu(tpl.alairasMin)} p • Megajánlott: ${formatHu(tpl.megajanlottMin)} p • ${zhCount} ZH • ${tpl.totalClasses || 0} gyak.`}
+                            </p>
+                          </div>
+
+                          <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-center">
+                            {isAdmin && !tpl.isWebScrapedMajor && (
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteTemplate(tpl.id, tpl.name)}
+                                title="Sablon törlése (Admin)"
+                                className="p-2 text-slate-400 hover:text-rose-500 cursor-pointer"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => handleCreateFromTemplate(tpl)}
+                              className={`px-3.5 py-2 sm:py-1.5 text-xs font-bold rounded-lg flex items-center gap-1 transition cursor-pointer ${
+                                isAdded
+                                  ? 'bg-emerald-500 text-white'
+                                  : 'bg-amber-400 hover:bg-amber-300 text-slate-950'
+                              }`}
+                            >
+                              {isAdded ? (
+                                <>
+                                  <Check className="w-3.5 h-3.5" /> Hozzáadva
+                                </>
+                              ) : (
+                                <>
+                                  <Plus className="w-3.5 h-3.5" /> Felvétel
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
 
-                {!editingSubject.id && activeMajorObject && subjectModalMode === 'template' ? (
-                  <div className="p-4 sm:p-6 overflow-y-auto overscroll-contain space-y-4 flex-1 min-h-0">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className={`grid grid-cols-2 gap-1 p-1 rounded-xl border flex-1 ${
-                        darkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-100 border-slate-200'
-                      }`}>
-                        <button
-                          type="button"
-                          onClick={() => setTemplateSemesterScope('current')}
-                          className={`py-1.5 px-2.5 rounded-lg text-xs font-bold transition cursor-pointer ${
-                            templateSemesterScope === 'current'
-                              ? 'bg-amber-400 text-slate-950 shadow-xs'
-                              : textMuted
-                          }`}
-                        >
-                          Csak {formatSemesterLabel(editingSubject.semester)} ({semesterMatchingTemplates.length})
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setTemplateSemesterScope('all')}
-                          className={`py-1.5 px-2.5 rounded-lg text-xs font-bold transition cursor-pointer ${
-                            templateSemesterScope === 'all'
-                              ? 'bg-amber-400 text-slate-950 shadow-xs'
-                              : textMuted
-                          }`}
-                        >
-                          Összes félév ({activeMajorTemplates.length})
-                        </button>
-                      </div>
-
-                      {activeMajorObject.isGazdinfo && (
-                        <button
-                          type="button"
-                          disabled={isRefreshingTemplates}
-                          onClick={() => fetchTemplates(true)}
-                          title="Sablonlista frissítése a szerverről"
-                          className={`p-2 rounded-xl border text-xs font-semibold transition cursor-pointer ${
-                            darkMode
-                              ? 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
-                              : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200'
-                          }`}
-                        >
-                          <RefreshCw className={`w-4 h-4 ${isRefreshingTemplates ? 'animate-spin text-amber-500' : ''}`} />
-                        </button>
-                      )}
+                <div className="flex justify-end pt-2">
+                  <button
+                    type="button"
+                    onClick={() => { setIsSubjectModalOpen(false); setSelectedSubjectMajorId(null); }}
+                    className={`px-4 py-2 text-sm font-semibold rounded-lg cursor-pointer ${
+                      darkMode ? 'bg-slate-800 text-slate-200 hover:bg-slate-700' : 'bg-slate-100 text-slate-800 hover:bg-slate-200'
+                    }`}
+                  >
+                    Kész
+                  </button>
+                </div>
+              </div>
+            ) : (editingSubject.id || (selectedSubjectMajorId && subjectModalMode === 'manual')) ? (
+              <form onSubmit={handleSaveSubject} className="p-4 sm:p-6 overflow-y-auto overscroll-contain space-y-4 flex-1 min-h-0">
+                {isSim && editingSubject.id ? (
+                  <>
+                    <div className={`p-3.5 rounded-xl border-2 border-amber-400/60 space-y-1.5 ${
+                      darkMode ? 'bg-amber-400/10 text-amber-100' : 'bg-amber-50 text-slate-800'
+                    }`}>
+                      <p className="text-xs font-extrabold uppercase tracking-wide text-amber-500 flex items-center gap-1.5">
+                        <FlaskConical className="w-4 h-4" /> Szimulátor mód aktív
+                      </p>
+                      <p className="text-xs leading-relaxed">
+                        Válassz egy előre meghatározott végleges jegyet a(z) <strong>{editingSubject.name}</strong> tantárgyhoz! A jegy azonnal frissíti a féléves és tanéves átlagokat, de <strong>nem mentődik az adatbázisba</strong>.
+                      </p>
                     </div>
 
-                    <div className="relative">
-                      <Search className={`w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 ${textMuted}`} />
-                      <input
-                        type="text"
-                        placeholder="Keresés tantárgy neve alapján..."
-                        value={templateSearch}
-                        onChange={e => setTemplateSearch(e.target.value)}
-                        className={`w-full border rounded-xl pl-9 pr-3 py-2 focus:outline-none ${inputStyle}`}
-                      />
-                    </div>
-
-                    {filteredTemplates.length === 0 ? (
-                      <div className={`p-5 rounded-xl border text-center space-y-2 ${bgSubCard}`}>
-                        <p className={`text-sm font-semibold ${textStrong}`}>
-                          Nincs találat a(z) {formatSemesterLabel(editingSubject.semester)} félévre
-                        </p>
-                        <p className={`text-xs ${textMuted}`}>
-                          Válts át az „Összes félév” fülre, vagy hozz létre új egyéni tárgyat!
-                        </p>
-                      </div>
-                    ) : (
-                      <div className="space-y-2.5">
-                        {filteredTemplates.map(tpl => {
-                          const zhCount = (tpl.assessments || []).filter(a => a.category === 'ZH').length;
-                          const isAdded = Boolean(addedTemplateIds[tpl.id]);
-                          const isTplElective = (tpl.courseType || 'mandatory') === 'elective';
+                    <div>
+                      <label className={`block text-xs font-semibold mb-1.5 ${textMuted}`}>
+                        Szimulált megajánlott / végleges jegy
+                      </label>
+                      <div className="grid grid-cols-5 gap-2">
+                        {[
+                          { val: '', label: 'Pontok alapján' },
+                          { val: '2', label: '2' },
+                          { val: '3', label: '3' },
+                          { val: '4', label: '4' },
+                          { val: '5', label: '5' }
+                        ].map(opt => {
+                          const isSelected = (editingSubject.manualGrade || '') === opt.val;
                           return (
-                            <div
-                              key={tpl.id}
-                              className={`p-3.5 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${bgSubCard}`}
+                            <button
+                              key={opt.val || 'auto'}
+                              type="button"
+                              onClick={() => setEditingSubject({ ...editingSubject, manualGrade: opt.val })}
+                              className={`py-2.5 px-2 rounded-xl text-xs sm:text-sm font-extrabold border transition cursor-pointer ${
+                                isSelected
+                                  ? 'bg-amber-400 text-slate-950 border-amber-400 shadow-sm'
+                                  : darkMode
+                                    ? 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
+                                    : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200'
+                              }`}
                             >
-                              <div className="min-w-0">
-                                <div className="flex items-center gap-1.5 flex-wrap">
-                                  <h3 className={`font-bold text-sm ${textStrong}`}>{tpl.name}</h3>
-                                  <span className="text-xs font-semibold text-amber-500">
-                                    • {tpl.credits} kredit
-                                  </span>
-                                  <span className={`px-2 py-0.5 text-[10px] font-bold rounded-full border ${
-                                    isTplElective
-                                      ? darkMode
-                                        ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/35'
-                                        : 'bg-emerald-50 text-emerald-700 border-emerald-300'
-                                      : darkMode
-                                        ? 'bg-sky-500/15 text-sky-300 border-sky-500/35'
-                                        : 'bg-sky-50 text-sky-700 border-sky-300'
-                                  }`}>
-                                    {isTplElective ? 'Szabadon választott' : 'Kötelező'}
-                                  </span>
-                                  {(tpl.sourceSemester || tpl.sourceSemesterOrdinal) && (
-                                    <span className={`px-2 py-0.5 text-[10px] font-semibold rounded-full ${
-                                      darkMode ? 'bg-slate-800 text-slate-300' : 'bg-slate-200 text-slate-700'
-                                    }`}>
-                                      {tpl.sourceSemester
-                                        ? formatSemesterLabel(tpl.sourceSemester)
-                                        : `${tpl.sourceSemesterOrdinal}. félév`}
-                                    </span>
-                                  )}
-                                </div>
-                                <p className={`text-[11px] mt-1 ${textMuted}`}>
-                                  {tpl.courseKind === 'exam'
-                                    ? 'Vizsgakurzus (100 p)'
-                                    : `${zhCount} db ZH • Aláírás: ${formatHu(tpl.alairasMin)} p • Megajánlott: ${formatHu(tpl.megajanlottMin ?? 60)} p • Gyak.: ${tpl.totalClasses || 0} alk.`}
-                                </p>
-                              </div>
-
-                              <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
-                                {isAdmin && !tpl.isWebScrapedMajor && (
-                                  <button
-                                    type="button"
-                                    onClick={() => handleDeleteTemplate(tpl.id, tpl.name)}
-                                    title="Sablon törlése"
-                                    className="p-2 text-slate-400 hover:text-rose-500 transition cursor-pointer"
-                                  >
-                                    <Trash2 className="w-4 h-4" />
-                                  </button>
-                                )}
-                                <button
-                                  type="button"
-                                  onClick={() => handleCreateFromTemplate(tpl)}
-                                  className={`px-3.5 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer ${
-                                    isAdded
-                                      ? 'bg-emerald-500 text-white'
-                                      : 'bg-amber-400 hover:bg-amber-300 text-slate-950'
-                                  }`}
-                                >
-                                  {isAdded ? (
-                                    <>
-                                      <Check className="w-3.5 h-3.5" /> Hozzáadva
-                                    </>
-                                  ) : (
-                                    <>
-                                      <Plus className="w-3.5 h-3.5" /> Felvétel
-                                    </>
-                                  )}
-                                </button>
-                              </div>
-                            </div>
+                              {opt.label}
+                            </button>
                           );
                         })}
                       </div>
-                    )}
-
-                    <div className="flex justify-end pt-2">
-                      <button
-                        type="button"
-                        onClick={() => { setIsSubjectModalOpen(false); setSelectedSubjectMajorId(null); }}
-                        className="px-4 py-2 text-sm font-bold bg-amber-400 hover:bg-amber-300 text-slate-950 rounded-lg cursor-pointer"
-                      >
-                        Kész
-                      </button>
                     </div>
-                  </div>
+                  </>
                 ) : (
-                  <form noValidate onSubmit={handleSaveSubject} className="p-4 sm:p-6 overflow-y-auto overscroll-contain space-y-4 flex-1 min-h-0">
-                    {isSim && editingSubject.id ? (
-                      <div className="space-y-4">
-                        <div className={`p-3.5 rounded-xl border text-xs leading-relaxed ${
-                          darkMode
-                            ? 'bg-amber-400/10 border-amber-400/40 text-amber-100'
-                            : 'bg-amber-50 border-amber-300 text-slate-800'
-                        }`}>
-                          <p className="font-extrabold text-amber-500 uppercase tracking-wide text-[11px] mb-1">
-                            Szimulátor mód aktív
-                          </p>
-                          <p>
-                            Itt előre meghatározhatsz egy szimulált végleges jegyet (2–5) a(z) <strong>{editingSubject.name}</strong> tantárgyhoz. Ez <strong>nem mentődik az adatbázisba</strong>, és a felső sárga sáv „Visszaállítás” gombjával törölhető.
-                          </p>
-                        </div>
-
-                        <div>
-                          <label className={`block text-xs font-semibold mb-1.5 ${textMuted}`}>
-                            Előre meghatározott szimulált jegy
-                          </label>
-                          <select
-                            value={editingSubject.manualGrade || ''}
-                            onChange={e => setEditingSubject({ ...editingSubject, manualGrade: e.target.value })}
-                            className={`w-full border rounded-lg px-3 py-2.5 sm:py-2 font-bold focus:outline-none ${inputStyle}`}
-                          >
-                            <option value="">Automatikus (pontokból számolva)</option>
-                            <option value="2">2 (Elégséges)</option>
-                            <option value="3">3 (Közepes)</option>
-                            <option value="4">4 (Jó)</option>
-                            <option value="5">5 (Jeles)</option>
-                          </select>
-                        </div>
-
-                        <div className="flex justify-end gap-2 pt-2">
-                          <button
-                            type="button"
-                            onClick={() => { setIsSubjectModalOpen(false); setSelectedSubjectMajorId(null); }}
-                            className={`px-4 py-2 text-sm rounded-lg cursor-pointer ${textMuted}`}
-                          >
-                            Mégse
-                          </button>
-                          <button
-                            type="submit"
-                            className="px-4 py-2 text-sm font-bold bg-amber-400 hover:bg-amber-300 text-slate-950 rounded-lg cursor-pointer"
-                          >
-                            Szimulált jegy mentése
-                          </button>
-                        </div>
+                  <>
+                    <div>
+                      <label className={`block text-xs font-semibold mb-1.5 ${textMuted}`}>Kurzus típusa</label>
+                      <div className="grid grid-cols-2 gap-2.5">
+                        <button
+                          type="button"
+                          onClick={() => setEditingSubject({ ...editingSubject, courseKind: 'regular' })}
+                          className={`py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold border transition cursor-pointer ${
+                            (editingSubject.courseKind || 'regular') === 'regular'
+                              ? 'bg-amber-400 text-slate-950 border-amber-400 shadow-sm'
+                              : darkMode
+                                ? 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
+                                : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200'
+                          }`}
+                        >
+                          Sima kurzus
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setEditingSubject({ ...editingSubject, courseKind: 'exam' })}
+                          className={`py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold border transition cursor-pointer ${
+                            editingSubject.courseKind === 'exam'
+                              ? 'bg-violet-600 text-white border-violet-600 shadow-sm'
+                              : darkMode
+                                ? 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
+                                : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200'
+                          }`}
+                        >
+                          Vizsgakurzus
+                        </button>
                       </div>
-                    ) : (
-                      <>
-                        <div>
-                          <label className={`block text-xs font-semibold mb-1.5 ${textMuted}`}>Kurzus típusa</label>
-                          <div className={`grid grid-cols-2 gap-1.5 p-1 rounded-xl border ${
-                            darkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-100 border-slate-200'
-                          }`}>
-                            <button
-                              type="button"
-                              onClick={() => setEditingSubject({ ...editingSubject, courseKind: 'regular' })}
-                              className={`py-2 px-3 rounded-lg text-xs font-bold transition cursor-pointer ${
-                                (editingSubject.courseKind || 'regular') === 'regular'
-                                  ? 'bg-amber-400 text-slate-950 shadow-xs'
-                                  : textMuted
-                              }`}
-                            >
-                              Sima kurzus
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setEditingSubject({ ...editingSubject, courseKind: 'exam' })}
-                              className={`py-2 px-3 rounded-lg text-xs font-bold transition cursor-pointer ${
-                                editingSubject.courseKind === 'exam'
-                                  ? 'bg-amber-400 text-slate-950 shadow-xs'
-                                  : textMuted
-                              }`}
-                            >
-                              Vizsgakurzus
-                            </button>
+                      {editingSubject.courseKind === 'exam' && (
+                        <p className={`text-[11px] mt-1.5 ${textMuted}`}>
+                          Vizsgakurzusnál csak a tárgy nevét és kreditjét kell megadnod (alapértelmezett 2-es határ: 59,5 pont, max: 100 pont).
+                        </p>
+                      )}
+                    </div>
+
+                    <div className={`p-3.5 rounded-xl border space-y-3 ${bgSubCard}`}>
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className={`text-xs sm:text-sm font-extrabold ${textStrong}`}>
+                            Pontszámítás kikapcsolása (csak jegy)
+                          </p>
+                          <p className={`text-[11px] mt-0.5 ${textMuted}`}>
+                            Ha ennél a tárgynál nem pontokat gyűjtesz, állítsd be közvetlenül a megajánlott / végleges jegyet.
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          role="switch"
+                          aria-checked={Boolean(editingSubject.disablePointCalc)}
+                          onClick={() =>
+                            setEditingSubject(prev => ({
+                              ...prev,
+                              disablePointCalc: !prev.disablePointCalc
+                            }))
+                          }
+                          className={`w-12 h-7 rounded-full transition-colors p-0.5 cursor-pointer shrink-0 ${
+                            editingSubject.disablePointCalc
+                              ? 'bg-emerald-500'
+                              : darkMode
+                                ? 'bg-slate-700'
+                                : 'bg-slate-300'
+                          }`}
+                        >
+                          <span
+                            className={`block w-6 h-6 rounded-full bg-white shadow-sm transform transition-transform ${
+                              editingSubject.disablePointCalc ? 'translate-x-5' : 'translate-x-0'
+                            }`}
+                          />
+                        </button>
+                      </div>
+
+                      {editingSubject.disablePointCalc && (
+                        <div className={`pt-2.5 border-t space-y-2 ${
+                          darkMode ? 'border-slate-700/80' : 'border-slate-200'
+                        }`}>
+                          <label className={`block text-xs font-bold ${textStrong}`}>
+                            Megajánlott / végleges jegy kiválasztása
+                          </label>
+                          <div className="grid grid-cols-5 gap-2">
+                            {[
+                              { val: '', label: 'Nincs' },
+                              { val: '2', label: '2' },
+                              { val: '3', label: '3' },
+                              { val: '4', label: '4' },
+                              { val: '5', label: '5' }
+                            ].map(opt => {
+                              const isSelected = (editingSubject.manualGrade || '') === opt.val;
+                              return (
+                                <button
+                                  key={opt.val || 'none'}
+                                  type="button"
+                                  onClick={() => setEditingSubject({ ...editingSubject, manualGrade: opt.val })}
+                                  className={`py-2.5 px-2 rounded-xl text-xs sm:text-sm font-extrabold border transition cursor-pointer ${
+                                    isSelected
+                                      ? 'bg-emerald-500 text-white border-emerald-500 shadow-sm'
+                                      : darkMode
+                                        ? 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
+                                        : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200'
+                                  }`}
+                                >
+                                  {opt.label}
+                                </button>
+                              );
+                            })}
                           </div>
                         </div>
+                      )}
+                    </div>
 
-                        <div>
-                          <label className={`block text-xs font-semibold mb-1 ${textMuted}`}>Tantárgy neve</label>
+                    <div>
+                      <label className={`block text-xs font-semibold mb-1.5 ${textMuted}`}>Tantárgy besorolása</label>
+                      <div className="grid grid-cols-2 gap-2.5">
+                        <button
+                          type="button"
+                          onClick={() => setEditingSubject({ ...editingSubject, courseType: 'mandatory' })}
+                          className={`py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold border transition cursor-pointer ${
+                            (editingSubject.courseType || 'mandatory') === 'mandatory'
+                              ? 'bg-sky-600 text-white border-sky-600 shadow-sm'
+                              : darkMode
+                                ? 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
+                                : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200'
+                          }`}
+                        >
+                          Kötelező
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setEditingSubject({ ...editingSubject, courseType: 'elective' })}
+                          className={`py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold border transition cursor-pointer ${
+                            editingSubject.courseType === 'elective'
+                              ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
+                              : darkMode
+                                ? 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
+                                : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200'
+                          }`}
+                        >
+                          Szabadon választott
+                        </button>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className={`block text-xs font-semibold mb-1 ${textMuted}`}>Tantárgy neve</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="Pl. Statisztika I."
+                        value={editingSubject.name}
+                        onChange={e => setEditingSubject({ ...editingSubject, name: e.target.value })}
+                        className={`w-full border rounded-lg px-3 py-2.5 sm:py-2 focus:outline-none ${inputStyle}`}
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className={`block text-xs font-semibold mb-1 ${textMuted}`}>Félév</label>
+                        {semesters.length > 0 ? (
+                          <select
+                            value={editingSubject.semester}
+                            onChange={e => setEditingSubject({ ...editingSubject, semester: e.target.value })}
+                            className={`w-full border rounded-lg px-3 py-2.5 sm:py-2 focus:outline-none ${inputStyle}`}
+                          >
+                            {semesters.map(sem => (
+                              <option key={sem} value={sem}>{formatSemesterLabel(sem)}</option>
+                            ))}
+                          </select>
+                        ) : (
                           <input
                             type="text"
                             required
-                            placeholder="Pl. Alkalmazásépítés"
-                            value={editingSubject.name}
-                            onChange={e => setEditingSubject({ ...editingSubject, name: e.target.value })}
+                            value={editingSubject.semester}
+                            onChange={e => setEditingSubject({ ...editingSubject, semester: e.target.value })}
                             className={`w-full border rounded-lg px-3 py-2.5 sm:py-2 focus:outline-none ${inputStyle}`}
                           />
-                        </div>
-
-                        <div>
-                          <label className={`block text-xs font-semibold mb-1.5 ${textMuted}`}>Tárgy besorolása (kreditkeret)</label>
-                          <div className={`grid grid-cols-2 gap-1.5 p-1 rounded-xl border ${
-                            darkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-100 border-slate-200'
-                          }`}>
-                            <button
-                              type="button"
-                              onClick={() => setEditingSubject({ ...editingSubject, courseType: 'mandatory' })}
-                              className={`py-2 px-3 rounded-lg text-xs font-bold transition cursor-pointer ${
-                                (editingSubject.courseType || 'mandatory') === 'mandatory'
-                                  ? 'bg-sky-500 text-white shadow-xs'
-                                  : textMuted
-                              }`}
-                            >
-                              Kötelező (186 kr.)
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setEditingSubject({ ...editingSubject, courseType: 'elective' })}
-                              className={`py-2 px-3 rounded-lg text-xs font-bold transition cursor-pointer ${
-                                editingSubject.courseType === 'elective'
-                                  ? 'bg-emerald-500 text-white shadow-xs'
-                                  : textMuted
-                              }`}
-                            >
-                              Szabadon választott (12 kr.)
-                            </button>
-                          </div>
-                        </div>
-
-                        {editingSubject.courseKind === 'exam' ? (
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <div>
-                              <label className={`block text-xs font-semibold mb-1 ${textMuted}`}>Félév</label>
-                              <select
-                                value={editingSubject.semester}
-                                onChange={e => setEditingSubject({ ...editingSubject, semester: e.target.value })}
-                                className={`w-full border rounded-lg px-3 py-2.5 sm:py-2 focus:outline-none ${inputStyle}`}
-                              >
-                                {semesters.map(sem => (
-                                  <option key={sem} value={sem}>{formatSemesterLabel(sem)}</option>
-                                ))}
-                              </select>
-                            </div>
-                            <div>
-                              <label className={`block text-xs font-semibold mb-1 ${textMuted}`}>Kreditérték</label>
-                              <input
-                                type="number"
-                                min="0"
-                                max="30"
-                                step="1"
-                                placeholder="Pl. 3 vagy 6"
-                                value={editingSubject.credits}
-                                onChange={e => handleSubjectCreditsChange(e.target.value)}
-                                className={`w-full border rounded-lg px-3 py-2.5 sm:py-2 focus:outline-none ${inputStyle}`}
-                              />
-                            </div>
-                          </div>
-                        ) : (
-                          <>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                              <div>
-                                <label className={`block text-xs font-semibold mb-1 ${textMuted}`}>Félév</label>
-                                <select
-                                  value={editingSubject.semester}
-                                  onChange={e => setEditingSubject({ ...editingSubject, semester: e.target.value })}
-                                  className={`w-full border rounded-lg px-3 py-2.5 sm:py-2 focus:outline-none ${inputStyle}`}
-                                >
-                                  {semesters.map(sem => (
-                                    <option key={sem} value={sem}>{formatSemesterLabel(sem)}</option>
-                                  ))}
-                                </select>
-                              </div>
-                              <div>
-                                <label className={`block text-xs font-semibold mb-1 ${textMuted}`}>Kreditérték</label>
-                                <input
-                                  type="number"
-                                  min="0"
-                                  max="30"
-                                  step="1"
-                                  placeholder="Pl. 3 vagy 6"
-                                  value={editingSubject.credits}
-                                  onChange={e => handleSubjectCreditsChange(e.target.value)}
-                                  className={`w-full border rounded-lg px-3 py-2.5 sm:py-2 focus:outline-none ${inputStyle}`}
-                                />
-                              </div>
-                            </div>
-
-                            <div className={`p-3.5 rounded-xl border flex items-center justify-between gap-3 ${bgSubCard}`}>
-                              <div className="min-w-0">
-                                <p className={`text-xs sm:text-sm font-bold leading-snug ${textStrong}`}>
-                                  Pontszámítás kikapcsolása (csak jegy)
-                                </p>
-                                <p className={`text-[11px] mt-0.5 leading-snug ${textMuted}`}>
-                                  Bekapcsolva nem jelenik meg pontsáv, csak a beállított jegy látszik a kártyán.
-                                </p>
-                              </div>
-                              <button
-                                type="button"
-                                role="switch"
-                                aria-checked={Boolean(editingSubject.disablePointCalc)}
-                                onClick={() =>
-                                  setEditingSubject({
-                                    ...editingSubject,
-                                    disablePointCalc: !editingSubject.disablePointCalc
-                                  })
-                                }
-                                className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors cursor-pointer ${
-                                  editingSubject.disablePointCalc
-                                    ? 'bg-amber-400'
-                                    : darkMode
-                                      ? 'bg-slate-700'
-                                      : 'bg-slate-300'
-                                }`}
-                              >
-                                <span
-                                  className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
-                                    editingSubject.disablePointCalc ? 'translate-x-6' : 'translate-x-1'
-                                  }`}
-                                />
-                              </button>
-                            </div>
-
-                            {!editingSubject.disablePointCalc && (
-                              <>
-                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                                  <div>
-                                    <label className={`block text-xs font-semibold mb-1 ${textMuted}`}>Aláírás min. pont</label>
-                                    <input
-                                      type="number"
-                                      step="1"
-                                      value={editingSubject.alairasMin}
-                                      onChange={e => setEditingSubject({ ...editingSubject, alairasMin: e.target.value })}
-                                      className={`w-full border rounded-lg px-3 py-2.5 sm:py-2 focus:outline-none ${inputStyle}`}
-                                    />
-                                  </div>
-                                  <div>
-                                    <label className={`block text-xs font-semibold mb-1 ${textMuted}`}>Megajánlott min. összpont</label>
-                                    <input
-                                      type="number"
-                                      step="1"
-                                      value={editingSubject.megajanlottMin}
-                                      onChange={e => setEditingSubject({ ...editingSubject, megajanlottMin: e.target.value })}
-                                      className={`w-full border rounded-lg px-3 py-2.5 sm:py-2 focus:outline-none ${inputStyle}`}
-                                    />
-                                  </div>
-                                  <div>
-                                    <label className={`block text-xs font-semibold mb-1 ${textMuted}`}>Megajánlott min. ZH pont</label>
-                                    <input
-                                      type="number"
-                                      step="1"
-                                      value={editingSubject.megajanlottMinZH}
-                                      onChange={e => setEditingSubject({ ...editingSubject, megajanlottMinZH: e.target.value })}
-                                      className={`w-full border rounded-lg px-3 py-2.5 sm:py-2 focus:outline-none ${inputStyle}`}
-                                    />
-                                  </div>
-                                </div>
-
-                                <div className={`p-3 rounded-xl border space-y-3 ${bgSubCard}`}>
-                                  <p className={`text-xs font-bold uppercase ${textMuted}`}>Gyakorlati jelenlét beállításai</p>
-                                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                                    <div>
-                                      <label className={`block text-xs font-semibold mb-1 ${textMuted}`}>Összes óra (alkalom)</label>
-                                      <input
-                                        type="number"
-                                        min="0"
-                                        max="40"
-                                        placeholder="3 kr→6, 6 kr→12"
-                                        value={editingSubject.totalClasses}
-                                        onChange={e => setEditingSubject({ ...editingSubject, totalClasses: e.target.value })}
-                                        className={`w-full border rounded-lg px-3 py-2.5 sm:py-2 focus:outline-none ${inputStyle}`}
-                                      />
-                                    </div>
-                                    <div>
-                                      <label className={`block text-xs font-semibold mb-1 ${textMuted}`}>Aláírás min. jelenlét</label>
-                                      <input
-                                        type="number"
-                                        min="0"
-                                        max="40"
-                                        placeholder="3 kr→3, 6 kr→6"
-                                        value={editingSubject.minAttendanceAlairas}
-                                        onChange={e => setEditingSubject({ ...editingSubject, minAttendanceAlairas: e.target.value })}
-                                        className={`w-full border rounded-lg px-3 py-2.5 sm:py-2 focus:outline-none ${inputStyle}`}
-                                      />
-                                    </div>
-                                    <div>
-                                      <label className={`block text-xs font-semibold mb-1 ${textMuted}`}>Megajánlott min. jelenlét</label>
-                                      <input
-                                        type="number"
-                                        min="0"
-                                        max="40"
-                                        placeholder="3 kr→4, 6 kr→9"
-                                        value={editingSubject.minAttendanceMegajanlott}
-                                        onChange={e => setEditingSubject({ ...editingSubject, minAttendanceMegajanlott: e.target.value })}
-                                        className={`w-full border rounded-lg px-3 py-2.5 sm:py-2 focus:outline-none ${inputStyle}`}
-                                      />
-                                    </div>
-                                  </div>
-                                </div>
-                              </>
-                            )}
-                          </>
                         )}
+                      </div>
+                      <div>
+                        <label className={`block text-xs font-semibold mb-1 ${textMuted}`}>Kreditszám</label>
+                        <input
+                          type="number"
+                          min="0"
+                          max="30"
+                          required
+                          placeholder="Pl. 3 vagy 6"
+                          value={editingSubject.credits}
+                          onChange={e => handleSubjectCreditsChange(e.target.value)}
+                          className={`w-full border rounded-lg px-3 py-2.5 sm:py-2 focus:outline-none ${inputStyle}`}
+                        />
+                        {!editingSubject.id && !editingSubject.disablePointCalc && editingSubject.courseKind !== 'exam' && (
+                          <p className={`text-[10px] mt-1 ${textMuted}`}>
+                            3 kr → 6 gyak. (3 / 4) • 6 kr → 12 gyak. (6 / 9)
+                          </p>
+                        )}
+                      </div>
+                    </div>
 
-                        <div>
-                          <label className={`block text-xs font-semibold mb-1 ${textMuted}`}>
-                            {editingSubject.disablePointCalc
-                              ? 'Megajánlott / végleges jegy (2–5)'
-                              : 'Manuális / vizsgán szerzett jegy felülbírálata (opcionális)'}
-                          </label>
-                          <select
-                            value={editingSubject.manualGrade}
-                            onChange={e => setEditingSubject({ ...editingSubject, manualGrade: e.target.value })}
-                            className={`w-full border rounded-lg px-3 py-2.5 sm:py-2 focus:outline-none ${inputStyle}`}
-                          >
-                            <option value="">
-                              {editingSubject.disablePointCalc
-                                ? 'Nincs még beírva jegy'
-                                : 'Automatikus (pontokból számolva)'}
-                            </option>
-                            <option value="2">2 (Elégséges)</option>
-                            <option value="3">3 (Közepes)</option>
-                            <option value="4">4 (Jó)</option>
-                            <option value="5">5 (Jeles)</option>
-                          </select>
+                    {editingSubject.courseKind !== 'exam' && !editingSubject.disablePointCalc && (
+                      <>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                          <div>
+                            <label className={`block text-[11px] font-semibold mb-1 ${textMuted}`}>Aláírás min. (p)</label>
+                            <input
+                              type="number"
+                              step="1"
+                              value={editingSubject.alairasMin}
+                              onChange={e => setEditingSubject({ ...editingSubject, alairasMin: e.target.value })}
+                              className={`w-full border rounded-lg px-3 py-2.5 sm:py-2 focus:outline-none ${inputStyle}`}
+                            />
+                          </div>
+                          <div>
+                            <label className={`block text-[11px] font-semibold mb-1 ${textMuted}`}>ZH min. (megajánlott)</label>
+                            <input
+                              type="number"
+                              step="1"
+                              value={editingSubject.megajanlottMinZH ?? 50}
+                              onChange={e => setEditingSubject({ ...editingSubject, megajanlottMinZH: e.target.value })}
+                              className={`w-full border rounded-lg px-3 py-2.5 sm:py-2 focus:outline-none ${inputStyle}`}
+                            />
+                          </div>
+                          <div>
+                            <label className={`block text-[11px] font-semibold mb-1 ${textMuted}`}>Megajánlott min. (p)</label>
+                            <input
+                              type="number"
+                              step="1"
+                              value={editingSubject.megajanlottMin ?? 60}
+                              onChange={e => setEditingSubject({ ...editingSubject, megajanlottMin: e.target.value })}
+                              className={`w-full border rounded-lg px-3 py-2.5 sm:py-2 focus:outline-none ${inputStyle}`}
+                            />
+                          </div>
                         </div>
 
-                        <div className="flex justify-end gap-2 pt-2">
-                          <button
-                            type="button"
-                            onClick={() => { setIsSubjectModalOpen(false); setSelectedSubjectMajorId(null); }}
-                            className={`px-4 py-2 text-sm rounded-lg cursor-pointer ${textMuted}`}
-                          >
-                            Mégse
-                          </button>
-                          <button
-                            type="submit"
-                            className="px-4 py-2 text-sm font-bold bg-amber-400 hover:bg-amber-300 text-slate-950 rounded-lg cursor-pointer"
-                          >
-                            Mentés
-                          </button>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                          <div>
+                            <label className={`block text-[11px] font-semibold mb-1 ${textMuted}`}>Összes gyakorlat</label>
+                            <input
+                              type="number"
+                              min="0"
+                              max="40"
+                              placeholder="Üres"
+                              value={editingSubject.totalClasses}
+                              onChange={e => setEditingSubject({ ...editingSubject, totalClasses: e.target.value })}
+                              className={`w-full border rounded-lg px-3 py-2.5 sm:py-2 focus:outline-none ${inputStyle}`}
+                            />
+                          </div>
+                          <div>
+                            <label className={`block text-[11px] font-semibold mb-1 ${textMuted}`}>Aláírás min. jelenlét</label>
+                            <input
+                              type="number"
+                              min="0"
+                              max="40"
+                              placeholder="Üres"
+                              value={editingSubject.minAttendanceAlairas}
+                              onChange={e => setEditingSubject({ ...editingSubject, minAttendanceAlairas: e.target.value })}
+                              className={`w-full border rounded-lg px-3 py-2.5 sm:py-2 focus:outline-none ${inputStyle}`}
+                            />
+                          </div>
+                          <div>
+                            <label className={`block text-[11px] font-semibold mb-1 ${textMuted}`}>Megajánlott min. jelenlét</label>
+                            <input
+                              type="number"
+                              min="0"
+                              max="40"
+                              placeholder="Üres"
+                              value={editingSubject.minAttendanceMegajanlott}
+                              onChange={e => setEditingSubject({ ...editingSubject, minAttendanceMegajanlott: e.target.value })}
+                              className={`w-full border rounded-lg px-3 py-2.5 sm:py-2 focus:outline-none ${inputStyle}`}
+                            />
+                          </div>
                         </div>
                       </>
                     )}
-                  </form>
+
+                    {!editingSubject.disablePointCalc && (
+                      <div>
+                        <label className={`block text-xs font-semibold mb-1 ${textMuted}`}>Kézi jegy felülírás (opcionális)</label>
+                        <select
+                          value={editingSubject.manualGrade || ''}
+                          onChange={e => setEditingSubject({ ...editingSubject, manualGrade: e.target.value })}
+                          className={`w-full border rounded-lg px-3 py-2.5 sm:py-2 focus:outline-none ${inputStyle}`}
+                        >
+                          <option value="">Automatikus (pontok alapján)</option>
+                          <option value="2">2 (Elégséges)</option>
+                          <option value="3">3 (Közepes)</option>
+                          <option value="4">4 (Jó)</option>
+                          <option value="5">5 (Jeles)</option>
+                        </select>
+                      </div>
+                    )}
+                  </>
                 )}
-              </>
-            )}
+
+                <div className="flex justify-end gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => { setIsSubjectModalOpen(false); setSelectedSubjectMajorId(null); }}
+                    className={`px-4 py-2 text-sm rounded-lg cursor-pointer ${textMuted}`}
+                  >
+                    Mégse
+                  </button>
+                  <button type="submit" className="px-4 py-2 text-sm font-bold bg-amber-400 hover:bg-amber-300 text-slate-950 rounded-lg cursor-pointer">
+                    Mentés
+                  </button>
+                </div>
+              </form>
+            ) : null}
           </div>
         </div>
       )}

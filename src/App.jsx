@@ -632,6 +632,13 @@ function buildTemplatesForMajor(majorId) {
 
 const APP_RELEASES = [
   {
+    version: 'v1.33.0',
+    date: '2026. 11. 17.',
+    changes: [
+      'Összesítő pontszámláló jelvények minden tantárgy gyűjtő szekciójának tetején: a ZH-k (Zárthelyi dolgozatok), a Pluszpontok, valamint az Egyéb számonkérések / Gyűjtők főcíme mellett is azonnal látszik az elért / maximum pontszám és a százalékos teljesítés'
+    ]
+  },
+  {
     version: 'v1.32.0',
     date: '2026. 11. 16.',
     changes: [
@@ -9542,10 +9549,18 @@ export default function App() {
                     )}
 
                     <div>
-                      <div className="flex items-center justify-between gap-2 mb-3">
-                        <h3 className={`font-bold text-sm sm:text-base ${textStrong} ${(st.needsAutoExam || st.autoFailedByNoSignature) ? 'opacity-50' : ''}`}>
-                          ZH-k (Zárthelyi dolgozatok)
-                        </h3>
+                      <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                        <div className={`flex items-center gap-2 flex-wrap ${(st.needsAutoExam || st.autoFailedByNoSignature) ? 'opacity-50' : ''}`}>
+                          <h3 className={`font-bold text-sm sm:text-base ${textStrong}`}>
+                            ZH-k (Zárthelyi dolgozatok)
+                          </h3>
+                          <span className={`px-2.5 py-0.5 text-xs font-bold rounded-full ${
+                            darkMode ? 'bg-amber-400/20 text-amber-300 border border-amber-400/30' : 'bg-amber-100 text-amber-900 border border-amber-300'
+                          }`}>
+                            {formatHu(st.zhElert)}{st.zhMax > 0 ? ` / ${formatHu(st.zhMax)} p` : ' p'}
+                            {zhSummaryPct !== null && ` (${formatHu(zhSummaryPct)}%)`}
+                          </span>
+                        </div>
                         <button
                           onClick={() => setItemModal({
                             category: 'ZH',
@@ -9576,8 +9591,21 @@ export default function App() {
                     <div>
                       <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
                         <div className={(st.needsAutoExam || st.autoFailedByNoSignature) ? 'opacity-50' : ''}>
-                          <h3 className={`font-bold text-sm sm:text-base ${textStrong}`}>Pluszpontok</h3>
-                          <p className={`text-xs ${textMuted}`}>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h3 className={`font-bold text-sm sm:text-base ${textStrong}`}>Pluszpontok</h3>
+                            <span className={`px-2.5 py-0.5 text-xs font-bold rounded-full ${
+                              darkMode ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                            }`}>
+                              +{formatHu(st.pluszElert)} / {BONUS_POINTS_CAP} p
+                              {pluszSummaryPct !== null && ` (${formatHu(pluszSummaryPct)}%)`}
+                            </span>
+                            {st.rawPluszElert > BONUS_POINTS_CAP && (
+                              <span className="text-[11px] font-semibold text-amber-500">
+                                (Nyers: +{formatHu(st.rawPluszElert)} p)
+                              </span>
+                            )}
+                          </div>
+                          <p className={`text-xs mt-0.5 ${textMuted}`}>
                             Ebben a kategóriában maximum <strong>{BONUS_POINTS_CAP} pont</strong> számítható be az összpontszámba.
                           </p>
                         </div>
@@ -9603,8 +9631,16 @@ export default function App() {
                     <div className="space-y-4">
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <div className={(st.needsAutoExam || st.autoFailedByNoSignature) ? 'opacity-50' : ''}>
-                          <h3 className={`font-bold text-sm sm:text-base ${textStrong}`}>Egyéb számonkérések / Gyűjtők</h3>
-                          <p className={`text-xs ${textMuted}`}>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h3 className={`font-bold text-sm sm:text-base ${textStrong}`}>Egyéb számonkérések / Gyűjtők</h3>
+                            <span className={`px-2.5 py-0.5 text-xs font-bold rounded-full ${
+                              darkMode ? 'bg-sky-500/20 text-sky-300 border border-sky-500/30' : 'bg-sky-100 text-sky-800 border border-sky-300'
+                            }`}>
+                              +{formatHu(st.egyebElert)}{st.egyebMax > 0 ? ` / ${formatHu(st.egyebMax)} p` : ' p'}
+                              {egyebSummaryPct !== null && ` (${formatHu(egyebSummaryPct)}%)`}
+                            </span>
+                          </div>
+                          <p className={`text-xs mt-0.5 ${textMuted}`}>
                             Hozz létre saját pontgyűjtőket (pl. Órai munka, Beadandó) opcionális ponthatárral.
                           </p>
                         </div>
@@ -9691,16 +9727,29 @@ export default function App() {
                         );
                       })}
 
-                      {st.unassignedEgyebEval.processed.length > 0 && (
+                      {st.unassignedEgyebEval.processed.length > 0 && (() => {
+                        const unassignedPct = st.unassignedEgyebEval.effectiveMax > 0
+                          ? formatPct(st.unassignedEgyebEval.countedElert, st.unassignedEgyebEval.effectiveMax)
+                          : null;
+                        return (
                         <div className={`rounded-2xl border p-3.5 sm:p-4 space-y-3 transition-opacity ${bgSubCard} ${
                           (st.needsAutoExam || st.autoFailedByNoSignature) ? 'opacity-50' : ''
                         }`}>
-                          <h4 className={`font-bold text-sm ${textStrong}`}>Besorolatlan egyéb tételek</h4>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h4 className={`font-bold text-sm ${textStrong}`}>Besorolatlan egyéb tételek</h4>
+                            <span className={`px-2 py-0.5 text-xs font-bold rounded-full ${
+                              darkMode ? 'bg-sky-500/20 text-sky-300' : 'bg-sky-100 text-sky-800'
+                            }`}>
+                              {formatHu(st.unassignedEgyebEval.countedElert)}{st.unassignedEgyebEval.effectiveMax > 0 ? ` / ${formatHu(st.unassignedEgyebEval.effectiveMax)} p` : ' p'}
+                              {unassignedPct !== null && ` (${formatHu(unassignedPct)}%)`}
+                            </span>
+                          </div>
                           <div className="space-y-2.5">
                             {st.unassignedEgyebEval.processed.map(({ item, capMeta }) => renderItemRow(item, capMeta))}
                           </div>
                         </div>
-                      )}
+                        );
+                      })()}
                     </div>
                   </>
                 ) : (

@@ -631,6 +631,13 @@ function buildTemplatesForMajor(majorId) {
 
 const APP_RELEASES = [
   {
+    version: 'v1.35.0',
+    date: '2026. 11. 18.',
+    changes: [
+      'ZH minimum pontszámláló a tantárgy részletei nézetben: a „ZH-k (Zárthelyi dolgozatok)” gyűjtő tetején, az összesített ZH pontszám mellett kicsiben megjelenik, hogy hány ZH pont hiányzik még a megajánlott jegyhez előírt ZH minimumponthoz (vagy hogy a ZH minimum már teljesült)'
+    ]
+  },
+  {
     version: 'v1.34.0',
     date: '2026. 11. 18.',
     changes: [
@@ -9823,6 +9830,21 @@ export default function App() {
                             {formatHu(st.zhElert)}{st.zhMax > 0 ? ` / ${formatHu(st.zhMax)} p` : ' p'}
                             {zhSummaryPct !== null && ` (${formatHu(zhSummaryPct)}%)`}
                           </span>
+                          {st.megajanlottMinZH > 0 && (
+                            <span className={`px-2 py-0.5 text-[11px] font-semibold rounded-full border ${
+                              st.megajanlottZHOk
+                                ? darkMode
+                                  ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                                  : 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                                : darkMode
+                                  ? 'bg-slate-800/90 text-slate-300 border-slate-700'
+                                  : 'bg-slate-100 text-slate-700 border-slate-300'
+                            }`}>
+                              {st.megajanlottZHOk
+                                ? `ZH min. (${formatHu(st.megajanlottMinZH)} p) megvan`
+                                : `ZH min.-hoz (${formatHu(st.megajanlottMinZH)} p) még ${formatHu(st.megajanlottZHHianyzik)} p kell`}
+                            </span>
+                          )}
                         </div>
                         <button
                           onClick={() => setItemModal({

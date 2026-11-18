@@ -26,9 +26,8 @@ async function getXlsxLib() {
 
 const BONUS_POINTS_CAP = 10;
 const DEFAULT_RECLASSIFICATION_AVG_THRESHOLD = 2.75;
-const DEGREE_TOTAL_CREDITS = 210;
-const DEGREE_MANDATORY_CREDITS = 186;
-const DEGREE_ELECTIVE_CREDITS = 12;
+const DEFAULT_DEGREE_MANDATORY_CREDITS = 186;
+const DEFAULT_DEGREE_ELECTIVE_CREDITS = 12;
 
 const ADMIN_EMAILS = ['csongorcserkesz@gmail.com'];
 const CREATOR_EMAIL = 'csongorcserkesz@gmail.com';
@@ -632,6 +631,13 @@ function buildTemplatesForMajor(majorId) {
 
 const APP_RELEASES = [
   {
+    version: 'v1.34.0',
+    date: '2026. 11. 18.',
+    changes: [
+      'Testreszabható képzési kreditszámok a főoldalon: mostantól külön szerkesztheted a szakon előírt kötelező kreditek és a szabadon választott kreditek számát, amelyek összegéből az alkalmazás automatikusan kiszámolja a teljes diplomakreditszámot (pl. 180 vagy 210 kredit)'
+    ]
+  },
+  {
     version: 'v1.33.0',
     date: '2026. 11. 17.',
     changes: [
@@ -919,12 +925,12 @@ const TUTORIAL_SLIDES = [
     id: 'degree_credits',
     shortLabel: '1. Kreditek',
     badge: '1 / 9 • Képzési kreditkövetés',
-    title: 'Így kövesd a 210 kredites diplomád állását',
+    title: 'Így kövesd a diplomádhoz szükséges kreditek állását',
     description:
-      'A főoldal legfelső blokkja folyamatosan összesíti az összes olyan felvett tárgyad kreditjét, amelyet már teljesítettél.',
+      'A főoldal legfelső blokkja folyamatosan összesíti az összes olyan felvett tárgyad kreditjét, amelyet már teljesítettél — szakodhoz igazítható kreditcélokkal.',
     steps: [
-      'A nagy, zöld kártya mutatja az összes megszerzett kreditet a 210 kredites oklevélhez képest.',
-      'Alatta két szürkéskék kártyán külön látod a 186 kötelező és a 12 szabadon választott kredit állását.',
+      'A „Kreditek szerkesztése” gombbal (vagy a kártyákon lévő ceruza ikonnal) szabadon beállíthatod a szakodra vonatkozó kötelező és szabadon választott kreditek számát, a teljes oklevélkreditet pedig ezekből automatikusan kiszámolja az app.',
+      'A nagy, zöld kártya mutatja az összes megszerzett kreditet a kiszámolt teljes oklevélkredithez képest, alatta pedig két szürkéskék kártyán külön látod a kötelező és a szabadon választott kredit állását.',
       'Bármelyik tárgykártyán a „Kötelező” vagy „Szabadon választott” címkére kattintva egyetlen érintéssel átválthatod a besorolását.'
     ],
     tip: 'Csak azok a tárgyak növelik a teljesített krediteket, amelyeknél már elérted a megajánlott jegyet, beírtál kézi jegyet, és nincsenek „Megbuktam☹️” állapotban.'
@@ -1831,6 +1837,20 @@ export default function App() {
   const [isThresholdModalOpen, setIsThresholdModalOpen] = useState(false);
   const [thresholdInputText, setThresholdInputText] = useState(() => formatHu(DEFAULT_RECLASSIFICATION_AVG_THRESHOLD, 2));
 
+  const [degreeMandatoryCredits, setDegreeMandatoryCredits] = useState(() => {
+    const saved = parseInt(localStorage.getItem('bge_degree_mandatory_credits'), 10);
+    return !isNaN(saved) && saved >= 0 ? saved : DEFAULT_DEGREE_MANDATORY_CREDITS;
+  });
+  const [degreeElectiveCredits, setDegreeElectiveCredits] = useState(() => {
+    const saved = parseInt(localStorage.getItem('bge_degree_elective_credits'), 10);
+    return !isNaN(saved) && saved >= 0 ? saved : DEFAULT_DEGREE_ELECTIVE_CREDITS;
+  });
+  const [isDegreeCreditsModalOpen, setIsDegreeCreditsModalOpen] = useState(false);
+  const [mandatoryCreditsInput, setMandatoryCreditsInput] = useState(() => String(DEFAULT_DEGREE_MANDATORY_CREDITS));
+  const [electiveCreditsInput, setElectiveCreditsInput] = useState(() => String(DEFAULT_DEGREE_ELECTIVE_CREDITS));
+
+  const degreeTotalCredits = degreeMandatoryCredits + degreeElectiveCredits;
+
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [userDataLoaded, setUserDataLoaded] = useState(false);
@@ -2418,6 +2438,20 @@ export default function App() {
             setReclassificationThreshold(val);
             localStorage.setItem('bge_reclassification_threshold', String(val));
           }
+          if (data.degreeMandatoryCredits !== undefined && data.degreeMandatoryCredits !== null) {
+            const mandVal = parseInt(data.degreeMandatoryCredits, 10);
+            if (!isNaN(mandVal) && mandVal >= 0) {
+              setDegreeMandatoryCredits(mandVal);
+              localStorage.setItem('bge_degree_mandatory_credits', String(mandVal));
+            }
+          }
+          if (data.degreeElectiveCredits !== undefined && data.degreeElectiveCredits !== null) {
+            const elecVal = parseInt(data.degreeElectiveCredits, 10);
+            if (!isNaN(elecVal) && elecVal >= 0) {
+              setDegreeElectiveCredits(elecVal);
+              localStorage.setItem('bge_degree_elective_credits', String(elecVal));
+            }
+          }
           if (typeof data.isGazdinfo === 'boolean') {
             setHasServerGazdinfoPref(true);
             localStorage.setItem('bge_gazdinfo_prompt_seen', 'true');
@@ -2469,6 +2503,38 @@ export default function App() {
       setDoc(
         doc(db, 'users', user.uid, 'settings', 'preferences'),
         { reclassificationThreshold: rounded },
+        { merge: true }
+      ).catch(() => {});
+    }
+  };
+
+  const handleOpenDegreeCreditsModal = () => {
+    setMandatoryCreditsInput(String(degreeMandatoryCredits));
+    setElectiveCreditsInput(String(degreeElectiveCredits));
+    setIsDegreeCreditsModalOpen(true);
+  };
+
+  const handleSaveDegreeCredits = async (e) => {
+    e.preventDefault();
+    const parsedMand = parseInt(String(mandatoryCreditsInput).trim(), 10);
+    const parsedElec = parseInt(String(electiveCreditsInput).trim(), 10);
+    if (isNaN(parsedMand) || parsedMand < 0 || isNaN(parsedElec) || parsedElec < 0) return;
+    if (parsedMand + parsedElec <= 0) return;
+
+    setDegreeMandatoryCredits(parsedMand);
+    setDegreeElectiveCredits(parsedElec);
+    localStorage.setItem('bge_degree_mandatory_credits', String(parsedMand));
+    localStorage.setItem('bge_degree_elective_credits', String(parsedElec));
+    setIsDegreeCreditsModalOpen(false);
+    showToast(`Kreditszámok mentve: ${parsedMand} kötelező + ${parsedElec} szab. vál. = ${parsedMand + parsedElec} teljes kredit`);
+
+    if (user) {
+      setDoc(
+        doc(db, 'users', user.uid, 'settings', 'preferences'),
+        {
+          degreeMandatoryCredits: parsedMand,
+          degreeElectiveCredits: parsedElec
+        },
         { merge: true }
       ).catch(() => {});
     }
@@ -4384,6 +4450,7 @@ export default function App() {
     excelImportTargetSemCode ||
     editingSemesterOldName ||
     isSubjectModalOpen ||
+    isDegreeCreditsModalOpen ||
     isThresholdModalOpen ||
     isGazdinfoOnboardingOpen ||
     isWelcomeOpen ||
@@ -4420,6 +4487,7 @@ export default function App() {
         if (isJokerModalOpen && !isSavingJoker) { setIsJokerModalOpen(false); return; }
         if (isCustomSortModalOpen) { setIsCustomSortModalOpen(false); return; }
         if (isAvgCalcOpen) { setIsAvgCalcOpen(false); return; }
+        if (isDegreeCreditsModalOpen) { setIsDegreeCreditsModalOpen(false); return; }
         if (isThresholdModalOpen) { setIsThresholdModalOpen(false); return; }
         if (isPastSemestersWizardOpen && !isSavingPastSemesters) { setIsPastSemestersWizardOpen(false); return; }
         if (isSemesterModalOpen) { setIsSemesterModalOpen(false); return; }
@@ -5112,9 +5180,15 @@ export default function App() {
     </footer>
   );
 
-  const totalCreditPct = Math.min(100, Math.round((degreeCreditSummary.totalCompleted / DEGREE_TOTAL_CREDITS) * 100));
-  const mandatoryCreditPct = Math.min(100, Math.round((degreeCreditSummary.mandatoryCompleted / DEGREE_MANDATORY_CREDITS) * 100));
-  const electiveCreditPct = Math.min(100, Math.round((degreeCreditSummary.electiveCompleted / DEGREE_ELECTIVE_CREDITS) * 100));
+  const totalCreditPct = degreeTotalCredits > 0
+    ? Math.min(100, Math.round((degreeCreditSummary.totalCompleted / degreeTotalCredits) * 100))
+    : 0;
+  const mandatoryCreditPct = degreeMandatoryCredits > 0
+    ? Math.min(100, Math.round((degreeCreditSummary.mandatoryCompleted / degreeMandatoryCredits) * 100))
+    : 100;
+  const electiveCreditPct = degreeElectiveCredits > 0
+    ? Math.min(100, Math.round((degreeCreditSummary.electiveCompleted / degreeElectiveCredits) * 100))
+    : 100;
 
   const showUpdateBanner =
     isNewVersionAvailable && Date.now() - updateBannerDismissedAt > 60 * 1000;
@@ -5465,16 +5539,33 @@ export default function App() {
             </div>
 
             <section className="mb-8 sm:mb-9">
-              <div className="flex items-start sm:items-center gap-2 mb-3">
-                <GraduationCap className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5 sm:mt-0" />
-                <div>
-                  <h2 className={`text-base sm:text-lg font-bold leading-tight ${textStrong}`}>
-                    Képzési kreditelőrehaladás (7 féléves alapképzés)
-                  </h2>
-                  <p className={`text-xs mt-0.5 ${textMuted}`}>
-                    A 210 kredites oklevélhez szükséges összes, kötelező és szabadon választott kreditek állása.
-                  </p>
+              <div className="flex flex-wrap items-center justify-between gap-2.5 mb-3">
+                <div className="flex items-start sm:items-center gap-2">
+                  <GraduationCap className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5 sm:mt-0" />
+                  <div>
+                    <h2 className={`text-base sm:text-lg font-bold leading-tight ${textStrong}`}>
+                      Képzési kreditelőrehaladás
+                    </h2>
+                    <p className={`text-xs mt-0.5 ${textMuted}`}>
+                      A {degreeTotalCredits} kredites oklevélhez szükséges összes ({degreeMandatoryCredits} kötelező + {degreeElectiveCredits} szab. választott) kredit állása.
+                    </p>
+                  </div>
                 </div>
+
+                <button
+                  type="button"
+                  onClick={handleOpenDegreeCreditsModal}
+                  title="Kötelező és szabadon választott kreditek számának szerkesztése"
+                  className={`px-3 py-2 sm:py-1.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shrink-0 ${
+                    darkMode
+                      ? 'bg-slate-900 hover:bg-slate-800 text-emerald-400 border-slate-700 hover:border-emerald-400/50'
+                      : 'bg-white hover:bg-emerald-50 text-slate-800 border-slate-200 hover:border-emerald-400 shadow-2xs'
+                  }`}
+                >
+                  <SlidersHorizontal className="w-3.5 h-3.5 text-emerald-500" />
+                  <span>Kreditek: {degreeMandatoryCredits} + {degreeElectiveCredits}</span>
+                  <Pencil className="w-3 h-3 opacity-70" />
+                </button>
               </div>
 
               <div className="space-y-3">
@@ -5490,7 +5581,10 @@ export default function App() {
                       </p>
                       <p className={`text-3xl sm:text-4xl font-extrabold mt-0.5 ${textStrong}`}>
                         {degreeCreditSummary.totalCompleted}{' '}
-                        <span className={`text-base sm:text-lg font-semibold ${textMuted}`}>/ {DEGREE_TOTAL_CREDITS} kredit</span>
+                        <span className={`text-base sm:text-lg font-semibold ${textMuted}`}>/ {degreeTotalCredits} kredit</span>
+                      </p>
+                      <p className={`text-[11px] mt-0.5 ${textMuted}`}>
+                        Automatikusan számolva: {degreeMandatoryCredits} kötelező + {degreeElectiveCredits} szab. választott
                       </p>
                     </div>
                     <div className="text-right">
@@ -5498,7 +5592,7 @@ export default function App() {
                         {totalCreditPct}%
                       </span>
                       <p className={`text-xs mt-1 ${textMuted}`}>
-                        Hátralévő: <strong className={textStrong}>{Math.max(0, DEGREE_TOTAL_CREDITS - degreeCreditSummary.totalCompleted)}</strong> kr.
+                        Hátralévő: <strong className={textStrong}>{Math.max(0, degreeTotalCredits - degreeCreditSummary.totalCompleted)}</strong> kr.
                       </p>
                     </div>
                   </div>
@@ -5511,21 +5605,26 @@ export default function App() {
                 </div>
 
                 <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
-                  <div className={`rounded-xl border p-3 sm:p-3.5 shadow-2xs flex flex-col justify-between ${
-                    darkMode
-                      ? 'bg-[#1a2533]/80 border-[#4d6885]/45'
-                      : 'bg-[#f1f5f9] border-[#9fb3c8]/70'
-                  }`}>
+                  <div
+                    onClick={handleOpenDegreeCreditsModal}
+                    title="Kattints a kötelező kreditszám szerkesztéséhez"
+                    className={`rounded-xl border p-3 sm:p-3.5 shadow-2xs flex flex-col justify-between cursor-pointer transition group ${
+                      darkMode
+                        ? 'bg-[#1a2533]/80 border-[#4d6885]/45 hover:border-emerald-400/60'
+                        : 'bg-[#f1f5f9] border-[#9fb3c8]/70 hover:border-emerald-400'
+                    }`}
+                  >
                     <div className="flex items-start justify-between gap-1.5 mb-2">
                       <div className="min-w-0">
-                        <p className={`text-[10px] sm:text-[11px] font-bold uppercase truncate ${
+                        <p className={`text-[10px] sm:text-[11px] font-bold uppercase truncate flex items-center gap-1 ${
                           darkMode ? 'text-[#8ea9c4]' : 'text-[#486581]'
                         }`}>
-                          Kötelező
+                          <span>Kötelező</span>
+                          <Pencil className="w-2.5 h-2.5 opacity-60 group-hover:opacity-100 group-hover:text-emerald-500 transition" />
                         </p>
                         <p className={`text-base sm:text-lg font-extrabold mt-0.5 ${textStrong}`}>
                           {degreeCreditSummary.mandatoryCompleted}{' '}
-                          <span className={`text-xs font-semibold ${textMuted}`}>/ {DEGREE_MANDATORY_CREDITS}</span>
+                          <span className={`text-xs font-semibold ${textMuted}`}>/ {degreeMandatoryCredits}</span>
                         </p>
                       </div>
                       <span className={`px-2 py-0.5 rounded-full text-[10px] sm:text-[11px] font-extrabold shrink-0 ${
@@ -5546,26 +5645,31 @@ export default function App() {
                         />
                       </div>
                       <p className={`text-[10px] sm:text-[11px] mt-1 ${textMuted}`}>
-                        Hátralévő: <strong className={textStrong}>{Math.max(0, DEGREE_MANDATORY_CREDITS - degreeCreditSummary.mandatoryCompleted)}</strong> kr.
+                        Hátralévő: <strong className={textStrong}>{Math.max(0, degreeMandatoryCredits - degreeCreditSummary.mandatoryCompleted)}</strong> kr.
                       </p>
                     </div>
                   </div>
 
-                  <div className={`rounded-xl border p-3 sm:p-3.5 shadow-2xs flex flex-col justify-between ${
-                    darkMode
-                      ? 'bg-[#1a2533]/80 border-[#4d6885]/45'
-                      : 'bg-[#f1f5f9] border-[#9fb3c8]/70'
-                  }`}>
+                  <div
+                    onClick={handleOpenDegreeCreditsModal}
+                    title="Kattints a szabadon választott kreditszám szerkesztéséhez"
+                    className={`rounded-xl border p-3 sm:p-3.5 shadow-2xs flex flex-col justify-between cursor-pointer transition group ${
+                      darkMode
+                        ? 'bg-[#1a2533]/80 border-[#4d6885]/45 hover:border-emerald-400/60'
+                        : 'bg-[#f1f5f9] border-[#9fb3c8]/70 hover:border-emerald-400'
+                    }`}
+                  >
                     <div className="flex items-start justify-between gap-1.5 mb-2">
                       <div className="min-w-0">
-                        <p className={`text-[10px] sm:text-[11px] font-bold uppercase truncate ${
+                        <p className={`text-[10px] sm:text-[11px] font-bold uppercase truncate flex items-center gap-1 ${
                           darkMode ? 'text-[#8ea9c4]' : 'text-[#486581]'
                         }`}>
-                          Szab. választott
+                          <span>Szab. választott</span>
+                          <Pencil className="w-2.5 h-2.5 opacity-60 group-hover:opacity-100 group-hover:text-emerald-500 transition" />
                         </p>
                         <p className={`text-base sm:text-lg font-extrabold mt-0.5 ${textStrong}`}>
                           {degreeCreditSummary.electiveCompleted}{' '}
-                          <span className={`text-xs font-semibold ${textMuted}`}>/ {DEGREE_ELECTIVE_CREDITS}</span>
+                          <span className={`text-xs font-semibold ${textMuted}`}>/ {degreeElectiveCredits}</span>
                         </p>
                       </div>
                       <span className={`px-2 py-0.5 rounded-full text-[10px] sm:text-[11px] font-extrabold shrink-0 ${
@@ -5586,7 +5690,7 @@ export default function App() {
                         />
                       </div>
                       <p className={`text-[10px] sm:text-[11px] mt-1 ${textMuted}`}>
-                        Hátralévő: <strong className={textStrong}>{Math.max(0, DEGREE_ELECTIVE_CREDITS - degreeCreditSummary.electiveCompleted)}</strong> kr.
+                        Hátralévő: <strong className={textStrong}>{Math.max(0, degreeElectiveCredits - degreeCreditSummary.electiveCompleted)}</strong> kr.
                       </p>
                     </div>
                   </div>
@@ -7960,6 +8064,165 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {/* KÉPZÉSI KREDITSZÁMOK (KÖTELEZŐ & SZAB. VÁLASZTOTT) SZERKESZTÉSE */}
+      {isDegreeCreditsModalOpen && (() => {
+        const draftMand = parseInt(String(mandatoryCreditsInput).trim(), 10);
+        const draftElec = parseInt(String(electiveCreditsInput).trim(), 10);
+        const isDraftValid =
+          !isNaN(draftMand) && draftMand >= 0 &&
+          !isNaN(draftElec) && draftElec >= 0 &&
+          draftMand + draftElec > 0;
+        const previewTotal = (!isNaN(draftMand) && draftMand >= 0 ? draftMand : 0) +
+          (!isNaN(draftElec) && draftElec >= 0 ? draftElec : 0);
+
+        return (
+          <div
+            data-top-modal="true"
+            onClick={() => setIsDegreeCreditsModalOpen(false)}
+            className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-2.5 sm:p-4 overscroll-none"
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              className={`rounded-2xl max-w-md w-full shadow-2xl overflow-hidden border ${bgCard}`}
+            >
+              <div className="px-4 sm:px-6 py-3.5 sm:py-4 bg-slate-900 text-white flex justify-between items-center border-b border-slate-800">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-8 h-8 rounded-lg bg-emerald-500 text-white flex items-center justify-center shrink-0">
+                    <GraduationCap className="w-4 h-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <h2 className="font-extrabold text-sm sm:text-base leading-tight">Képzési kreditek beállítása</h2>
+                    <p className="text-[11px] text-slate-400 truncate">
+                      Kötelező + szabadon választott kreditek a szakod szerint
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsDegreeCreditsModalOpen(false)}
+                  className="text-slate-400 hover:text-white p-1.5 cursor-pointer shrink-0"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <form onSubmit={handleSaveDegreeCredits} className="p-4 sm:p-6 space-y-4">
+                <p className={`text-xs leading-relaxed ${textMuted}`}>
+                  Add meg a szakod mintatantervében előírt <strong>kötelező</strong> és <strong>szabadon választott</strong> kreditek számát — a teljes oklevélkreditet ezek összegéből automatikusan számoljuk ki:
+                </p>
+
+                <div>
+                  <label className={`block text-xs font-semibold mb-1.5 ${textMuted}`}>
+                    Gyors sablonok (gyakori BGE képzések)
+                  </label>
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {[
+                      { label: '186 + 12 (210)', mand: 186, elec: 12 },
+                      { label: '171 + 9 (180)', mand: 171, elec: 9 },
+                      { label: '168 + 12 (180)', mand: 168, elec: 12 }
+                    ].map(preset => {
+                      const isSelected =
+                        String(mandatoryCreditsInput).trim() === String(preset.mand) &&
+                        String(electiveCreditsInput).trim() === String(preset.elec);
+                      return (
+                        <button
+                          key={preset.label}
+                          type="button"
+                          onClick={() => {
+                            setMandatoryCreditsInput(String(preset.mand));
+                            setElectiveCreditsInput(String(preset.elec));
+                          }}
+                          className={`py-2 px-2 rounded-xl text-[11px] font-extrabold border transition cursor-pointer ${
+                            isSelected
+                              ? 'bg-emerald-500 text-white border-emerald-500 shadow-xs'
+                              : darkMode
+                                ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
+                                : 'bg-slate-100 hover:bg-slate-200 text-slate-800 border-slate-200'
+                          }`}
+                        >
+                          {preset.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className={`block text-xs font-semibold mb-1.5 ${textMuted}`}>
+                      Kötelező kreditek
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="500"
+                      step="1"
+                      required
+                      placeholder="Pl. 186"
+                      value={mandatoryCreditsInput}
+                      onChange={e => setMandatoryCreditsInput(e.target.value)}
+                      className={`w-full border rounded-xl px-3.5 py-2.5 font-extrabold focus:outline-none ${inputStyle}`}
+                    />
+                  </div>
+
+                  <div>
+                    <label className={`block text-xs font-semibold mb-1.5 ${textMuted}`}>
+                      Szab. választott kreditek
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="500"
+                      step="1"
+                      required
+                      placeholder="Pl. 12"
+                      value={electiveCreditsInput}
+                      onChange={e => setElectiveCreditsInput(e.target.value)}
+                      className={`w-full border rounded-xl px-3.5 py-2.5 font-extrabold focus:outline-none ${inputStyle}`}
+                    />
+                  </div>
+                </div>
+
+                <div className={`p-3.5 rounded-xl border flex items-center justify-between gap-2 ${
+                  darkMode
+                    ? 'bg-emerald-950/25 border-emerald-500/40'
+                    : 'bg-emerald-50/80 border-emerald-300'
+                }`}>
+                  <div>
+                    <p className="text-[11px] font-extrabold uppercase tracking-wide text-emerald-500">
+                      Kiszámolt teljes kreditszám
+                    </p>
+                    <p className={`text-[11px] ${textMuted}`}>
+                      {!isNaN(draftMand) && draftMand >= 0 ? draftMand : 0} kötelező + {!isNaN(draftElec) && draftElec >= 0 ? draftElec : 0} szab. választott
+                    </p>
+                  </div>
+                  <p className={`text-2xl font-extrabold ${textStrong}`}>
+                    {previewTotal} <span className={`text-xs font-semibold ${textMuted}`}>kredit</span>
+                  </p>
+                </div>
+
+                <div className="flex justify-end gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setIsDegreeCreditsModalOpen(false)}
+                    className={`px-4 py-2 text-sm rounded-lg cursor-pointer ${textMuted}`}
+                  >
+                    Mégse
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={!isDraftValid}
+                    className="px-4 py-2 text-sm font-bold bg-emerald-500 hover:bg-emerald-400 disabled:opacity-45 disabled:cursor-not-allowed text-white rounded-lg cursor-pointer"
+                  >
+                    Kreditek mentése
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ÁTSOROLÁSI SÚLYOZOTT ÁTLAG KÜSZÖB BEÁLLÍTÁSA */}
       {isThresholdModalOpen && (

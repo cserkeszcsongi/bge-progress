@@ -631,6 +631,14 @@ function buildTemplatesForMajor(majorId) {
 
 const APP_RELEASES = [
   {
+    version: 'v2.0.0',
+    date: '2026. 11. 18.',
+    changes: [
+      'Publikálás előtti nagy frissítés & mobil nézet finomhangolása: a főoldali „Összes teljesített kredit” kártyán telefonon is minden esetben a kártya jobb felső sarkában jelenik meg a százalékos jelvény (nem csúszik át balra), a kártyák elrendezése és a felső sáv gombjai pedig még letisztultabb mobil megjelenést kaptak',
+      'Közvetlenebb, barátságosabb bemutatkozás a Köszöntő ablakban'
+    ]
+  },
+  {
     version: 'v1.37.0',
     date: '2026. 11. 18.',
     changes: [
@@ -5428,14 +5436,14 @@ export default function App() {
         <>
           <div className="max-w-6xl mx-auto px-3 sm:px-4 pt-3 sm:pt-4 flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-1.5 min-w-0 max-w-full">
-              <span className={`text-xs truncate max-w-[140px] sm:max-w-xs ${textMuted}`}>{user.email}</span>
+              <span className={`text-[11px] sm:text-xs truncate max-w-[155px] sm:max-w-xs ${textMuted}`}>{user.email}</span>
               {isAdmin && (
                 <span className="px-2 py-0.5 text-[10px] font-bold uppercase rounded-full bg-amber-400/20 text-amber-500 border border-amber-400/30 shrink-0">
                   Admin
                 </span>
               )}
             </div>
-            <div className="flex items-center gap-1.5 sm:gap-2 ml-auto">
+            <div className="flex items-center gap-1.5 sm:gap-2 ml-auto flex-wrap justify-end">
               {canShowMobileInstall && (
                 <button
                   type="button"
@@ -5560,14 +5568,14 @@ export default function App() {
             </div>
 
             <section className="mb-8 sm:mb-9">
-              <div className="flex flex-wrap items-center justify-between gap-2.5 mb-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 mb-3">
                 <div className="flex items-start sm:items-center gap-2">
                   <GraduationCap className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5 sm:mt-0" />
                   <div>
                     <h2 className={`text-base sm:text-lg font-bold leading-tight ${textStrong}`}>
                       Képzési kreditelőrehaladás
                     </h2>
-                    <p className={`text-xs mt-0.5 ${textMuted}`}>
+                    <p className={`text-xs mt-0.5 leading-relaxed ${textMuted}`}>
                       A {degreeTotalCredits} kredites oklevélhez szükséges összes ({degreeMandatoryCredits} kötelező + {degreeElectiveCredits} szab. választott) kredit állása.
                     </p>
                   </div>
@@ -5577,7 +5585,7 @@ export default function App() {
                   type="button"
                   onClick={handleOpenDegreeCreditsModal}
                   title="Kötelező és szabadon választott kreditek számának szerkesztése"
-                  className={`px-3 py-2 sm:py-1.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shrink-0 ${
+                  className={`self-start sm:self-auto px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shrink-0 ${
                     darkMode
                       ? 'bg-slate-900 hover:bg-slate-800 text-emerald-400 border-slate-700 hover:border-emerald-400/50'
                       : 'bg-white hover:bg-emerald-50 text-slate-800 border-slate-200 hover:border-emerald-400 shadow-2xs'
@@ -5590,34 +5598,36 @@ export default function App() {
               </div>
 
               <div className="space-y-3">
-                <div className={`rounded-2xl border-2 p-5 sm:p-6 shadow-sm ${
+                <div className={`rounded-2xl border-2 p-4 sm:p-6 shadow-sm ${
                   darkMode
                     ? 'bg-emerald-950/25 border-emerald-500/45'
                     : 'bg-emerald-50/70 border-emerald-300'
                 }`}>
-                  <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-                    <div>
-                      <p className="text-xs font-extrabold uppercase tracking-wide text-emerald-500">
+                  <div className="flex items-start justify-between gap-3 mb-2">
+                    <div className="min-w-0">
+                      <p className="text-[11px] sm:text-xs font-extrabold uppercase tracking-wide text-emerald-500">
                         Összes teljesített kredit
                       </p>
-                      <p className={`text-3xl sm:text-4xl font-extrabold mt-0.5 ${textStrong}`}>
+                      <p className={`text-3xl sm:text-4xl font-extrabold mt-0.5 leading-tight ${textStrong}`}>
                         {degreeCreditSummary.totalCompleted}{' '}
                         <span className={`text-base sm:text-lg font-semibold ${textMuted}`}>/ {degreeTotalCredits} kredit</span>
                       </p>
-                      <p className={`text-[11px] mt-0.5 ${textMuted}`}>
-                        Automatikusan számolva: {degreeMandatoryCredits} kötelező + {degreeElectiveCredits} szab. választott
-                      </p>
                     </div>
-                    <div className="text-right">
-                      <span className="inline-block px-3 py-1 rounded-full text-xs sm:text-sm font-extrabold bg-emerald-500 text-white shadow-xs">
-                        {totalCreditPct}%
-                      </span>
-                      <p className={`text-xs mt-1 ${textMuted}`}>
-                        Hátralévő: <strong className={textStrong}>{Math.max(0, degreeTotalCredits - degreeCreditSummary.totalCompleted)}</strong> kr.
-                      </p>
-                    </div>
+                    <span className="inline-flex items-center justify-center px-3 py-1 rounded-full text-xs sm:text-sm font-extrabold bg-emerald-500 text-white shadow-xs shrink-0">
+                      {totalCreditPct}%
+                    </span>
                   </div>
-                  <div className={`w-full h-3.5 rounded-full overflow-hidden ${darkMode ? 'bg-slate-800' : 'bg-emerald-100'}`}>
+
+                  <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 mb-3">
+                    <p className={`text-[11px] ${textMuted}`}>
+                      Automatikusan számolva: {degreeMandatoryCredits} kötelező + {degreeElectiveCredits} szab. választott
+                    </p>
+                    <p className={`text-xs ${textMuted} ml-auto`}>
+                      Hátralévő: <strong className={textStrong}>{Math.max(0, degreeTotalCredits - degreeCreditSummary.totalCompleted)}</strong> kr.
+                    </p>
+                  </div>
+
+                  <div className={`w-full h-3 sm:h-3.5 rounded-full overflow-hidden ${darkMode ? 'bg-slate-800' : 'bg-emerald-100'}`}>
                     <div
                       className="h-full bg-emerald-500 transition-all duration-300 rounded-full"
                       style={{ width: `${totalCreditPct}%` }}
@@ -5721,14 +5731,14 @@ export default function App() {
 
             {academicYearGroups.length > 0 && (
               <section className="mb-8 sm:mb-9">
-                <div className="flex flex-wrap items-center justify-between gap-2.5 mb-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 mb-3">
                   <div className="flex items-start sm:items-center gap-2">
                     <Scale className="w-5 h-5 text-amber-500 shrink-0 mt-0.5 sm:mt-0" />
                     <div>
                       <h2 className={`text-base sm:text-lg font-bold leading-tight ${textStrong}`}>
                         Tanéves súlyozott átlag összesítés (Átsorolási határ: {thresholdFormatted})
                       </h2>
-                      <p className={`text-xs mt-0.5 ${textMuted}`}>
+                      <p className={`text-xs mt-0.5 leading-relaxed ${textMuted}`}>
                         A tavaszi szemeszter végén az utolsó 2 félév súlyozott átlagának átlaga alapján dől el az ösztöndíjas státusz (a bukott tárgyak nem számítanak bele).
                       </p>
                     </div>
@@ -5737,7 +5747,7 @@ export default function App() {
                     type="button"
                     onClick={handleOpenThresholdModal}
                     title="Átsorolási súlyozott átlag küszöb módosítása szakod szerint"
-                    className={`px-3 py-2 sm:py-1.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shrink-0 ${
+                    className={`self-start sm:self-auto px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shrink-0 ${
                       darkMode
                         ? 'bg-slate-900 hover:bg-slate-800 text-amber-400 border-slate-700 hover:border-amber-400/50'
                         : 'bg-white hover:bg-amber-50 text-slate-800 border-slate-200 hover:border-amber-400 shadow-2xs'
@@ -6054,13 +6064,13 @@ export default function App() {
                         </div>
                       </div>
 
-                      <div className={`pt-3.5 border-t flex items-center justify-between text-xs ${
+                      <div className={`pt-3.5 border-t flex flex-wrap items-center justify-between gap-2 text-xs ${
                         darkMode ? 'border-slate-800' : 'border-slate-100'
                       }`}>
                         <span className={textMuted}>
                           Súlyozott átlag: <strong className={textStrong}>{semStats.atlag}</strong> • Aláírás: <strong className={textStrong}>{semStats.alairtDb}/{semStats.osszesTargy}</strong>
                         </span>
-                        <span className="font-semibold text-amber-500 group-hover:translate-x-0.5 transition-transform">
+                        <span className="font-semibold text-amber-500 group-hover:translate-x-0.5 transition-transform ml-auto">
                           Megnyitás →
                         </span>
                       </div>
@@ -8388,16 +8398,16 @@ export default function App() {
             <div className="p-4 sm:p-6 overflow-y-auto overscroll-contain space-y-4 flex-1 min-h-0">
               <div className={`p-3.5 sm:p-4 rounded-2xl border space-y-3 text-xs sm:text-sm leading-relaxed ${bgSubCard}`}>
                 <p className={textStrong}>
-                  Sziasztok! <strong>Cserkész Csongor</strong> vagyok, 2025 szeptemberében kezdtem meg tanulmányaimat a <strong>Budapesti Gazdaságtudományi Egyetem (BGE)</strong> Gazdaságinformatika szakán.
+                  Sziasztok! <strong>Cserkész Csongor</strong> vagyok, jelenleg a <strong>3. félévemet</strong> csinálom a <strong>BGE</strong> gazdinfó szakán.
                 </p>
                 <p className={darkMode ? 'text-slate-300' : 'text-slate-700'}>
-                  Ezt a webalkalmazást saját hallgatói tapasztalatból és egy kis egészséges bosszankodásból hoztam létre: rendkívül zavaró volt, hogy a CoSpace felületén minden tantárgy pontszámai külön helyen, átláthatatlanul szerepeltek.
+                  Ezt az oldalt saját hallgatói tapasztalatból és egy kis egészséges bosszankodásból raktam össze: eléggé zavaró volt, hogy CoSpace-en minden tárgy pontszáma külön helyen, átláthatatlanul van szétszórva.
                 </p>
                 <p className={darkMode ? 'text-slate-300' : 'text-slate-700'}>
-                  Szerettem volna egy olyan eszközt, ahol egy pillantással látszik, pontosan <strong>hány pont hiányzik még az aláíráshoz vagy a megajánlott jegyhez</strong>, hogyan alakul a kreditindex, és mennyi hiányzás fér még bele.
+                  Szerettem volna egy olyan felületet, ahol egy pillantással látszik, pontosan <strong>hány pont kell még az aláíráshoz vagy a megajánlott jegyhez</strong>, hogyan alakul a kreditindex, és mennyi hiányzás fér még bele.
                 </p>
                 <p className={darkMode ? 'text-slate-300' : 'text-slate-700'}>
-                  Remélem, nektek is legalább akkora segítség lesz a félév során a ZH-kra való felkészülésben és a tervezésben, mint nekem!
+                  Remélem, nektek is legalább akkora segítség lesz a félév közbeni tervezésben és a ZH-k követésében, mint nekem!
                 </p>
               </div>
 

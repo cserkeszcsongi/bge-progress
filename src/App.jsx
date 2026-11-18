@@ -631,6 +631,13 @@ function buildTemplatesForMajor(majorId) {
 
 const APP_RELEASES = [
   {
+    version: 'v1.37.0',
+    date: '2026. 11. 18.',
+    changes: [
+      'Részletes szürke számláló kártyák a tantárgy Jelenlét fülén: egyetlen pillantással látható az eddigi jelenlétek és hiányzások száma, valamint pontosan hány alkalommal kell még jelen lenni az aláíráshoz és a megajánlott jegyhez'
+    ]
+  },
+  {
     version: 'v1.36.0',
     date: '2026. 11. 18.',
     changes: [
@@ -10063,33 +10070,129 @@ export default function App() {
                   </>
                 ) : (
                   <div className="space-y-4">
-                    <div className={`p-4 rounded-xl border flex flex-wrap items-center justify-between gap-3 ${bgSubCard}`}>
-                      <div>
-                        <p className={`text-sm font-bold ${textStrong}`}>
-                          Gyakorlati jelenlét: {st.presentCount} / {st.totalClasses} alkalom
-                        </p>
-                        <p className={`text-xs mt-0.5 ${textMuted}`}>
-                          Aláírás minimum: <strong>{st.minAttAlairas} jelenlét</strong> (max. {Math.max(0, st.totalClasses - st.minAttAlairas)} hiányzás)
-                          {st.minAttMegajanlott > 0 && (
-                            <> • Megajánlott minimum: <strong>{st.minAttMegajanlott} jelenlét</strong></>
-                          )}
-                        </p>
+                    <div className={`p-4 rounded-xl border space-y-3 ${bgSubCard}`}>
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                          <p className={`text-sm font-bold ${textStrong}`}>
+                            Gyakorlati jelenlét: {st.presentCount} / {st.totalClasses} alkalom
+                          </p>
+                          <p className={`text-xs mt-0.5 ${textMuted}`}>
+                            Aláírás minimum: <strong>{st.minAttAlairas} jelenlét</strong> (max. {Math.max(0, st.totalClasses - st.minAttAlairas)} hiányzás)
+                            {st.minAttMegajanlott > 0 && (
+                              <> • Megajánlott minimum: <strong>{st.minAttMegajanlott} jelenlét</strong></>
+                            )}
+                          </p>
+                        </div>
+                        {st.totalClasses > 0 && (
+                          <span className={`px-3 py-1 rounded-full text-xs font-bold ${
+                            !st.attendanceAlairasPossible
+                              ? 'bg-rose-500/20 text-rose-400'
+                              : st.presentCount >= st.minAttAlairas
+                                ? 'bg-emerald-500/20 text-emerald-500'
+                                : 'bg-amber-400/20 text-amber-500'
+                          }`}>
+                            {!st.attendanceAlairasPossible
+                              ? 'Túl sok hiányzás (aláírás veszélyben)'
+                              : st.presentCount >= st.minAttAlairas
+                                ? 'Jelenléti minimum teljesítve'
+                                : `Még ${st.minAttAlairas - st.presentCount} jelenlét kell`}
+                          </span>
+                        )}
                       </div>
-                      {st.totalClasses > 0 && (
-                        <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-                          !st.attendanceAlairasPossible
-                            ? 'bg-rose-500/20 text-rose-400'
-                            : st.presentCount >= st.minAttAlairas
-                              ? 'bg-emerald-500/20 text-emerald-500'
-                              : 'bg-amber-400/20 text-amber-500'
-                        }`}>
-                          {!st.attendanceAlairasPossible
-                            ? 'Túl sok hiányzás (aláírás veszélyben)'
-                            : st.presentCount >= st.minAttAlairas
-                              ? 'Jelenléti minimum teljesítve'
-                              : `Még ${st.minAttAlairas - st.presentCount} jelenlét kell`}
-                        </span>
-                      )}
+
+                      {st.totalClasses > 0 && (() => {
+                        const neededAlairas = Math.max(0, st.minAttAlairas - st.presentCount);
+                        const neededMegajanlott = Math.max(0, st.minAttMegajanlott - st.presentCount);
+                        const unrecordedCount = Math.max(0, st.totalClasses - st.presentCount - st.absentCount);
+                        const maxPossiblePresent = st.presentCount + unrecordedCount;
+                        const alairasReachable = maxPossiblePresent >= st.minAttAlairas;
+                        const megajanlottReachable = maxPossiblePresent >= st.minAttMegajanlott;
+
+                        const grayCardClass = darkMode
+                          ? 'bg-slate-800/90 border-slate-700/90'
+                          : 'bg-slate-100/90 border-slate-200';
+
+                        return (
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                            <div className={`p-2.5 rounded-xl border text-center ${grayCardClass}`}>
+                              <p className={`text-[10px] sm:text-[11px] font-semibold uppercase tracking-wide ${textMuted}`}>
+                                Jelen voltam
+                              </p>
+                              <p className={`text-base sm:text-lg font-extrabold mt-0.5 ${textStrong}`}>
+                                {st.presentCount} <span className={`text-xs font-normal ${textMuted}`}>alkalom</span>
+                              </p>
+                              <p className={`text-[10px] mt-0.5 ${textMuted}`}>
+                                Hátralévő óra: {unrecordedCount}
+                              </p>
+                            </div>
+
+                            <div className={`p-2.5 rounded-xl border text-center ${grayCardClass}`}>
+                              <p className={`text-[10px] sm:text-[11px] font-semibold uppercase tracking-wide ${textMuted}`}>
+                                Hiányoztam
+                              </p>
+                              <p className={`text-base sm:text-lg font-extrabold mt-0.5 ${textStrong}`}>
+                                {st.absentCount} <span className={`text-xs font-normal ${textMuted}`}>alkalom</span>
+                              </p>
+                              <p className={`text-[10px] mt-0.5 ${textMuted}`}>
+                                Max. aláíráshoz: {Math.max(0, st.totalClasses - st.minAttAlairas)}
+                              </p>
+                            </div>
+
+                            <div className={`p-2.5 rounded-xl border text-center ${grayCardClass}`}>
+                              <p className={`text-[10px] sm:text-[11px] font-semibold uppercase tracking-wide ${textMuted}`}>
+                                Aláíráshoz kell
+                              </p>
+                              <p className={`text-base sm:text-lg font-extrabold mt-0.5 ${
+                                neededAlairas === 0
+                                  ? 'text-emerald-500'
+                                  : !alairasReachable
+                                    ? 'text-rose-500'
+                                    : textStrong
+                              }`}>
+                                {neededAlairas === 0
+                                  ? 'Megvan'
+                                  : !alairasReachable
+                                    ? 'Nem elérhető'
+                                    : `${neededAlairas} jelenlét`}
+                              </p>
+                              <p className={`text-[10px] mt-0.5 ${textMuted}`}>
+                                Min. {st.minAttAlairas} / {st.totalClasses} alkalom
+                              </p>
+                            </div>
+
+                            <div className={`p-2.5 rounded-xl border text-center ${grayCardClass}`}>
+                              <p className={`text-[10px] sm:text-[11px] font-semibold uppercase tracking-wide ${textMuted}`}>
+                                Megajánlotthoz kell
+                              </p>
+                              {st.minAttMegajanlott > 0 ? (
+                                <>
+                                  <p className={`text-base sm:text-lg font-extrabold mt-0.5 ${
+                                    neededMegajanlott === 0
+                                      ? 'text-emerald-500'
+                                      : !megajanlottReachable
+                                        ? 'text-rose-500'
+                                        : textStrong
+                                  }`}>
+                                    {neededMegajanlott === 0
+                                      ? 'Megvan'
+                                      : !megajanlottReachable
+                                        ? 'Nem elérhető'
+                                        : `${neededMegajanlott} jelenlét`}
+                                  </p>
+                                  <p className={`text-[10px] mt-0.5 ${textMuted}`}>
+                                    Min. {st.minAttMegajanlott} / {st.totalClasses} alkalom
+                                  </p>
+                                </>
+                              ) : (
+                                <>
+                                  <p className={`text-base sm:text-lg font-extrabold mt-0.5 ${textMuted}`}>—</p>
+                                  <p className={`text-[10px] mt-0.5 ${textMuted}`}>Nincs külön limit</p>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </div>
 
                     {st.totalClasses === 0 ? (

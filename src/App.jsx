@@ -631,6 +631,13 @@ function buildTemplatesForMajor(majorId) {
 
 const APP_RELEASES = [
   {
+    version: 'v1.36.0',
+    date: '2026. 11. 18.',
+    changes: [
+      'Megajánlott jegyhez (és vizsgajegyhez) hiányzó pontok jelzése a tantárgy részletei nézet „Összesen” rubrikájában: a százalékos érték alatt kicsiben azonnal látható, hány pont hiányzik még a megajánlott 2-eshez (vagy a következő jegyhez / már megvan-e)'
+    ]
+  },
+  {
     version: 'v1.35.0',
     date: '2026. 11. 18.',
     changes: [
@@ -9678,6 +9685,23 @@ export default function App() {
                         </p>
                         {osszSummaryPct !== null && !(st.needsAutoExam && !st.hasAutoExamScore) && (
                           <p className="text-[11px] font-bold text-amber-500 mt-0.5">{formatHu(osszSummaryPct)}%</p>
+                        )}
+                        {!st.isFailed && !st.isGradeOnlyCard && st.megajanlottMin > 0 && !(st.needsAutoExam && !st.hasAutoExamScore) && (
+                          <p className={`text-[10px] leading-tight mt-1 font-semibold ${
+                            st.megajanlottTeljesul ? 'text-emerald-500' : textMuted
+                          }`}>
+                            {st.needsAutoExam
+                              ? (st.megajanlottTeljesul
+                                  ? `Vizsgajegy (${st.projectedGrade}) megvan`
+                                  : `Vizsgajegyhez még ${formatHu(st.megajanlottHianyzik)} p kell`)
+                              : (st.megajanlottTeljesul
+                                  ? `Megajánlott (${st.projectedGrade}) megvan`
+                                  : st.megajanlottHianyzik > 0
+                                    ? `Megajánlotthoz még ${formatHu(st.megajanlottHianyzik)} p kell`
+                                    : !st.megajanlottZHOk && st.megajanlottMinZH > 0
+                                      ? `Összpont megvan (ZH min.-hoz még ${formatHu(st.megajanlottZHHianyzik)} p)`
+                                      : 'Megajánlott feltételek folyamatban')}
+                          </p>
                         )}
                       </div>
                     </div>

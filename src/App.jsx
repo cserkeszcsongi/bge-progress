@@ -13,7 +13,7 @@ import {
   Menu, Palette, ChevronDown, SlidersHorizontal, RefreshCw, Lightbulb, CheckCircle2,
   LayoutList, ArrowUpDown, GripVertical, ArrowUp, ArrowDown, Calculator,
   BarChart3, Users, FastForward, FileSpreadsheet, HelpCircle, Upload,
-  Download, Smartphone, Share
+  Download, Smartphone, Share, ShieldCheck, Lock, Database
 } from 'lucide-react';
 import { auth, googleProvider, db } from './firebase';
 
@@ -41,6 +41,7 @@ const TEMPLATES_CACHE_TTL_MS = 15 * 60 * 1000;
 const RELEASES_CACHE_KEY = 'bge_releases_cache_v1';
 const RELEASES_CACHE_TTL_MS = 30 * 60 * 1000;
 const UPDATE_CHECK_THROTTLE_MS = 30 * 1000;
+const GDPR_POLICY_VERSION = 'v2.0.2';
 
 const BGE_MAJORS = [
   { id: 'emberi_eroforrasok', label: 'Emberi erőforrások', isGazdinfo: false },
@@ -630,6 +631,14 @@ function buildTemplatesForMajor(majorId) {
 }
 
 const APP_RELEASES = [
+  {
+    version: 'v2.0.2',
+    date: '2026. 11. 19.',
+    changes: [
+      'Adatvédelmi tájékoztató (GDPR) bevezetése: bejelentkezés után minden új és korábbi felhasználónak egyszer el kell fogadnia az adatkezelési tájékoztatót, amely átláthatóan leírja a Firebase-alapú adattárolást és azt, hogy az adatok semmilyen más célra nem kerülnek felhasználásra',
+      'Az adatvédelmi tájékoztató bármikor újra megnyitható az oldal alján található „Adatvédelem (GDPR)” gombbal'
+    ]
+  },
   {
     version: 'v2.0.1',
     date: '2026. 11. 19.',
@@ -1892,6 +1901,10 @@ export default function App() {
   const [authLoading, setAuthLoading] = useState(true);
   const [userDataLoaded, setUserDataLoaded] = useState(false);
   const [hasServerGazdinfoPref, setHasServerGazdinfoPref] = useState(false);
+  const [hasAcceptedGdpr, setHasAcceptedGdpr] = useState(false);
+  const [isGdprModalOpen, setIsGdprModalOpen] = useState(false);
+  const [gdprCheckboxChecked, setGdprCheckboxChecked] = useState(false);
+  const [isSavingGdpr, setIsSavingGdpr] = useState(false);
 
   const isAdmin = useMemo(
     () => Boolean(user?.email && ADMIN_EMAILS.includes(user.email.toLowerCase())),
@@ -2443,6 +2456,9 @@ export default function App() {
       setSavedSemesterDocs([]);
       setUserDataLoaded(false);
       setHasServerGazdinfoPref(false);
+      setHasAcceptedGdpr(false);
+      setGdprCheckboxChecked(false);
+      setIsGdprModalOpen(false);
       return;
     }
 
@@ -2509,11 +2525,28 @@ export default function App() {
             setSortMode(data.subjectSortMode);
             localStorage.setItem('bge_subject_sort_mode', data.subjectSortMode);
           }
+          if (data.gdprAcceptedVersion === GDPR_POLICY_VERSION) {
+            setHasAcceptedGdpr(true);
+            try {
+              localStorage.setItem(`bge_gdpr_accepted_${user.uid}`, GDPR_POLICY_VERSION);
+            } catch {
+              // ignore
+            }
+          } else {
+            setHasAcceptedGdpr(false);
+          }
+        } else {
+          setHasAcceptedGdpr(false);
         }
         prefsReady = true;
         checkAllReady();
       },
       () => {
+        try {
+          setHasAcceptedGdpr(localStorage.getItem(`bge_gdpr_accepted_${user.uid}`) === GDPR_POLICY_VERSION);
+        } catch {
+          setHasAcceptedGdpr(false);
+        }
         prefsReady = true;
         checkAllReady();
       }
@@ -2603,9 +2636,39 @@ export default function App() {
   }, [firestoreReleases]);
 
   const latestRelease = allReleases[0] || null;
+  const mustAcceptGdpr = Boolean(user && userDataLoaded && !hasAcceptedGdpr);
+
+  const handleAcceptGdpr = async () => {
+    if (!user || !gdprCheckboxChecked || isSavingGdpr) return;
+    setIsSavingGdpr(true);
+    try {
+      await setDoc(
+        doc(db, 'users', user.uid, 'settings', 'preferences'),
+        {
+          gdprAcceptedVersion: GDPR_POLICY_VERSION,
+          gdprAcceptedAt: serverTimestamp()
+        },
+        { merge: true }
+      );
+      try {
+        localStorage.setItem(`bge_gdpr_accepted_${user.uid}`, GDPR_POLICY_VERSION);
+      } catch {
+        // ignore
+      }
+      setHasAcceptedGdpr(true);
+      setIsGdprModalOpen(false);
+      setGdprCheckboxChecked(false);
+      showToast('Adatvédelmi tájékoztató elfogadva. Köszönjük!');
+    } catch (err) {
+      alert('Hiba az adatvédelmi hozzájárulás mentésekor: ' + err.message);
+    } finally {
+      setIsSavingGdpr(false);
+    }
+  };
 
   useEffect(() => {
     if (!user || !userDataLoaded || activeView !== 'home') return;
+    if (mustAcceptGdpr) return;
 
     const alreadySeenLocal = localStorage.getItem('bge_gazdinfo_prompt_seen') === 'true';
     const hasExistingData = subjects.length > 0 || savedSemesterDocs.length > 0;
@@ -2644,6 +2707,7 @@ export default function App() {
     user,
     userDataLoaded,
     activeView,
+    mustAcceptGdpr,
     subjects.length,
     savedSemesterDocs.length,
     hasServerGazdinfoPref,
@@ -4506,7 +4570,9 @@ export default function App() {
     isCustomSortModalOpen ||
     isAvgCalcOpen ||
     isStatsModalOpen ||
-    isInstallGuideOpen
+    isInstallGuideOpen ||
+    mustAcceptGdpr ||
+    isGdprModalOpen
   );
 
   useEffect(() => {
@@ -4517,6 +4583,8 @@ export default function App() {
 
       if (e.key === 'Escape') {
         e.preventDefault();
+        if (mustAcceptGdpr) return;
+        if (isGdprModalOpen) { setIsGdprModalOpen(false); return; }
         if (excelImportTargetSemCode && !isParsingExcel) {
           setExcelImportTargetSemCode(null);
           return;
@@ -4551,6 +4619,7 @@ export default function App() {
       }
 
       if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey) {
+        if (mustAcceptGdpr) return;
         const tag = (e.target?.tagName || '').toLowerCase();
         if (tag === 'textarea' || tag === 'button' || tag === 'a') return;
 
@@ -5207,6 +5276,19 @@ export default function App() {
         >
           <MessageSquare className="w-3.5 h-3.5 text-amber-500" />
           <span>Visszajelzés</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setIsGdprModalOpen(true)}
+          className={`inline-flex items-center gap-1.5 px-3.5 py-2 sm:py-1.5 rounded-xl border text-xs font-bold transition cursor-pointer ${
+            darkMode
+              ? 'bg-slate-900 hover:bg-slate-800 text-emerald-400 border-slate-800 hover:border-emerald-400/50'
+              : 'bg-white hover:bg-emerald-50 text-emerald-700 border-slate-200 hover:border-emerald-400 shadow-2xs'
+          }`}
+        >
+          <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
+          <span>Adatvédelem (GDPR)</span>
         </button>
       </div>
 
@@ -8045,6 +8127,192 @@ export default function App() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ADATVÉDELMI TÁJÉKOZTATÓ (GDPR) — KÖTELEZŐ EGYSZERI ELFOGADÁS / MEGTEKINTÉS */}
+      {(mustAcceptGdpr || isGdprModalOpen) && (
+        <div
+          data-top-modal="true"
+          onClick={() => {
+            if (!mustAcceptGdpr) setIsGdprModalOpen(false);
+          }}
+          className="fixed inset-0 bg-black/85 backdrop-blur-sm z-[80] flex items-center justify-center p-2.5 sm:p-4 overscroll-none"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className={`rounded-2xl max-w-xl w-full max-h-[92dvh] flex flex-col shadow-2xl overflow-hidden border-2 border-emerald-500/70 ${bgCard}`}
+          >
+            <div className="px-4 sm:px-6 py-3.5 sm:py-4 bg-slate-900 text-white flex justify-between items-center border-b border-slate-800 shrink-0">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-emerald-500 text-white flex items-center justify-center shrink-0">
+                  <ShieldCheck className="w-5 h-5 sm:w-6 sm:h-6" />
+                </div>
+                <div className="min-w-0">
+                  <h2 className="font-extrabold text-sm sm:text-base leading-tight">
+                    Személyes adatok védelme (GDPR)
+                  </h2>
+                  <p className="text-[11px] text-emerald-400 font-semibold truncate">
+                    {mustAcceptGdpr
+                      ? 'A folytatáshoz egyszeri elfogadás szükséges'
+                      : `Adatkezelési tájékoztató • ${GDPR_POLICY_VERSION}`}
+                  </p>
+                </div>
+              </div>
+              {!mustAcceptGdpr && (
+                <button
+                  type="button"
+                  onClick={() => setIsGdprModalOpen(false)}
+                  title="Bezárás"
+                  className="text-slate-400 hover:text-white p-1.5 cursor-pointer shrink-0"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              )}
+            </div>
+
+            <div className="p-4 sm:p-6 overflow-y-auto overscroll-contain space-y-3.5 flex-1 min-h-0 text-xs sm:text-sm leading-relaxed">
+              <div className={`p-3.5 rounded-xl border ${
+                darkMode
+                  ? 'bg-emerald-950/25 border-emerald-500/40 text-emerald-100'
+                  : 'bg-emerald-50/80 border-emerald-300 text-slate-800'
+              }`}>
+                <p className="font-bold text-emerald-500 mb-1">
+                  Átlátható és biztonságos adatkezelés
+                </p>
+                <p className={darkMode ? 'text-slate-200' : 'text-slate-700'}>
+                  A <strong>BGE Progress</strong> egy független, hallgatói kezdeményezésű, nem hivatalos alkalmazás. A személyes adataid védelmét az Európai Unió Általános Adatvédelmi Rendeletével (<strong>GDPR – EU 2016/679</strong>) összhangban kezeljük.
+                </p>
+              </div>
+
+              <div className={`p-3.5 rounded-xl border space-y-2 ${bgSubCard}`}>
+                <h3 className={`font-extrabold text-xs sm:text-sm flex items-center gap-2 ${textStrong}`}>
+                  <Database className="w-4 h-4 text-sky-500 shrink-0" />
+                  1. Hogyan és hol tároljuk az adataidat? (Google Firebase)
+                </h3>
+                <ul className={`list-disc pl-5 space-y-1.5 text-xs ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>
+                  <li>
+                    A bejelentkezés és az adattárolás a Google által üzemeltetett <strong>Firebase Authentication</strong> és <strong>Cloud Firestore</strong> felhőszolgáltatáson keresztül, titkosított (HTTPS/TLS) kapcsolaton történik.
+                  </li>
+                  <li>
+                    Bejelentkezéskor kizárólag a Google-fiókod alapvető azonosító adatait (e-mail cím, megjelenített név, egyedi felhasználói azonosító – UID) használjuk a fiókod elkülönítéséhez. <strong>A jelszavadhoz az alkalmazás nem fér hozzá és nem tárolja azt.</strong>
+                  </li>
+                  <li>
+                    Az általad rögzített félévek, tantárgyak, ZH-pontok, jelenlétek és beállítások kizárólag a saját, egyedi azonosítód alatti elszigetelt adatbázis-területen tárolódnak, így más felhasználók nem láthatják azokat.
+                  </li>
+                  <li>
+                    Bizonyos megjelenítési beállítások (pl. sötét mód, rendezés, helyi gyorsítótár) a saját böngésződ tárhelyében (<code>localStorage</code>) is mentésre kerülnek.
+                  </li>
+                </ul>
+              </div>
+
+              <div className={`p-3.5 rounded-xl border space-y-2 ${bgSubCard}`}>
+                <h3 className={`font-extrabold text-xs sm:text-sm flex items-center gap-2 ${textStrong}`}>
+                  <Lock className="w-4 h-4 text-amber-500 shrink-0" />
+                  2. Mire (NEM) használjuk fel az adataidat?
+                </h3>
+                <ul className={`list-disc pl-5 space-y-1.5 text-xs ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>
+                  <li>
+                    Az adataid <strong>semmilyen formában nem kerülnek felhasználásra</strong> marketing-, hirdetési, profilalkotási vagy kereskedelmi célokra.
+                  </li>
+                  <li>
+                    Az adataidat <strong>harmadik félnek nem adjuk ki, nem osztjuk meg és nem értékesítjük</strong>.
+                  </li>
+                  <li>
+                    A rögzített pontszámokat és adatokat kizárólag az alkalmazás saját funkcióinak (átlagszámítás, kreditindex, szinkronizáció az eszközeid között) működtetésére használjuk.
+                  </li>
+                  <li>
+                    Az „App statisztika” kizárólag összesített, névtelen darabszámot (regisztráltak és aktív felhasználók száma) jelenít meg, személyes adatok felfedése nélkül.
+                  </li>
+                  <li>
+                    A Neptunból exportált Excel fájlok feldolgozása helyben, a böngésződben történik — magát az Excel fájlt nem töltjük fel és nem tároljuk szerveren.
+                  </li>
+                </ul>
+              </div>
+
+              <div className={`p-3.5 rounded-xl border space-y-1.5 ${bgSubCard}`}>
+                <h3 className={`font-extrabold text-xs sm:text-sm flex items-center gap-2 ${textStrong}`}>
+                  <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                  3. Jogaid és adattörlés
+                </h3>
+                <p className={`text-xs ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>
+                  Adataidat bármikor szabadon módosíthatod vagy törölheted az alkalmazáson belül. Teljes fiók- és adattörlési kérelem, illetve bármilyen adatvédelmi kérdés esetén írj közvetlenül a fejlesztőnek a(z){' '}
+                  <a
+                    href={`mailto:${CREATOR_EMAIL}?subject=${encodeURIComponent('BGE Progress — Adatvédelem / Adattörlési kérelem')}`}
+                    className="font-bold text-amber-500 underline underline-offset-2"
+                  >
+                    {CREATOR_EMAIL}
+                  </a>{' '}
+                  e-mail címen.
+                </p>
+              </div>
+            </div>
+
+            <div className={`px-4 sm:px-6 py-3.5 sm:py-4 border-t shrink-0 space-y-3 ${
+              darkMode ? 'border-slate-800 bg-slate-900/80' : 'border-slate-200 bg-slate-50'
+            }`}>
+              {mustAcceptGdpr ? (
+                <>
+                  <label className={`flex items-start gap-2.5 p-3 rounded-xl border cursor-pointer select-none transition ${
+                    gdprCheckboxChecked
+                      ? darkMode
+                        ? 'bg-emerald-950/30 border-emerald-500/60'
+                        : 'bg-emerald-50 border-emerald-400'
+                      : darkMode
+                        ? 'bg-slate-800/70 border-slate-700 hover:border-slate-600'
+                        : 'bg-white border-slate-300 hover:border-slate-400'
+                  }`}>
+                    <input
+                      type="checkbox"
+                      checked={gdprCheckboxChecked}
+                      onChange={(e) => setGdprCheckboxChecked(e.target.checked)}
+                      className="mt-0.5 w-4 h-4 accent-emerald-500 rounded cursor-pointer shrink-0"
+                    />
+                    <span className={`text-xs font-semibold leading-snug ${textStrong}`}>
+                      Elolvastam, megértettem és elfogadom a BGE Progress adatvédelmi tájékoztatóját (GDPR), és hozzájárulok adataim Firebase-ben történő tárolásához az alkalmazás használatához.
+                    </span>
+                  </label>
+
+                  <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-2">
+                    <button
+                      type="button"
+                      disabled={isSavingGdpr}
+                      onClick={() => signOut(auth)}
+                      className={`px-4 py-2.5 rounded-xl text-xs font-bold border transition cursor-pointer disabled:opacity-50 ${
+                        darkMode
+                          ? 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
+                          : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-300'
+                      }`}
+                    >
+                      Nem fogadom el (Kijelentkezés)
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!gdprCheckboxChecked || isSavingGdpr}
+                      onClick={handleAcceptGdpr}
+                      className="px-5 py-2.5 rounded-xl text-xs sm:text-sm font-extrabold bg-emerald-500 hover:bg-emerald-400 disabled:opacity-45 disabled:cursor-not-allowed text-white shadow-md flex items-center justify-center gap-1.5 transition cursor-pointer"
+                    >
+                      <Check className="w-4 h-4" />
+                      <span>{isSavingGdpr ? 'Mentés...' : 'Elfogadom és tovább az appba'}</span>
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <div className="flex items-center justify-between gap-2">
+                  <span className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-500">
+                    <CheckCircle2 className="w-4 h-4" /> Elfogadva ({GDPR_POLICY_VERSION})
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setIsGdprModalOpen(false)}
+                    className="px-5 py-2 rounded-xl text-xs sm:text-sm font-bold bg-amber-400 hover:bg-amber-300 text-slate-950 transition cursor-pointer"
+                  >
+                    Bezárás
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}

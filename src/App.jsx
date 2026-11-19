@@ -635,6 +635,13 @@ function buildTemplatesForMajor(majorId) {
 
 const APP_RELEASES = [
  {
+ version: 'v2.1.2',
+ date: '2026. 11. 20.',
+ changes: [
+ 'Neptun Excel import javítása múltbéli féléveknél: ha egy adott tantárgynál üres az érdemjegy / eredmény cella (nincs beírva teljesítés), az alkalmazás mostantól 5-ös helyett automatikusan 1-esként (bukott tárgyként) olvassa be'
+ ]
+ },
+ {
  version: 'v2.1.1',
  date: '2026. 11. 19.',
  changes: [
@@ -1239,7 +1246,7 @@ async function parseNeptunExcelWorkbook(arrayBuffer) {
  parsedItems.push({
  name: rawName,
  credits,
- grade: numericGrade !== null ? numericGrade : 5,
+ grade: numericGrade !== null ? numericGrade : 1,
  hasParsedGrade: numericGrade !== null,
  rawGradeText: String(rawGradeText || '').trim(),
  courseType: isElective ? 'elective' : 'mandatory'
@@ -8776,7 +8783,7 @@ export default function App() {
  <div className={`p-3.5 rounded-xl border space-y-1.5 text-xs ${bgSubCard}`}>
  <p className={`font-bold ${textStrong}`}>Mit olvas be automatikusan az alkalmazás?</p>
  <p className={textMuted}>
- A letöltött táblázatból kinyerjük a <strong>tárgy nevét</strong>, a <strong>kredit értékét</strong>, a <strong>kötelező / szabadon választott besorolást</strong>, valamint a szöveges érdemjegyből (pl. <em>„Elégséges (2)”</em>, <em>„Jeles (5)”</em>) kizárólag az <strong>1–5 számértéket</strong>.
+ A letöltött táblázatból kinyerjük a <strong>tárgy nevét</strong>, a <strong>kredit értékét</strong>, a <strong>kötelező / szabadon választott besorolást</strong>, valamint a szöveges érdemjegyből (pl. <em>„Elégséges (2)”</em>, <em>„Jeles (5)”</em>) kizárólag az <strong>1–5 számértéket</strong> (ha az eredmény cella üres, automatikusan <strong>1-esként</strong> olvassa be).
  </p>
  </div>
 

@@ -2431,6 +2431,8 @@ export default function App() {
     return () => unsubNotices();
   }, [user]);
 
+  const mustAcceptGdpr = Boolean(user && userDataLoaded && !hasAcceptedGdpr);
+
   useEffect(() => {
     if (!user || !userDataLoaded || mustAcceptGdpr) return;
     if (isGazdinfoOnboardingOpen || isWelcomeOpen || isTutorialOpen || isChangelogOpen) return;
@@ -2786,7 +2788,6 @@ export default function App() {
   }, [firestoreReleases]);
 
   const latestRelease = allReleases[0] || null;
-  const mustAcceptGdpr = Boolean(user && userDataLoaded && !hasAcceptedGdpr);
 
   const handleAcceptGdpr = async () => {
     if (!user || !gdprCheckboxChecked || isSavingGdpr) return;

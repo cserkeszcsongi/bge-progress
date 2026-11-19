@@ -635,6 +635,14 @@ function buildTemplatesForMajor(majorId) {
 
 const APP_RELEASES = [
  {
+ version: 'v2.1.3',
+ date: '2026. 11. 20.',
+ changes: [
+ 'Egyszerűsített megajánlott jegy ponthatár-kijelzés a kártyákon és az „Összesen” rubrikában: két külön szám helyett kizárólag a nagyobbik (ténylegesen szükséges) hiányzó pontszámot mutatja (a ZH-minimum és az összpontszám-hiány közül a nagyobbat)',
+ 'Aláírás feltételeinek pontosítása: aláírás akkor is jár a megfelelő gyakorlati jelenlét mellett, ha az 1. ZH eredménye legalább 50%-os VAGY az összpontszám eléri az aláírási minimumot (pl. 40 pontot)'
+ ]
+ },
+ {
  version: 'v2.1.2',
  date: '2026. 11. 20.',
  changes: [
@@ -4644,9 +4652,24 @@ export default function App() {
  const attendanceMegajanlottPossible = totalClasses === 0 || absentCount <= maxAllowedAbsencesMegajanlott;
 
  const effectiveAlairasMin = isExamCourse ? 0 : (Number(subj.alairasMin) || 0);
- const alairasPontOk = regularOsszElert >= effectiveAlairasMin;
+ const firstZh = !isExamCourse ? (zhAssessments[0] || null) : null;
+ const firstZhEff = firstZh ? getEffectiveScore(firstZh) : null;
+ const firstZhHasScore = firstZhEff !== null && firstZhEff !== undefined && firstZhEff !== '' && !isNaN(Number(firstZhEff));
+ const firstZhBonus = (firstZh && firstZh.bonusPoints !== null && firstZh.bonusPoints !== undefined && firstZh.bonusPoints !== '' && !isNaN(Number(firstZh.bonusPoints)))
+ ? Number(firstZh.bonusPoints)
+ : 0;
+ const firstZhMax = (firstZh && firstZh.max !== null && firstZh.max !== undefined && firstZh.max !== '' && Number(firstZh.max) > 0)
+ ? Number(firstZh.max)
+ : 0;
+ const firstZhPassed50Pct = Boolean(
+ firstZhHasScore &&
+ firstZhMax > 0 &&
+ ((Number(firstZhEff) + firstZhBonus) / firstZhMax) >= 0.5
+ );
+
+ const alairasPontOk = regularOsszElert >= effectiveAlairasMin || firstZhPassed50Pct;
  const alairasTeljesul = isExamCourse ? true : (alairasPontOk && attendanceAlairasPossible);
- const alairasHianyzik = Math.max(0, +(effectiveAlairasMin - regularOsszElert).toFixed(2));
+ const alairasHianyzik = alairasPontOk ? 0 : Math.max(0, +(effectiveAlairasMin - regularOsszElert).toFixed(2));
 
  const megajanlottMin = isExamCourse
  ? 59.5
@@ -4661,6 +4684,9 @@ export default function App() {
 
  const megajanlottHianyzik = Math.max(0, +(megajanlottMin - regularOsszElert).toFixed(2));
  const megajanlottZHHianyzik = Math.max(0, +(megajanlottMinZH - zhElert).toFixed(2));
+ const megajanlottEffectiveHianyzik = (!isExamCourse && megajanlottMinZH > 0)
+ ? Math.max(megajanlottHianyzik, megajanlottZHHianyzik)
+ : megajanlottHianyzik;
 
  const allZhsFilled = !disablePointCalc && !isExamCourse && zhAssessments.length > 0 && zhAssessments.every(a => {
  const v = getEffectiveScore(a);
@@ -4825,8 +4851,10 @@ export default function App() {
  : needsAutoExam
  ? (hasAutoExamScore && autoExamScoreNum >= 59.5)
  : megajanlottTeljesul,
+ firstZhPassed50Pct,
  megajanlottHianyzik,
  megajanlottZHOk, megajanlottZHHianyzik,
+ megajanlottEffectiveHianyzik,
  nextOfferedMilestone,
  progressLabel, progressStage, projectedGrade
  };
@@ -7792,16 +7820,18 @@ export default function App() {
  let nextGradeText = '';
  if (!st.isFailed && !st.isGradeOnlyCard) {
  const gradeSuffix = { 2: '2-eshez', 3: '3-ashoz', 4: '4-eshez', 5: '5-öshöz' };
- if (ms.allMaxed) {
+ if (ms.allMaxed && (st.isExamCourse || st.needsAutoExam || st.megajanlottZHOk)) {
  nextGradeText = `${gradeLabelPrefix} 5-ös elérve!`;
  } else if (ms.targetGrade === 2) {
- if (!st.isExamCourse && !st.needsAutoExam && !st.megajanlottZHOk && megajanlottMinZH > 0) {
- nextGradeText = `${gradeLabelPrefix} 2-eshez még ${formatHu(ms.needed)} p (és ${formatHu(st.megajanlottZHHianyzik)} ZH p) kell`;
+ const effectiveNeeded2 = (!st.isExamCourse && !st.needsAutoExam && megajanlottMinZH > 0)
+ ? Math.max(ms.needed, st.megajanlottZHHianyzik)
+ : ms.needed;
+ nextGradeText = `${gradeLabelPrefix} 2-eshez még ${formatHu(effectiveNeeded2)} p kell`;
  } else {
- nextGradeText = `${gradeLabelPrefix} 2-eshez még ${formatHu(ms.needed)} p kell`;
- }
- } else {
- nextGradeText = `${gradeLabelPrefix} ${gradeSuffix[ms.targetGrade]} még ${formatHu(ms.needed)} p kell`;
+ const effectiveNeededHigher = (!st.isExamCourse && !st.needsAutoExam && megajanlottMinZH > 0)
+ ? Math.max(ms.needed, st.megajanlottZHHianyzik)
+ : ms.needed;
+ nextGradeText = `${gradeLabelPrefix} ${gradeSuffix[ms.targetGrade]} még ${formatHu(effectiveNeededHigher)} p kell`;
  }
  }
 
@@ -11285,12 +11315,8 @@ export default function App() {
  : `Vizsgajegyhez még ${formatHu(st.megajanlottHianyzik)} p kell`)
  : (st.megajanlottTeljesul
  ? `Megajánlott (${st.projectedGrade}) megvan`
- : st.megajanlottHianyzik > 0
- ? (!st.isExamCourse && !st.megajanlottZHOk && st.megajanlottMinZH > 0
- ? `Megajánlotthoz még ${formatHu(st.megajanlottHianyzik)} p (ZH-kból még ${formatHu(st.megajanlottZHHianyzik)} p) kell`
- : `Megajánlotthoz még ${formatHu(st.megajanlottHianyzik)} p kell`)
- : !st.megajanlottZHOk && st.megajanlottMinZH > 0
- ? `Összpont megvan (ZH-kból még ${formatHu(st.megajanlottZHHianyzik)} p kell)`
+ : st.megajanlottEffectiveHianyzik > 0
+ ? `Megajánlotthoz még ${formatHu(st.megajanlottEffectiveHianyzik)} p kell`
  : 'Megajánlott feltételek folyamatban')}
  </p>
  )}
@@ -11332,7 +11358,7 @@ export default function App() {
  </>
  ) : (
  <>
- Minden ZH eredményed rögzítve lett, de a félévközi összpontszámod (<strong>{formatHu(st.regularOsszElert)} p</strong>) nem érte el az aláíráshoz szükséges <strong>{formatHu(activeSubject.alairasMin)} pontot</strong>. Mivel <strong>nincs aláírásod</strong>, <strong>vizsgázni sem mehetsz el</strong>, szóval a tárgyat <strong>újra fel kell venned egy évvel később</strong>.
+ Minden ZH eredményed rögzítve lett, de sem az 1. ZH-d nem érte el az 50%-ot, sem a félévközi összpontszámod (<strong>{formatHu(st.regularOsszElert)} p</strong>) nem érte el az aláíráshoz szükséges <strong>{formatHu(activeSubject.alairasMin)} pontot</strong>. Mivel <strong>nincs aláírásod</strong>, <strong>vizsgázni sem mehetsz el</strong>, szóval a tárgyat <strong>újra fel kell venned egy évvel később</strong>.
  </>
  )}
  </p>

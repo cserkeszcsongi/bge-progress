@@ -13,7 +13,7 @@ import {
   Menu, Palette, ChevronDown, SlidersHorizontal, RefreshCw, Lightbulb, CheckCircle2,
   LayoutList, ArrowUpDown, GripVertical, ArrowUp, ArrowDown, Calculator,
   BarChart3, Users, FastForward, FileSpreadsheet, HelpCircle, Upload,
-  Download, Smartphone, Share, ShieldCheck, Lock, Database
+  Download, Smartphone, Share, ShieldCheck, Lock, Database, Bell
 } from 'lucide-react';
 import { auth, googleProvider, db } from './firebase';
 
@@ -40,6 +40,9 @@ const TEMPLATES_CACHE_KEY = 'bge_templates_cache_v1';
 const TEMPLATES_CACHE_TTL_MS = 15 * 60 * 1000;
 const RELEASES_CACHE_KEY = 'bge_releases_cache_v1';
 const RELEASES_CACHE_TTL_MS = 30 * 60 * 1000;
+const NOTICEBOARD_CACHE_KEY = 'bge_noticeboard_cache_v1';
+const NOTICEBOARD_CACHE_TTL_MS = 10 * 60 * 1000;
+const SEEN_NOTICES_STORAGE_KEY = 'bge_seen_notice_ids_v1';
 const UPDATE_CHECK_THROTTLE_MS = 30 * 1000;
 const GDPR_POLICY_VERSION = 'v2.0.2';
 
@@ -631,6 +634,14 @@ function buildTemplatesForMajor(majorId) {
 }
 
 const APP_RELEASES = [
+  {
+    version: 'v2.0.3',
+    date: '2026. 11. 19.',
+    changes: [
+      'Pontszám tételek szerkesztésének és törlésének összevonása: a két külön ceruza és kuka ikon helyett egyetlen szélesebb gomb (ceruza / kuka) nyitja meg a tétel szerkesztőablakát, amelynek alján kétlépcsős megerősítéssel biztonságosan törölhető az adott tétel',
+      'Új Faliújság funkció a felső sávban (kis csengő ikon a Menü gomb mellett): az admin által közzétett közérdekű közlemények belépéskor nagy felugró ablakban is megjelennek „Elolvasva / Bezárás” gombbal, később pedig dátummal ellátva bármikor visszanézhetők a faliújságon'
+    ]
+  },
   {
     version: 'v2.0.2',
     date: '2026. 11. 19.',
@@ -2052,6 +2063,22 @@ export default function App() {
 
   const [firestoreReleases, setFirestoreReleases] = useState(() => readLocalCache(RELEASES_CACHE_KEY, RELEASES_CACHE_TTL_MS) || []);
   const [isChangelogOpen, setIsChangelogOpen] = useState(false);
+
+  const [noticeboardItems, setNoticeboardItems] = useState(() => readLocalCache(NOTICEBOARD_CACHE_KEY, NOTICEBOARD_CACHE_TTL_MS) || []);
+  const [isNoticeboardOpen, setIsNoticeboardOpen] = useState(false);
+  const [activeNoticePopup, setActiveNoticePopup] = useState(null);
+  const [seenNoticeIds, setSeenNoticeIds] = useState(() => {
+    try {
+      const raw = localStorage.getItem(SEEN_NOTICES_STORAGE_KEY);
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [isAddingNotice, setIsAddingNotice] = useState(false);
+  const [newNoticeTitle, setNewNoticeTitle] = useState('');
+  const [newNoticeBody, setNewNoticeBody] = useState('');
+  const [isSavingNotice, setIsSavingNotice] = useState(false);
   const [isAddingRelease, setIsAddingRelease] = useState(false);
   const [newReleaseVersion, setNewReleaseVersion] = useState('');
   const [newReleaseDate, setNewReleaseDate] = useState(() => getTodayFormattedHu());
@@ -2374,6 +2401,129 @@ export default function App() {
       writeLocalCache(RELEASES_CACHE_KEY, list);
     } catch (err) {
       console.warn('Verziók betöltési hiba:', err);
+    }
+  };
+
+  useEffect(() => {
+    if (!user) {
+      setNoticeboardItems([]);
+      setActiveNoticePopup(null);
+      return;
+    }
+
+    const unsubNotices = onSnapshot(
+      collection(db, 'appNoticeboard'),
+      (snapshot) => {
+        const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+        list.sort((a, b) => {
+          const msA = typeof a.createdAtMs === 'number' ? a.createdAtMs : Date.parse(a.createdAt || '') || 0;
+          const msB = typeof b.createdAtMs === 'number' ? b.createdAtMs : Date.parse(b.createdAt || '') || 0;
+          return msB - msA;
+        });
+        setNoticeboardItems(list);
+        writeLocalCache(NOTICEBOARD_CACHE_KEY, list);
+      },
+      (err) => {
+        console.warn('Faliújság betöltési hiba:', err);
+      }
+    );
+
+    return () => unsubNotices();
+  }, [user]);
+
+  useEffect(() => {
+    if (!user || !userDataLoaded || mustAcceptGdpr) return;
+    if (isGazdinfoOnboardingOpen || isWelcomeOpen || isTutorialOpen || isChangelogOpen) return;
+    if (!noticeboardItems || noticeboardItems.length === 0) return;
+
+    const latestNotice = noticeboardItems[0];
+    if (latestNotice && latestNotice.id && !seenNoticeIds.includes(latestNotice.id)) {
+      setActiveNoticePopup(latestNotice);
+    }
+  }, [
+    user,
+    userDataLoaded,
+    mustAcceptGdpr,
+    isGazdinfoOnboardingOpen,
+    isWelcomeOpen,
+    isTutorialOpen,
+    isChangelogOpen,
+    noticeboardItems,
+    seenNoticeIds
+  ]);
+
+  const handleMarkNoticeAsRead = (noticeId) => {
+    if (noticeId) {
+      setSeenNoticeIds(prev => {
+        if (prev.includes(noticeId)) return prev;
+        const next = [...prev, noticeId];
+        try {
+          localStorage.setItem(SEEN_NOTICES_STORAGE_KEY, JSON.stringify(next));
+        } catch {
+          // ignore
+        }
+        return next;
+      });
+    }
+    setActiveNoticePopup(null);
+  };
+
+  const handleSaveNewNotice = async (e) => {
+    e.preventDefault();
+    if (!isAdmin || isSavingNotice) return;
+    const titleTrimmed = newNoticeTitle.trim();
+    const bodyTrimmed = newNoticeBody.trim();
+    if (!bodyTrimmed) return;
+
+    setIsSavingNotice(true);
+    try {
+      const nowMs = Date.now();
+      const noticeId = `notice_${nowMs}_${Math.random().toString(36).slice(2, 6)}`;
+      const payload = {
+        id: noticeId,
+        title: titleTrimmed || 'Közérdekű információ',
+        message: bodyTrimmed,
+        date: getTodayFormattedHu(),
+        createdAt: new Date(nowMs).toISOString(),
+        createdAtMs: nowMs,
+        authorEmail: user?.email || CREATOR_EMAIL
+      };
+
+      await setDoc(doc(db, 'appNoticeboard', noticeId), payload);
+
+      // Mark as seen for the admin who just published it so they don't get startled by their own popup immediately
+      setSeenNoticeIds(prev => {
+        const next = prev.includes(noticeId) ? prev : [...prev, noticeId];
+        try {
+          localStorage.setItem(SEEN_NOTICES_STORAGE_KEY, JSON.stringify(next));
+        } catch {
+          // ignore
+        }
+        return next;
+      });
+
+      setNewNoticeTitle('');
+      setNewNoticeBody('');
+      setIsAddingNotice(false);
+      showToast('Közérdekű információ közzétéve a faliújságon!');
+    } catch (err) {
+      alert('Hiba a közlemény közzétételekor: ' + err.message);
+    } finally {
+      setIsSavingNotice(false);
+    }
+  };
+
+  const handleDeleteNotice = async (notice) => {
+    if (!isAdmin || !notice?.id) return;
+    if (!confirm(`Biztosan törlöd ezt a faliújság bejegyzést („${notice.title || 'Közérdekű információ'}”)?`)) return;
+    try {
+      await deleteDoc(doc(db, 'appNoticeboard', notice.id));
+      if (activeNoticePopup?.id === notice.id) {
+        setActiveNoticePopup(null);
+      }
+      showToast('Faliújság bejegyzés törölve.');
+    } catch (err) {
+      alert('Hiba a bejegyzés törlésekor: ' + err.message);
     }
   };
 
@@ -4572,7 +4722,9 @@ export default function App() {
     isStatsModalOpen ||
     isInstallGuideOpen ||
     mustAcceptGdpr ||
-    isGdprModalOpen
+    isGdprModalOpen ||
+    isNoticeboardOpen ||
+    Boolean(activeNoticePopup)
   );
 
   useEffect(() => {
@@ -4584,6 +4736,8 @@ export default function App() {
       if (e.key === 'Escape') {
         e.preventDefault();
         if (mustAcceptGdpr) return;
+        if (activeNoticePopup) { handleMarkNoticeAsRead(activeNoticePopup.id); return; }
+        if (isNoticeboardOpen) { setIsNoticeboardOpen(false); setIsAddingNotice(false); return; }
         if (isGdprModalOpen) { setIsGdprModalOpen(false); return; }
         if (excelImportTargetSemCode && !isParsingExcel) {
           setExcelImportTargetSemCode(null);
@@ -4649,6 +4803,16 @@ export default function App() {
         if (isAvgCalcOpen) {
           e.preventDefault();
           setIsAvgCalcOpen(false);
+          return;
+        }
+        if (activeNoticePopup) {
+          e.preventDefault();
+          handleMarkNoticeAsRead(activeNoticePopup.id);
+          return;
+        }
+        if (isNoticeboardOpen && !isAddingNotice) {
+          e.preventDefault();
+          setIsNoticeboardOpen(false);
           return;
         }
         if (isChangelogOpen && !isAddingRelease) {
@@ -4858,11 +5022,16 @@ export default function App() {
     setItemModal(null);
   };
 
-  const handleDeleteAssessment = async (itemId) => {
+  const handleDeleteAssessment = async (itemId, closeItemModal = false) => {
+    if (!activeSubject || !itemId) return;
     const updated = (activeSubject.assessments || []).filter(a => a.id !== itemId);
     await updateDoc(doc(db, 'users', user.uid, 'subjects', activeSubject.id), {
       assessments: updated
     });
+    if (closeItemModal) {
+      setItemModal(null);
+      showToast('Tétel törölve.');
+    }
   };
 
   const handleUpdateSession = async (sessionIdx, changes) => {
@@ -5009,6 +5178,51 @@ export default function App() {
     points_desc: 'Pontszám (csökkenő)',
     points_asc: 'Pontszám (növekvő)',
     custom: 'Egyéni sorrend'
+  };
+
+  const unreadNoticesCount = useMemo(
+    () => noticeboardItems.filter(n => n.id && !seenNoticeIds.includes(n.id)).length,
+    [noticeboardItems, seenNoticeIds]
+  );
+
+  const renderNoticeboardBellButton = (isDarkHeader = false) => {
+    const btnClass = isDarkHeader
+      ? 'p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-400 border border-slate-700 transition cursor-pointer relative shrink-0'
+      : darkMode
+        ? 'p-2 sm:p-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-amber-400 border border-slate-800 transition cursor-pointer relative shrink-0'
+        : 'p-2 sm:p-1.5 rounded-lg bg-white hover:bg-amber-50 text-amber-600 border border-slate-200 shadow-2xs transition cursor-pointer relative shrink-0';
+
+    return (
+      <button
+        type="button"
+        onClick={() => {
+          setIsAddingNotice(false);
+          setIsNoticeboardOpen(true);
+          if (noticeboardItems.length > 0) {
+            const allIds = noticeboardItems.map(n => n.id).filter(Boolean);
+            setSeenNoticeIds(prev => {
+              const merged = Array.from(new Set([...prev, ...allIds]));
+              try {
+                localStorage.setItem(SEEN_NOTICES_STORAGE_KEY, JSON.stringify(merged));
+              } catch {
+                // ignore
+              }
+              return merged;
+            });
+          }
+        }}
+        title="Faliújság — Közérdekű információk"
+        aria-label="Faliújság — Közérdekű információk"
+        className={btnClass}
+      >
+        <Bell className="w-4 h-4" />
+        {unreadNoticesCount > 0 && (
+          <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-rose-500 text-white text-[10px] font-extrabold flex items-center justify-center leading-none shadow-xs">
+            {unreadNoticesCount}
+          </span>
+        )}
+      </button>
+    );
   };
 
   const renderDropdownMenu = (isDarkHeader = false) => {
@@ -5618,6 +5832,7 @@ export default function App() {
                 </button>
               )}
 
+              {renderNoticeboardBellButton(false)}
               {renderDropdownMenu(false)}
             </div>
           </div>
@@ -6315,6 +6530,7 @@ export default function App() {
                   >
                     <BookOpen className="w-4 h-4" />
                   </button>
+                  {renderNoticeboardBellButton(true)}
                   {renderDropdownMenu(true)}
                 </div>
               </div>
@@ -6396,6 +6612,7 @@ export default function App() {
                     <span>Bemutató</span>
                   </button>
 
+                  {renderNoticeboardBellButton(true)}
                   {renderDropdownMenu(true)}
                 </div>
               </div>
@@ -9645,7 +9862,7 @@ export default function App() {
                   </span>
                 </div>
 
-                <div className="flex items-center gap-1.5 ml-auto sm:ml-0">
+                <div className="flex items-center ml-auto sm:ml-0">
                   <button
                     type="button"
                     onClick={() => setItemModal({
@@ -9656,32 +9873,24 @@ export default function App() {
                       date: item.date || '',
                       max: item.max ?? '',
                       achieved: eff ?? '',
-                      bonusPoints: item.bonusPoints ?? ''
+                      bonusPoints: item.bonusPoints ?? '',
+                      confirmDelete: false
                     })}
-                    title="Tétel szerkesztése"
-                    className={`p-2 sm:p-1.5 rounded-lg border transition cursor-pointer ${
+                    title={st.isExamCourse ? 'Vizsgapontszám szerkesztése' : 'Tétel szerkesztése / törlése'}
+                    className={`px-3.5 py-2 sm:px-3 sm:py-1.5 rounded-lg border transition cursor-pointer inline-flex items-center justify-center gap-1.5 min-w-[4.5rem] ${
                       darkMode
-                        ? 'bg-slate-800 border-slate-700 text-amber-400 hover:bg-slate-700'
-                        : 'bg-white border-slate-200 text-slate-700 hover:bg-amber-50 hover:text-amber-600'
+                        ? 'bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-700 hover:border-amber-400/50'
+                        : 'bg-white border-slate-200 text-slate-700 hover:bg-amber-50 hover:border-amber-300'
                     }`}
                   >
-                    <Pencil className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
+                    <Pencil className="w-4 h-4 sm:w-3.5 sm:h-3.5 text-amber-500 shrink-0" />
+                    {!st.isExamCourse && (
+                      <>
+                        <span className={`text-xs font-extrabold select-none ${textMuted}`}>/</span>
+                        <Trash2 className="w-4 h-4 sm:w-3.5 sm:h-3.5 text-rose-500 shrink-0" />
+                      </>
+                    )}
                   </button>
-
-                  {!st.isExamCourse && (
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteAssessment(item.id)}
-                      title="Törlés"
-                      className={`p-2 sm:p-1.5 rounded-lg border transition cursor-pointer ${
-                        darkMode
-                          ? 'bg-slate-800 border-slate-700 text-rose-400 hover:bg-rose-500/20'
-                          : 'bg-white border-slate-200 text-rose-500 hover:bg-rose-50'
-                      }`}
-                    >
-                      <Trash2 className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
-                    </button>
-                  )}
                 </div>
               </div>
             </div>
@@ -10765,6 +10974,59 @@ export default function App() {
                 <button type="button" onClick={() => setItemModal(null)} className={`px-4 py-2 text-sm rounded-lg cursor-pointer ${textMuted}`}>Mégse</button>
                 <button type="submit" className="px-4 py-2 text-sm font-bold bg-amber-400 hover:bg-amber-300 text-slate-950 rounded-lg cursor-pointer">Mentés</button>
               </div>
+
+              {itemModal.id && !itemModal.isAutoExam && activeSubject?.courseKind !== 'exam' && (
+                <div className={`pt-4 mt-2 border-t ${darkMode ? 'border-slate-800' : 'border-slate-200'}`}>
+                  {!itemModal.confirmDelete ? (
+                    <button
+                      type="button"
+                      onClick={() => setItemModal({ ...itemModal, confirmDelete: true })}
+                      className={`w-full py-2.5 px-4 rounded-xl text-xs sm:text-sm font-bold border flex items-center justify-center gap-2 transition cursor-pointer ${
+                        darkMode
+                          ? 'bg-rose-950/30 hover:bg-rose-900/50 text-rose-400 border-rose-500/40'
+                          : 'bg-rose-50 hover:bg-rose-100 text-rose-600 border-rose-200'
+                      }`}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      <span>Tétel törlése</span>
+                    </button>
+                  ) : (
+                    <div className={`p-3.5 rounded-xl border-2 space-y-2.5 ${
+                      darkMode
+                        ? 'bg-rose-950/45 border-rose-500/70 text-rose-100'
+                        : 'bg-rose-50 border-rose-400 text-rose-950'
+                    }`}>
+                      <div className="flex items-start gap-2">
+                        <AlertTriangle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
+                        <p className="text-xs font-bold leading-snug">
+                          Biztosan törölni szeretnéd ezt a tételt („{itemModal.title || 'Névtelen tétel'}”)? Ez a művelet nem vonható vissza!
+                        </p>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 pt-0.5">
+                        <button
+                          type="button"
+                          onClick={() => setItemModal({ ...itemModal, confirmDelete: false })}
+                          className={`py-2 px-3 rounded-lg text-xs font-bold border transition cursor-pointer ${
+                            darkMode
+                              ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
+                              : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-300'
+                          }`}
+                        >
+                          Mégse
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteAssessment(itemModal.id, true)}
+                          className="py-2 px-3 rounded-lg text-xs font-extrabold bg-rose-600 hover:bg-rose-500 text-white flex items-center justify-center gap-1.5 transition cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>Igen, törlés</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </form>
           </div>
         </div>
@@ -11710,6 +11972,279 @@ export default function App() {
                 </div>
               </form>
             ) : null}
+          </div>
+        </div>
+      )}
+
+      {/* FALIÚJSÁG — KÖZÉRDEKŰ INFORMÁCIÓK ABLAK */}
+      {isNoticeboardOpen && (
+        <div
+          data-top-modal={!activeNoticePopup ? 'true' : undefined}
+          onClick={() => {
+            setIsNoticeboardOpen(false);
+            setIsAddingNotice(false);
+          }}
+          className="fixed inset-0 bg-black/75 backdrop-blur-sm z-[65] flex items-center justify-center p-2.5 sm:p-4 overscroll-none"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className={`rounded-2xl max-w-lg w-full max-h-[90dvh] flex flex-col shadow-2xl overflow-hidden border-2 border-amber-400/70 ${bgCard}`}
+          >
+            <div className="px-4 sm:px-6 py-3.5 sm:py-4 bg-slate-900 text-white flex justify-between items-center border-b border-slate-800 shrink-0">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-9 h-9 rounded-xl bg-amber-400 text-slate-950 flex items-center justify-center shrink-0">
+                  <Bell className="w-5 h-5" />
+                </div>
+                <div className="min-w-0">
+                  <h2 className="font-extrabold text-sm sm:text-base leading-tight">Faliújság</h2>
+                  <p className="text-[11px] text-amber-400 font-semibold truncate">
+                    Közérdekű információk és közlemények
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-1.5 shrink-0">
+                {isAdmin && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNewNoticeTitle('');
+                      setNewNoticeBody('');
+                      setIsAddingNotice(prev => !prev);
+                    }}
+                    title="Új közérdekű információ közzététele minden felhasználónak"
+                    className="px-3 py-1.5 rounded-xl text-xs font-extrabold bg-amber-400 hover:bg-amber-300 text-slate-950 flex items-center gap-1 transition cursor-pointer"
+                  >
+                    <Plus className="w-4 h-4 stroke-[2.75]" />
+                    <span>Új közlemény</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsNoticeboardOpen(false);
+                    setIsAddingNotice(false);
+                  }}
+                  className="text-slate-400 hover:text-white p-1.5 cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            <div className="p-4 sm:p-6 overflow-y-auto overscroll-contain space-y-3.5 flex-1 min-h-0">
+              {isAdmin && isAddingNotice && (
+                <form
+                  onSubmit={handleSaveNewNotice}
+                  className={`p-4 rounded-2xl border-2 border-amber-400 space-y-3 ${
+                    darkMode ? 'bg-slate-800/90' : 'bg-amber-50/70'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs sm:text-sm font-extrabold text-amber-500 flex items-center gap-1.5">
+                      <Bell className="w-4 h-4" /> Közérdekű információ küldése mindenkinek
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setIsAddingNotice(false)}
+                      className={`p-1 rounded-lg cursor-pointer ${textMuted}`}
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  <div>
+                    <label className={`block text-[11px] font-semibold mb-1 ${textMuted}`}>
+                      Cím (opcionális)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Pl. Karbantartási értesítő / Fontos tudnivaló"
+                      value={newNoticeTitle}
+                      onChange={e => setNewNoticeTitle(e.target.value)}
+                      className={`w-full border rounded-xl px-3 py-2 font-bold focus:outline-none ${inputStyle}`}
+                    />
+                  </div>
+
+                  <div>
+                    <label className={`block text-[11px] font-semibold mb-1 ${textMuted}`}>
+                      Közlemény szövege
+                    </label>
+                    <textarea
+                      required
+                      rows={4}
+                      placeholder="Írd ide a közérdekű információt, amely minden felhasználónak nagy pop-up ablakban is megjelenik belépéskor..."
+                      value={newNoticeBody}
+                      onChange={e => setNewNoticeBody(e.target.value)}
+                      className={`w-full border rounded-xl px-3 py-2 text-xs sm:text-sm focus:outline-none resize-y ${inputStyle}`}
+                    />
+                  </div>
+
+                  <div className="flex justify-end gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setIsAddingNotice(false)}
+                      className={`px-3.5 py-2 text-xs font-semibold rounded-xl cursor-pointer ${textMuted}`}
+                    >
+                      Mégse
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isSavingNotice || !newNoticeBody.trim()}
+                      className="px-4 py-2 text-xs font-extrabold bg-amber-400 hover:bg-amber-300 disabled:opacity-50 text-slate-950 rounded-xl flex items-center gap-1.5 transition cursor-pointer"
+                    >
+                      <Check className="w-4 h-4" />
+                      <span>{isSavingNotice ? 'Közzététel...' : 'Közzététel mindenkinek'}</span>
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {noticeboardItems.length === 0 ? (
+                <div className={`p-6 rounded-2xl border text-center space-y-2 ${bgSubCard}`}>
+                  <Bell className={`w-7 h-7 mx-auto opacity-60 ${textMuted}`} />
+                  <p className={`text-sm font-bold ${textStrong}`}>Még nincs közzétett információ</p>
+                  <p className={`text-xs ${textMuted}`}>
+                    Itt fognak megjelenni a fejlesztő által közzétett közérdekű közlemények dátummal ellátva.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2.5">
+                  {noticeboardItems.map((notice, idx) => (
+                    <div
+                      key={notice.id}
+                      className={`p-3.5 rounded-xl border space-y-1.5 ${
+                        idx === 0
+                          ? darkMode
+                            ? 'bg-amber-400/10 border-amber-400/40'
+                            : 'bg-amber-50/75 border-amber-300'
+                          : bgSubCard
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className={`text-[10px] font-semibold ${textMuted}`}>
+                              {notice.date || ''}
+                            </span>
+                            {idx === 0 && (
+                              <span className="px-1.5 py-0.2 rounded bg-amber-400 text-slate-950 text-[9px] font-extrabold uppercase">
+                                Legfrissebb
+                              </span>
+                            )}
+                          </div>
+                          <h3 className={`text-xs sm:text-sm font-extrabold mt-0.5 ${textStrong}`}>
+                            {notice.title || 'Közérdekű információ'}
+                          </h3>
+                        </div>
+
+                        {isAdmin && (
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteNotice(notice)}
+                            title="Bejegyzés törlése"
+                            className={`p-1.5 rounded-lg transition cursor-pointer shrink-0 ${
+                              darkMode
+                                ? 'text-slate-400 hover:text-rose-400 hover:bg-rose-500/15'
+                                : 'text-slate-400 hover:text-rose-600 hover:bg-rose-50'
+                            }`}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+
+                      <p className={`text-xs leading-relaxed whitespace-pre-line ${darkMode ? 'text-slate-200' : 'text-slate-700'}`}>
+                        {notice.message}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className={`px-4 sm:px-6 py-3 border-t flex justify-end shrink-0 ${
+              darkMode ? 'border-slate-800 bg-slate-900/75' : 'border-slate-200 bg-slate-50'
+            }`}>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsNoticeboardOpen(false);
+                  setIsAddingNotice(false);
+                }}
+                className="px-5 py-2 text-xs sm:text-sm font-bold bg-amber-400 hover:bg-amber-300 text-slate-950 rounded-xl cursor-pointer"
+              >
+                Bezárás
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* KÖZÉRDEKŰ INFORMÁCIÓ — NAGY FELUGRÓ POP-UP BELÉPÉSKOR */}
+      {activeNoticePopup && (
+        <div
+          data-top-modal="true"
+          onClick={() => handleMarkNoticeAsRead(activeNoticePopup.id)}
+          className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[75] flex items-center justify-center p-3 sm:p-4 overscroll-none"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className={`rounded-2xl max-w-lg w-full max-h-[90dvh] flex flex-col shadow-2xl overflow-hidden border-2 border-amber-400 ${bgCard}`}
+          >
+            <div className="px-5 py-4 bg-slate-900 text-white flex items-center justify-between gap-3 border-b border-slate-800 shrink-0">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-10 h-10 rounded-xl bg-amber-400 text-slate-950 flex items-center justify-center shrink-0">
+                  <Bell className="w-5 h-5" />
+                </div>
+                <div className="min-w-0">
+                  <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-amber-400/20 text-amber-300 border border-amber-400/35 mb-0.5">
+                    Faliújság • Közérdekű információ
+                  </span>
+                  <h2 className="font-extrabold text-base sm:text-lg leading-tight truncate">
+                    {activeNoticePopup.title || 'Közérdekű információ'}
+                  </h2>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => handleMarkNoticeAsRead(activeNoticePopup.id)}
+                title="Bezárás"
+                className="text-slate-400 hover:text-white p-1.5 cursor-pointer shrink-0"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-5 sm:p-6 overflow-y-auto overscroll-contain space-y-4 flex-1 min-h-0">
+              {activeNoticePopup.date && (
+                <div className="flex items-center gap-1.5 text-xs font-semibold text-amber-500">
+                  <Calendar className="w-3.5 h-3.5" />
+                  <span>Közzétéve: {activeNoticePopup.date}</span>
+                </div>
+              )}
+
+              <div className={`p-4 rounded-2xl border text-sm leading-relaxed whitespace-pre-line ${bgSubCard} ${textStrong}`}>
+                {activeNoticePopup.message}
+              </div>
+
+              <p className={`text-[11px] leading-relaxed ${textMuted}`}>
+                Bezárás után ez a közlemény bármikor visszanézhető a felső sávban található <strong>Faliújság (csengő)</strong> ikonra kattintva.
+              </p>
+            </div>
+
+            <div className={`px-5 py-3.5 border-t flex items-center justify-end gap-2.5 shrink-0 ${
+              darkMode ? 'border-slate-800 bg-slate-900/80' : 'border-slate-200 bg-slate-50'
+            }`}>
+              <button
+                type="button"
+                onClick={() => handleMarkNoticeAsRead(activeNoticePopup.id)}
+                className="w-full sm:w-auto px-6 py-2.5 rounded-xl text-xs sm:text-sm font-extrabold bg-amber-400 hover:bg-amber-300 text-slate-950 shadow-md flex items-center justify-center gap-2 transition cursor-pointer"
+              >
+                <Check className="w-4 h-4" />
+                <span>Elolvasva / Bezárás</span>
+              </button>
+            </div>
           </div>
         </div>
       )}

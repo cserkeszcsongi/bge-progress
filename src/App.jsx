@@ -13,7 +13,7 @@ import {
   Menu, Palette, ChevronDown, SlidersHorizontal, RefreshCw, Lightbulb, CheckCircle2,
   LayoutList, ArrowUpDown, GripVertical, ArrowUp, ArrowDown, Calculator,
   BarChart3, Users, FastForward, FileSpreadsheet, HelpCircle, Upload,
-  Download, Smartphone, Share, ShieldCheck, Lock, Database, Bell
+  Download, Smartphone, Share, ShieldCheck, Lock, Database, Bell, Wrench
 } from 'lucide-react';
 import { auth, googleProvider, db } from './firebase';
 
@@ -634,6 +634,15 @@ function buildTemplatesForMajor(majorId) {
 }
 
 const APP_RELEASES = [
+  {
+    version: 'v2.1.0',
+    date: '2026. 11. 19.',
+    changes: [
+      'Új Maintenance (karbantartás) mód kapcsoló az admin számára a főoldalon: bekapcsoláskor kizárólag az admin férhet hozzá az alkalmazáshoz, minden más látogató pedig egy egyedi karbantartási grafikát és tájékoztató üzenetet lát',
+      'Beépített klasszikus Chrome No-Internet Dino minijáték a karbantartási képernyőn: billentyűzettel (Szóköz / Fel nyíl) vagy érintéssel játszható, élő pontszámmal és rekordmentéssel, amíg tart a frissítés',
+      'Automatikus „Oldal frissítése” gomb: amint véget ér a karbantartás és kikapcsolásra kerül a Maintenance mód, a várakozó felhasználóknak azonnal megjelenik a frissítés gomb, amellyel egy kattintással folytathatják az app használatát'
+    ]
+  },
   {
     version: 'v2.0.3.1',
     date: '2026. 11. 19.',
@@ -1871,6 +1880,583 @@ function getTodayFormattedHu() {
   return `${y}. ${m}. ${d}.`;
 }
 
+function DinoRunnerGame({ darkMode }) {
+  const canvasRef = useRef(null);
+  const [score, setScore] = useState(0);
+  const [highScore, setHighScore] = useState(() => {
+    try {
+      return Number(localStorage.getItem('bge_dino_highscore_v1')) || 0;
+    } catch {
+      return 0;
+    }
+  });
+  const [gameState, setGameState] = useState('idle'); // 'idle' | 'playing' | 'gameover'
+
+  const stateRef = useRef({
+    status: 'idle',
+    dinoY: 0,
+    dinoVy: 0,
+    isDucking: false,
+    obstacles: [],
+    clouds: [
+      { x: 140, y: 28, speed: 0.4 },
+      { x: 360, y: 20, speed: 0.3 },
+      { x: 540, y: 36, speed: 0.5 }
+    ],
+    groundOffset: 0,
+    speed: 6.2,
+    score: 0,
+    nextSpawnIn: 65,
+    frame: 0
+  });
+
+  const triggerJump = () => {
+    const st = stateRef.current;
+    if (st.status === 'idle' || st.status === 'gameover') {
+      st.status = 'playing';
+      st.dinoY = 0;
+      st.dinoVy = 11.4;
+      st.isDucking = false;
+      st.obstacles = [];
+      st.speed = 6.2;
+      st.score = 0;
+      st.nextSpawnIn = 60;
+      st.frame = 0;
+      setScore(0);
+      setGameState('playing');
+      return;
+    }
+    if (st.status === 'playing' && st.dinoY <= 0.5) {
+      st.dinoVy = 11.4;
+    }
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.code === 'Space' || e.code === 'ArrowUp' || e.key === 'w' || e.key === 'W') {
+        e.preventDefault();
+        triggerJump();
+      } else if (e.code === 'ArrowDown' || e.key === 's' || e.key === 'S') {
+        if (stateRef.current.status === 'playing') {
+          e.preventDefault();
+          stateRef.current.isDucking = true;
+        }
+      }
+    };
+
+    const handleKeyUp = (e) => {
+      if (e.code === 'ArrowDown' || e.key === 's' || e.key === 'S') {
+        stateRef.current.isDucking = false;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, []);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    let animId;
+
+    const W = 640;
+    const H = 185;
+    const GROUND_Y = 152;
+    const DINO_X = 54;
+    const GRAVITY = 0.58;
+
+    const drawPixelDino = (ctx, x, yBottom, frame, isDucking, isDead, color, eyeCutoutColor) => {
+      ctx.fillStyle = color;
+      if (isDucking && !isDead) {
+        const w = 44;
+        const h = 24;
+        const top = yBottom - h;
+        // Body + extended head
+        ctx.fillRect(x, top + 4, 30, 14);
+        ctx.fillRect(x + 26, top, 18, 13);
+        ctx.fillRect(x + 36, top + 11, 6, 3);
+        // Tail
+        ctx.fillRect(x - 6, top + 2, 6, 8);
+        ctx.fillRect(x - 10, top, 4, 6);
+        // Eye
+        ctx.fillStyle = eyeCutoutColor;
+        ctx.fillRect(x + 33, top + 3, 3, 3);
+        // Legs
+        ctx.fillStyle = color;
+        const step = Math.floor(frame / 6) % 2;
+        if (step === 0) {
+          ctx.fillRect(x + 6, top + 18, 4, 6);
+          ctx.fillRect(x + 18, top + 18, 4, 3);
+        } else {
+          ctx.fillRect(x + 6, top + 18, 4, 3);
+          ctx.fillRect(x + 18, top + 18, 4, 6);
+        }
+        return;
+      }
+
+      const top = yBottom - 42;
+      // Head
+      ctx.fillRect(x + 14, top, 20, 14);
+      ctx.fillRect(x + 34, top + 3, 4, 8);
+      // Mouth gap
+      ctx.fillStyle = eyeCutoutColor;
+      ctx.fillRect(x + 25, top + 10, 13, 2);
+      // Eye
+      if (isDead) {
+        ctx.fillRect(x + 19, top + 3, 5, 5);
+        ctx.fillStyle = color;
+        ctx.fillRect(x + 20, top + 4, 3, 3);
+      } else {
+        ctx.fillRect(x + 20, top + 3, 3, 3);
+      }
+
+      ctx.fillStyle = color;
+      // Neck & torso
+      ctx.fillRect(x + 12, top + 14, 14, 16);
+      ctx.fillRect(x + 6, top + 18, 8, 14);
+      // Tiny arm
+      ctx.fillRect(x + 26, top + 18, 6, 3);
+      ctx.fillRect(x + 29, top + 21, 3, 3);
+      // Tail
+      ctx.fillRect(x, top + 16, 6, 12);
+      ctx.fillRect(x - 4, top + 12, 4, 10);
+      ctx.fillRect(x - 7, top + 8, 3, 8);
+
+      // Legs
+      const step = Math.floor(frame / 6) % 2;
+      if (isDead || yBottom < GROUND_Y - 1) {
+        ctx.fillRect(x + 9, top + 30, 4, 12);
+        ctx.fillRect(x + 19, top + 30, 4, 12);
+      } else if (step === 0) {
+        ctx.fillRect(x + 9, top + 30, 4, 12);
+        ctx.fillRect(x + 19, top + 30, 4, 7);
+        ctx.fillRect(x + 21, top + 35, 4, 2);
+      } else {
+        ctx.fillRect(x + 9, top + 30, 4, 7);
+        ctx.fillRect(x + 11, top + 35, 4, 2);
+        ctx.fillRect(x + 19, top + 30, 4, 12);
+      }
+    };
+
+    const drawCactus = (ctx, obs, groundY, color) => {
+      ctx.fillStyle = color;
+      const drawSingle = (cx, h, w) => {
+        const top = groundY - h;
+        ctx.fillRect(cx + Math.floor(w * 0.3), top, Math.ceil(w * 0.4), h);
+        // Left arm
+        ctx.fillRect(cx, top + Math.floor(h * 0.32), Math.floor(w * 0.35), 4);
+        ctx.fillRect(cx, top + Math.floor(h * 0.16), 4, Math.floor(h * 0.2));
+        // Right arm
+        ctx.fillRect(cx + Math.floor(w * 0.65), top + Math.floor(h * 0.42), Math.ceil(w * 0.35), 4);
+        ctx.fillRect(cx + w - 4, top + Math.floor(h * 0.24), 4, Math.floor(h * 0.22));
+      };
+
+      if (obs.variant === 'double') {
+        drawSingle(obs.x, obs.h, 16);
+        drawSingle(obs.x + 18, Math.max(24, obs.h - 6), 14);
+      } else {
+        drawSingle(obs.x, obs.h, obs.w);
+      }
+    };
+
+    const drawPtero = (ctx, obs, frame, color) => {
+      ctx.fillStyle = color;
+      const flap = Math.floor(frame / 10) % 2 === 0;
+      const y = obs.y;
+      // Body & beak
+      ctx.fillRect(obs.x + 10, y + 8, 22, 8);
+      ctx.fillRect(obs.x, y + 10, 12, 5);
+      // Wings
+      if (flap) {
+        ctx.fillRect(obs.x + 14, y, 10, 8);
+        ctx.fillRect(obs.x + 16, y - 4, 6, 4);
+      } else {
+        ctx.fillRect(obs.x + 14, y + 16, 10, 8);
+        ctx.fillRect(obs.x + 16, y + 24, 6, 4);
+      }
+    };
+
+    let lastUiSyncScore = 0;
+
+    const loop = () => {
+      const st = stateRef.current;
+      const bgFill = darkMode ? '#0f172a' : '#f8fafc';
+      const fgColor = darkMode ? '#e2e8f0' : '#334155';
+      const mutedColor = darkMode ? '#475569' : '#cbd5e1';
+      const accentColor = '#fbbf24';
+
+      ctx.fillStyle = bgFill;
+      ctx.fillRect(0, 0, W, H);
+
+      // Clouds
+      ctx.fillStyle = mutedColor;
+      st.clouds.forEach(c => {
+        if (st.status === 'playing') {
+          c.x -= c.speed;
+          if (c.x < -50) c.x = W + 30;
+        }
+        ctx.fillRect(c.x, c.y, 34, 8);
+        ctx.fillRect(c.x + 8, c.y - 5, 18, 6);
+      });
+
+      // Ground line & pebbles
+      ctx.fillStyle = fgColor;
+      ctx.fillRect(0, GROUND_Y, W, 2);
+      if (st.status === 'playing') {
+        st.groundOffset = (st.groundOffset + st.speed) % 48;
+      }
+      for (let gx = -st.groundOffset; gx < W; gx += 48) {
+        ctx.fillRect(gx + 8, GROUND_Y + 6, 10, 2);
+        ctx.fillRect(gx + 28, GROUND_Y + 10, 6, 2);
+      }
+
+      if (st.status === 'playing') {
+        st.frame += 1;
+        st.dinoY += st.dinoVy;
+        if (st.dinoY > 0) {
+          st.dinoVy -= st.isDucking ? GRAVITY * 1.65 : GRAVITY;
+        } else {
+          st.dinoY = 0;
+          st.dinoVy = 0;
+        }
+
+        st.speed = Math.min(13.5, 6.2 + st.score * 0.0022);
+        st.score += 0.18;
+        const intScore = Math.floor(st.score);
+        if (intScore !== lastUiSyncScore) {
+          lastUiSyncScore = intScore;
+          setScore(intScore);
+        }
+
+        st.nextSpawnIn -= 1;
+        if (st.nextSpawnIn <= 0) {
+          const canSpawnBird = st.score > 140 && Math.random() < 0.28;
+          if (canSpawnBird) {
+            const heights = [GROUND_Y - 26, GROUND_Y - 46, GROUND_Y - 64];
+            st.obstacles.push({
+              type: 'bird',
+              x: W + 20,
+              y: heights[Math.floor(Math.random() * heights.length)],
+              w: 32,
+              h: 22
+            });
+          } else {
+            const isDouble = Math.random() < 0.38;
+            const h = isDouble ? 34 : (Math.random() < 0.5 ? 38 : 28);
+            st.obstacles.push({
+              type: 'cactus',
+              variant: isDouble ? 'double' : 'single',
+              x: W + 20,
+              y: GROUND_Y - h,
+              w: isDouble ? 32 : 18,
+              h
+            });
+          }
+          const minGap = Math.max(44, Math.floor(82 - st.speed * 2.4));
+          st.nextSpawnIn = minGap + Math.floor(Math.random() * 42);
+        }
+
+        // Move & check collision
+        const dinoBottom = GROUND_Y - st.dinoY;
+        const dinoBox = st.isDucking
+          ? { x: DINO_X + 4, y: dinoBottom - 20, w: 34, h: 18 }
+          : { x: DINO_X + 6, y: dinoBottom - 36, w: 22, h: 33 };
+
+        for (let i = st.obstacles.length - 1; i >= 0; i--) {
+          const obs = st.obstacles[i];
+          obs.x -= st.speed;
+          if (obs.x + obs.w < -20) {
+            st.obstacles.splice(i, 1);
+            continue;
+          }
+
+          const obsBox = {
+            x: obs.x + 3,
+            y: obs.y + 3,
+            w: Math.max(8, obs.w - 6),
+            h: Math.max(8, obs.h - 5)
+          };
+
+          const hit =
+            dinoBox.x < obsBox.x + obsBox.w &&
+            dinoBox.x + dinoBox.w > obsBox.x &&
+            dinoBox.y < obsBox.y + obsBox.h &&
+            dinoBox.y + dinoBox.h > obsBox.y;
+
+          if (hit) {
+            st.status = 'gameover';
+            st.isDucking = false;
+            const finalScore = Math.floor(st.score);
+            setScore(finalScore);
+            setGameState('gameover');
+            setHighScore(prev => {
+              const best = Math.max(prev, finalScore);
+              try {
+                localStorage.setItem('bge_dino_highscore_v1', String(best));
+              } catch {
+                // ignore
+              }
+              return best;
+            });
+            break;
+          }
+        }
+      }
+
+      // Draw obstacles
+      st.obstacles.forEach(obs => {
+        if (obs.type === 'bird') {
+          drawPtero(ctx, obs, st.frame, accentColor);
+        } else {
+          drawCactus(ctx, obs, GROUND_Y, darkMode ? '#34d399' : '#059669');
+        }
+      });
+
+      // Draw Dino
+      const dinoBottom = GROUND_Y - st.dinoY;
+      drawPixelDino(
+        ctx,
+        DINO_X,
+        dinoBottom,
+        st.frame,
+        st.isDucking,
+        st.status === 'gameover',
+        fgColor,
+        bgFill
+      );
+
+      animId = requestAnimationFrame(loop);
+    };
+
+    animId = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(animId);
+  }, [darkMode]);
+
+  return (
+    <div className={`w-full max-w-xl mx-auto rounded-2xl border p-3.5 sm:p-4 shadow-lg select-none ${
+      darkMode ? 'bg-slate-900/95 border-slate-800' : 'bg-white border-slate-200'
+    }`}>
+      <div className="flex items-center justify-between gap-2 mb-2 px-1">
+        <div className="flex items-center gap-2">
+          <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase tracking-wider bg-amber-400/20 text-amber-500 border border-amber-400/30">
+            Várakozó minijáték
+          </span>
+          <span className={`text-[11px] hidden sm:inline ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+            Ugrás: Szóköz / ↑ / Koppintás
+          </span>
+        </div>
+        <div className="flex items-center gap-3 font-mono text-xs sm:text-sm font-extrabold">
+          {highScore > 0 && (
+            <span className={darkMode ? 'text-slate-400' : 'text-slate-500'}>
+              HI {String(highScore).padStart(5, '0')}
+            </span>
+          )}
+          <span className={darkMode ? 'text-amber-400' : 'text-slate-900'}>
+            {String(score).padStart(5, '0')}
+          </span>
+        </div>
+      </div>
+
+      <div
+        onPointerDown={(e) => {
+          e.preventDefault();
+          triggerJump();
+        }}
+        className={`relative rounded-xl overflow-hidden border cursor-pointer touch-none ${
+          darkMode ? 'border-slate-700/80 bg-slate-950' : 'border-slate-200 bg-slate-50'
+        }`}
+      >
+        <canvas
+          ref={canvasRef}
+          width={640}
+          height={185}
+          className="w-full h-auto block"
+        />
+
+        {gameState === 'idle' && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/20 backdrop-blur-[1px] p-2 text-center">
+            <span className="px-4 py-1.5 rounded-full text-xs sm:text-sm font-extrabold bg-amber-400 text-slate-950 shadow-md">
+              Kattints vagy nyomj Szóközt az induláshoz!
+            </span>
+          </div>
+        )}
+
+        {gameState === 'gameover' && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-950/55 backdrop-blur-[1.5px] p-3 text-center gap-2">
+            <p className="text-sm sm:text-base font-black tracking-wider uppercase text-white">
+              Game Over • {score} pont
+            </p>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                triggerJump();
+              }}
+              className="px-4 py-1.5 rounded-xl text-xs sm:text-sm font-extrabold bg-amber-400 hover:bg-amber-300 text-slate-950 inline-flex items-center gap-1.5 shadow-md transition cursor-pointer"
+            >
+              <RotateCcw className="w-3.5 h-3.5" /> Újra
+            </button>
+          </div>
+        )}
+      </div>
+
+      <p className={`text-[11px] text-center mt-2 sm:hidden ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+        Koppints a játéktérre az ugráshoz!
+      </p>
+    </div>
+  );
+}
+
+function MaintenanceRepairIllustration({ darkMode }) {
+  return (
+    <div className="relative w-full max-w-sm mx-auto py-2 select-none">
+      <div className={`relative rounded-3xl border-2 p-5 sm:p-6 overflow-hidden shadow-xl ${
+        darkMode
+          ? 'bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 border-amber-400/40'
+          : 'bg-gradient-to-b from-amber-50/90 via-white to-slate-50 border-amber-300'
+      }`}>
+        {/* Decorative blueprint grid */}
+        <svg
+          viewBox="0 0 360 210"
+          className="w-full h-auto mx-auto overflow-visible"
+          role="img"
+          aria-label="Csavarkulcs, szerelő doboz és fúrógép szerelik a BGE Progress logóját"
+        >
+          <defs>
+            <linearGradient id="toolboxGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stopColor="#ef4444" />
+              <stop offset="100%" stopColor="#b91c1c" />
+            </linearGradient>
+            <linearGradient id="drillBodyGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor="#fbbf24" />
+              <stop offset="100%" stopColor="#d97706" />
+            </linearGradient>
+            <linearGradient id="wrenchGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor="#cbd5e1" />
+              <stop offset="100%" stopColor="#64748b" />
+            </linearGradient>
+          </defs>
+
+          {/* Subtle background gears */}
+          <g opacity={darkMode ? '0.16' : '0.14'} stroke="#f59e0b" strokeWidth="2.5" fill="none">
+            <circle cx="62" cy="46" r="18" strokeDasharray="6 4" />
+            <circle cx="62" cy="46" r="7" />
+            <circle cx="304" cy="44" r="22" strokeDasharray="7 4" />
+            <circle cx="304" cy="44" r="9" />
+          </g>
+
+          {/* Center glowing badge around the App Logo */}
+          <circle
+            cx="180"
+            cy="92"
+            r="56"
+            fill={darkMode ? 'rgba(251, 191, 36, 0.12)' : 'rgba(251, 191, 36, 0.22)'}
+            stroke="#fbbf24"
+            strokeWidth="2.5"
+            strokeDasharray="8 5"
+          />
+
+          {/* Sparks around the logo being repaired */}
+          <g fill="#fbbf24">
+            <polygon points="122,52 125,60 133,63 125,66 122,74 119,66 111,63 119,60" />
+            <polygon points="238,46 240,52 246,54 240,56 238,62 236,56 230,54 236,52" />
+            <circle cx="132" cy="126" r="3" />
+            <circle cx="232" cy="122" r="3.5" />
+          </g>
+
+          {/* LEFT TOOL: Wrench (Csavarkulcs) tightening the logo */}
+          <g transform="translate(52, 56) rotate(-24)">
+            {/* Wrench shaft */}
+            <rect x="24" y="20" width="66" height="14" rx="7" fill="url(#wrenchGrad)" stroke="#334155" strokeWidth="2" />
+            <rect x="34" y="24" width="44" height="5" rx="2.5" fill="#475569" opacity="0.45" />
+            {/* Left open jaw */}
+            <path
+              d="M 28 13 C 14 9, 4 16, 4 27 C 4 38, 14 45, 28 41 L 28 33 L 16 33 L 16 21 L 28 21 Z"
+              fill="url(#wrenchGrad)"
+              stroke="#334155"
+              strokeWidth="2"
+              strokeLinejoin="round"
+            />
+            {/* Right jaw gripping the logo */}
+            <path
+              d="M 84 12 C 98 8, 110 15, 110 27 C 110 39, 98 46, 84 42 L 84 34 L 97 34 L 97 20 L 84 20 Z"
+              fill="url(#wrenchGrad)"
+              stroke="#334155"
+              strokeWidth="2"
+              strokeLinejoin="round"
+            />
+          </g>
+
+          {/* RIGHT TOOL: Cordless Drill (Fúrógép) working on the logo */}
+          <g transform="translate(226, 58) rotate(12)">
+            {/* Drill chuck & bit pointing toward the logo */}
+            <rect x="-24" y="21" width="22" height="4" rx="1.5" fill="#94a3b8" stroke="#334155" strokeWidth="1.2" />
+            <line x1="-22" y1="21" x2="-18" y2="25" stroke="#334155" strokeWidth="1.3" />
+            <line x1="-15" y1="21" x2="-11" y2="25" stroke="#334155" strokeWidth="1.3" />
+            <line x1="-8" y1="21" x2="-4" y2="25" stroke="#334155" strokeWidth="1.3" />
+            {/* Chuck */}
+            <rect x="-4" y="16" width="14" height="14" rx="3" fill="#334155" />
+            <rect x="2" y="17" width="4" height="12" fill="#64748b" />
+            {/* Motor housing */}
+            <rect x="10" y="11" width="52" height="24" rx="8" fill="url(#drillBodyGrad)" stroke="#78350f" strokeWidth="2" />
+            <rect x="22" y="15" width="24" height="5" rx="2" fill="#fef3c7" opacity="0.65" />
+            {/* Ventilation slots */}
+            <line x1="50" y1="16" x2="50" y2="30" stroke="#78350f" strokeWidth="2" />
+            <line x1="55" y1="16" x2="55" y2="30" stroke="#78350f" strokeWidth="2" />
+            {/* Trigger */}
+            <path d="M 24 35 L 24 44 L 30 44" fill="none" stroke="#1e293b" strokeWidth="3" strokeLinecap="round" />
+            {/* Grip handle */}
+            <path d="M 32 35 L 40 64 L 54 64 L 48 35 Z" fill="#1e293b" />
+            {/* Battery pack at bottom */}
+            <rect x="33" y="62" width="28" height="11" rx="3" fill="#f59e0b" stroke="#78350f" strokeWidth="1.8" />
+          </g>
+
+          {/* BOTTOM TOOLBOX (Szerelő doboz) */}
+          <g transform="translate(122, 148)">
+            {/* Handle */}
+            <path
+              d="M 40 12 L 40 4 C 40 1, 43 0, 46 0 L 70 0 C 73 0, 76 1, 76 4 L 76 12"
+              fill="none"
+              stroke="#475569"
+              strokeWidth="4.5"
+              strokeLinecap="round"
+            />
+            {/* Box body */}
+            <rect x="6" y="11" width="104" height="44" rx="7" fill="url(#toolboxGrad)" stroke="#7f1d1d" strokeWidth="2" />
+            {/* Lid seam */}
+            <line x1="6" y1="24" x2="110" y2="24" stroke="#7f1d1d" strokeWidth="2.2" />
+            {/* Metallic latches */}
+            <rect x="26" y="20" width="10" height="9" rx="2" fill="#fbbf24" stroke="#78350f" strokeWidth="1.5" />
+            <rect x="80" y="20" width="10" height="9" rx="2" fill="#fbbf24" stroke="#78350f" strokeWidth="1.5" />
+            {/* Center emblem */}
+            <rect x="49" y="32" width="18" height="12" rx="3" fill="#fef2f2" opacity="0.9" />
+            <path d="M 58 34 L 58 42 M 54 38 L 62 38" stroke="#dc2626" strokeWidth="2.4" strokeLinecap="round" />
+          </g>
+        </svg>
+
+        {/* App Logo centered over the glowing workbench circle */}
+        <div className="pointer-events-none absolute inset-x-0 top-[21%] sm:top-[22%] flex justify-center">
+          <div className={`w-20 h-20 sm:w-24 sm:h-24 rounded-2xl p-2 flex items-center justify-center shadow-lg border ${
+            darkMode ? 'bg-slate-900/95 border-amber-400/50' : 'bg-white/95 border-amber-300'
+          }`}>
+            <img
+              src="/logo.png"
+              onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = 'https://tudasterkep.uni-bge.hu/images/logo.png'; }}
+              alt="BGE Progress Logó"
+              className="w-full h-full object-contain"
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem('bge_theme') === 'dark');
   const [monochrome, setMonochrome] = useState(() => localStorage.getItem('bge_palette') === 'monochrome');
@@ -1935,6 +2521,66 @@ export default function App() {
     () => Boolean(user?.email && ADMIN_EMAILS.includes(user.email.toLowerCase())),
     [user]
   );
+
+  const [isMaintenanceMode, setIsMaintenanceMode] = useState(false);
+  const [maintenanceLoaded, setMaintenanceLoaded] = useState(false);
+  const [isTogglingMaintenance, setIsTogglingMaintenance] = useState(false);
+  const [wasInMaintenanceScreen, setWasInMaintenanceScreen] = useState(false);
+  const [showMaintenanceFinishedRefresh, setShowMaintenanceFinishedRefresh] = useState(false);
+
+  useEffect(() => {
+    const maintDocRef = doc(db, 'appConfig', 'maintenance');
+    const unsubMaint = onSnapshot(
+      maintDocRef,
+      (snap) => {
+        const enabled = snap.exists() ? Boolean(snap.data()?.enabled) : false;
+        setIsMaintenanceMode(enabled);
+        setMaintenanceLoaded(true);
+      },
+      (err) => {
+        console.warn('Karbantartás állapot lekérdezési hiba:', err?.code || err?.message);
+        setMaintenanceLoaded(true);
+      }
+    );
+    return () => unsubMaint();
+  }, []);
+
+  useEffect(() => {
+    if (!maintenanceLoaded) return;
+    if (isMaintenanceMode && !isAdmin) {
+      setWasInMaintenanceScreen(true);
+      setShowMaintenanceFinishedRefresh(false);
+    } else if (!isMaintenanceMode && wasInMaintenanceScreen) {
+      setShowMaintenanceFinishedRefresh(true);
+    }
+  }, [isMaintenanceMode, maintenanceLoaded, isAdmin, wasInMaintenanceScreen]);
+
+  const handleToggleMaintenanceMode = async () => {
+    if (!isAdmin || isTogglingMaintenance) return;
+    const nextEnabled = !isMaintenanceMode;
+    setIsTogglingMaintenance(true);
+    try {
+      await setDoc(
+        doc(db, 'appConfig', 'maintenance'),
+        {
+          enabled: nextEnabled,
+          updatedAt: serverTimestamp(),
+          updatedAtMs: Date.now(),
+          updatedBy: user?.email || CREATOR_EMAIL
+        },
+        { merge: true }
+      );
+      showToast(
+        nextEnabled
+          ? 'Maintenance mód BEKAPCSOLVA! Csak te (admin) férsz hozzá az oldalhoz.'
+          : 'Maintenance mód KIKAPCSOLVA! A felhasználóknál megjelent a frissítés gomb.'
+      );
+    } catch (err) {
+      alert('Hiba a Maintenance mód váltásakor: ' + err.message);
+    } finally {
+      setIsTogglingMaintenance(false);
+    }
+  };
 
   const inAppBrowser = useMemo(() => detectInAppBrowser(), []);
   const [linkCopied, setLinkCopied] = useState(false);
@@ -5196,10 +5842,108 @@ export default function App() {
     ? 'bg-slate-800 border-slate-700 text-white placeholder-slate-500 focus:border-amber-400 text-base sm:text-sm'
     : 'bg-white border-slate-300 text-slate-900 placeholder-slate-400 focus:border-amber-400 text-base sm:text-sm';
 
-  if (authLoading) {
+  if (authLoading || !maintenanceLoaded) {
     return (
       <div className={`min-h-screen flex items-center justify-center ${bgPage}`}>
         <div className="w-8 h-8 border-4 border-amber-400 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (isMaintenanceMode && !isAdmin) {
+    return (
+      <div className={`min-h-screen flex flex-col items-center justify-center p-4 sm:p-6 transition-colors duration-200 ${bgPage}`}>
+        <button
+          type="button"
+          onClick={() => setDarkMode(!darkMode)}
+          title={darkMode ? 'Világos mód' : 'Sötét mód'}
+          className={`fixed top-4 right-4 z-30 p-2.5 rounded-xl border transition cursor-pointer ${
+            darkMode
+              ? 'bg-slate-900 hover:bg-slate-800 text-amber-300 border-slate-700'
+              : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200 shadow-sm'
+          }`}
+        >
+          {darkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+        </button>
+
+        <div className="max-w-2xl w-full text-center space-y-5 sm:space-y-6 my-auto">
+          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-amber-400/20 text-amber-500 border border-amber-400/40 text-xs font-extrabold uppercase tracking-wider">
+            <Wrench className="w-3.5 h-3.5" />
+            <span>Karbantartás folyamatban</span>
+          </div>
+
+          <MaintenanceRepairIllustration darkMode={darkMode} />
+
+          <div className="space-y-2 px-2">
+            <h1 className={`text-xl sm:text-2xl font-extrabold tracking-tight ${textStrong}`}>
+              BGE Progress • Rendszerfrissítés
+            </h1>
+            <p className={`text-sm sm:text-base font-semibold leading-relaxed max-w-xl mx-auto ${
+              darkMode ? 'text-slate-200' : 'text-slate-700'
+            }`}>
+              Csongi épp karbantartást vagy új frissítéseket hoz az alkalmazásba. Hamarosan végez, és tudod folytatni az app használatát. Köszönöm a türelmed!
+            </p>
+          </div>
+
+          <DinoRunnerGame darkMode={darkMode} />
+
+          <div className="pt-1 flex flex-col items-center gap-2">
+            {!user ? (
+              <button
+                type="button"
+                onClick={handleLogin}
+                className={`text-[11px] underline decoration-dotted underline-offset-4 hover:text-amber-500 transition cursor-pointer ${textMuted}`}
+              >
+                Adminisztrátori belépés
+              </button>
+            ) : (
+              <div className="flex items-center gap-3 text-[11px]">
+                <span className={textMuted}>Bejelentkezve: {user.email}</span>
+                <button
+                  type="button"
+                  onClick={() => signOut(auth)}
+                  className="text-rose-500 hover:underline font-semibold cursor-pointer"
+                >
+                  Kijelentkezés
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (showMaintenanceFinishedRefresh && !isAdmin) {
+    return (
+      <div className={`min-h-screen flex items-center justify-center p-4 transition-colors duration-200 ${bgPage}`}>
+        <div className={`border-2 border-emerald-500/70 max-w-md w-full rounded-3xl p-6 sm:p-8 shadow-2xl text-center space-y-5 ${bgCard}`}>
+          <div className="w-16 h-16 rounded-2xl bg-emerald-500/15 border border-emerald-500/40 text-emerald-500 flex items-center justify-center mx-auto">
+            <CheckCircle2 className="w-9 h-9" />
+          </div>
+
+          <div className="space-y-2">
+            <span className="inline-block px-3 py-1 rounded-full text-[11px] font-extrabold uppercase tracking-wider bg-emerald-500/20 text-emerald-500">
+              Karbantartás befejezve
+            </span>
+            <h1 className={`text-xl sm:text-2xl font-extrabold ${textStrong}`}>
+              Elkészült a frissítés!
+            </h1>
+            <p className={`text-xs sm:text-sm leading-relaxed ${textMuted}`}>
+              Csongi végzett a karbantartással. Kattints az alábbi frissítés gombra, hogy betöltsd a legújabb verziót és folytasd az alkalmazás használatát!
+            </p>
+          </div>
+
+          <button
+            type="button"
+            disabled={isReloadingApp}
+            onClick={handleReloadForUpdate}
+            className="w-full py-3.5 px-5 rounded-2xl text-sm sm:text-base font-extrabold bg-emerald-500 hover:bg-emerald-400 text-white shadow-lg shadow-emerald-500/25 flex items-center justify-center gap-2.5 transition cursor-pointer disabled:opacity-60"
+          >
+            <RefreshCw className={`w-5 h-5 ${isReloadingApp ? 'animate-spin' : ''}`} />
+            <span>{isReloadingApp ? 'Oldal frissítése...' : 'Oldal frissítése'}</span>
+          </button>
+        </div>
       </div>
     );
   }
@@ -5892,13 +6636,65 @@ export default function App() {
 
       {activeView === 'home' ? (
         <>
+          {isAdmin && isMaintenanceMode && (
+            <div className="bg-amber-400 text-slate-950 text-xs font-bold px-3 sm:px-4 py-2 text-center flex flex-wrap items-center justify-center gap-2 shadow-sm">
+              <Wrench className="w-4 h-4 shrink-0" />
+              <span>
+                <strong>Maintenance mód AKTÍV:</strong> Jelenleg csak te (admin) éred el az alkalmazást, mindenki más a karbantartási képernyőt és a Dino játékot látja.
+              </span>
+              <button
+                type="button"
+                disabled={isTogglingMaintenance}
+                onClick={handleToggleMaintenanceMode}
+                className="px-2.5 py-1 rounded-lg bg-slate-950 text-amber-400 hover:bg-slate-800 text-[11px] font-extrabold transition cursor-pointer"
+              >
+                Kikapcsolás most
+              </button>
+            </div>
+          )}
+
           <div className="max-w-6xl mx-auto px-3 sm:px-4 pt-3 sm:pt-4 flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-1.5 min-w-0 max-w-full">
+            <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 max-w-full flex-wrap">
               <span className={`text-[11px] sm:text-xs truncate max-w-[155px] sm:max-w-xs ${textMuted}`}>{user.email}</span>
               {isAdmin && (
-                <span className="px-2 py-0.5 text-[10px] font-bold uppercase rounded-full bg-amber-400/20 text-amber-500 border border-amber-400/30 shrink-0">
-                  Admin
-                </span>
+                <>
+                  <span className="px-2 py-0.5 text-[10px] font-bold uppercase rounded-full bg-amber-400/20 text-amber-500 border border-amber-400/30 shrink-0">
+                    Admin
+                  </span>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={isMaintenanceMode}
+                    disabled={isTogglingMaintenance}
+                    onClick={handleToggleMaintenanceMode}
+                    title="Maintenance mód be- vagy kikapcsolása"
+                    className={`px-2.5 py-1 rounded-full border text-[11px] font-extrabold inline-flex items-center gap-2 transition cursor-pointer shrink-0 ${
+                      isMaintenanceMode
+                        ? 'bg-amber-400 text-slate-950 border-amber-500 shadow-sm'
+                        : darkMode
+                          ? 'bg-slate-900 hover:bg-slate-800 text-slate-200 border-slate-700'
+                          : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200 shadow-2xs'
+                    }`}
+                  >
+                    <Wrench className={`w-3.5 h-3.5 ${isMaintenanceMode ? 'text-slate-950' : 'text-amber-500'}`} />
+                    <span>Maintenance</span>
+                    <span
+                      className={`relative inline-flex h-4 w-7 items-center rounded-full transition-colors ${
+                        isMaintenanceMode
+                          ? 'bg-slate-950'
+                          : darkMode ? 'bg-slate-700' : 'bg-slate-300'
+                      }`}
+                    >
+                      <span
+                        className={`inline-block h-3 w-3 transform rounded-full transition-transform ${
+                          isMaintenanceMode
+                            ? 'translate-x-3.5 bg-amber-400'
+                            : 'translate-x-0.5 bg-white'
+                        }`}
+                      />
+                    </span>
+                  </button>
+                </>
               )}
             </div>
             <div className="flex items-center gap-1.5 sm:gap-2 ml-auto flex-wrap justify-end">

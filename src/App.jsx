@@ -631,6 +631,14 @@ function buildTemplatesForMajor(majorId) {
 
 const APP_RELEASES = [
   {
+    version: 'v2.0.1',
+    date: '2026. 11. 19.',
+    changes: [
+      'Jelenlét fül görgetésének javítása: a tantárgy részletei ablakban a Jelenlét fülre váltáskor mostantól mindig a lista legtetejéről indul a nézet',
+      'Új tárgy felvétele / beállítások szövegezésének pontosítása: a „Pontszámítás kikapcsolása (csak jegy)” kapcsoló helyett az „Intenzív heti kurzus?” opció jelenik meg egyértelmű magyarázattal'
+    ]
+  },
+  {
     version: 'v2.0.0',
     date: '2026. 11. 18.',
     changes: [
@@ -2046,6 +2054,13 @@ export default function App() {
 
   const [activeSubjectId, setActiveSubjectId] = useState(null);
   const [detailTab, setDetailTab] = useState('points');
+  const detailModalBodyRef = useRef(null);
+
+  useEffect(() => {
+    if (detailModalBodyRef.current) {
+      detailModalBodyRef.current.scrollTop = 0;
+    }
+  }, [detailTab, activeSubjectId]);
   const [editingSubject, setEditingSubject] = useState(null);
   const [isSubjectModalOpen, setIsSubjectModalOpen] = useState(false);
   const [selectedSubjectMajorId, setSelectedSubjectMajorId] = useState(null);
@@ -9513,7 +9528,13 @@ export default function App() {
               {!st.isExamCourse && !st.disablePointCalc && (
                 <div className={`flex border-b px-3 sm:px-6 shrink-0 ${darkMode ? 'border-slate-800 bg-slate-900/50' : 'border-slate-200 bg-slate-50'}`}>
                   <button
-                    onClick={() => setDetailTab('points')}
+                    type="button"
+                    onClick={() => {
+                      setDetailTab('points');
+                      if (detailModalBodyRef.current) {
+                        detailModalBodyRef.current.scrollTop = 0;
+                      }
+                    }}
                     className={`py-3 px-3 sm:px-4 text-xs sm:text-sm font-semibold border-b-2 transition cursor-pointer ${
                       detailTab === 'points'
                         ? 'border-amber-400 text-amber-500'
@@ -9523,7 +9544,13 @@ export default function App() {
                     Pontszámok és ZH-k
                   </button>
                   <button
-                    onClick={() => setDetailTab('attendance')}
+                    type="button"
+                    onClick={() => {
+                      setDetailTab('attendance');
+                      if (detailModalBodyRef.current) {
+                        detailModalBodyRef.current.scrollTop = 0;
+                      }
+                    }}
                     className={`py-3 px-3 sm:px-4 text-xs sm:text-sm font-semibold border-b-2 transition cursor-pointer flex items-center gap-2 ${
                       detailTab === 'attendance'
                         ? 'border-amber-400 text-amber-500'
@@ -9544,7 +9571,11 @@ export default function App() {
                 </div>
               )}
 
-              <div className="p-4 sm:p-6 overflow-y-auto overscroll-contain space-y-5 sm:space-y-6 flex-1 min-h-0">
+              <div
+                ref={detailModalBodyRef}
+                style={{ overflowAnchor: 'none' }}
+                className="p-4 sm:p-6 overflow-y-auto overscroll-contain space-y-5 sm:space-y-6 flex-1 min-h-0"
+              >
                 {st.disablePointCalc ? (
                   <div className="space-y-4">
                     <div className={`p-5 rounded-2xl border-2 text-center space-y-3 ${
@@ -11145,10 +11176,10 @@ export default function App() {
                       <div className="flex items-center justify-between gap-3">
                         <div className="min-w-0">
                           <p className={`text-xs sm:text-sm font-extrabold ${textStrong}`}>
-                            Pontszámítás kikapcsolása (csak jegy)
+                            Intenzív heti kurzus?
                           </p>
                           <p className={`text-[11px] mt-0.5 ${textMuted}`}>
-                            Ha ennél a tárgynál nem pontokat gyűjtesz, állítsd be közvetlenül a megajánlott / végleges jegyet.
+                            Ha intenzív heti kurzust veszel fel, csak kapcsold be ezt az opciót, és ha megkaptad a jegyedet belőle, csak írd be.
                           </p>
                         </div>
                         <button

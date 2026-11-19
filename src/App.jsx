@@ -44,7 +44,7 @@ const NOTICEBOARD_CACHE_KEY = 'bge_noticeboard_cache_v1';
 const NOTICEBOARD_CACHE_TTL_MS = 10 * 60 * 1000;
 const SEEN_NOTICES_STORAGE_KEY = 'bge_seen_notice_ids_v1';
 const UPDATE_CHECK_THROTTLE_MS = 30 * 1000;
-const GDPR_POLICY_VERSION = 'v2.0.2';
+const GDPR_POLICY_VERSION = 'v2.0.3.1';
 
 const BGE_MAJORS = [
   { id: 'emberi_eroforrasok', label: 'Emberi erőforrások', isGazdinfo: false },
@@ -634,6 +634,15 @@ function buildTemplatesForMajor(majorId) {
 }
 
 const APP_RELEASES = [
+  {
+    version: 'v2.0.3.1',
+    date: '2026. 11. 19.',
+    changes: [
+      'Kötelező szakválasztás bejelentkezés után (új és korábbi felhasználóknak egyaránt): a BGE alapszakjai közül kiválasztott szakod elmentődik a profilodba, megjelenik a jobb felső Menüben, és szakváltás esetén ott bármikor módosítható',
+      'Célzott Faliújság közlemények: adminként minden új közleménynél kiválasztható, hogy az csak a Gazdaságinformatikus hallgatóknak vagy szaktól függetlenül minden felhasználónak jelenjen meg',
+      'Frissített adatvédelmi tájékoztató (GDPR): átláthatóan rögzíti, hogy a kiválasztott szakadatot sem gyűjti vagy adja tovább a rendszer, kizárólag a személyre szabott funkciók (pl. szakspecifikus hirdetmények) működtetéséhez tárolja biztonságosan'
+    ]
+  },
   {
     version: 'v2.0.3',
     date: '2026. 11. 19.',
@@ -1917,6 +1926,11 @@ export default function App() {
   const [gdprCheckboxChecked, setGdprCheckboxChecked] = useState(false);
   const [isSavingGdpr, setIsSavingGdpr] = useState(false);
 
+  const [userMajorId, setUserMajorId] = useState('');
+  const [isMajorSelectModalOpen, setIsMajorSelectModalOpen] = useState(false);
+  const [majorDraftId, setMajorDraftId] = useState('');
+  const [isSavingMajor, setIsSavingMajor] = useState(false);
+
   const isAdmin = useMemo(
     () => Boolean(user?.email && ADMIN_EMAILS.includes(user.email.toLowerCase())),
     [user]
@@ -2078,6 +2092,7 @@ export default function App() {
   const [isAddingNotice, setIsAddingNotice] = useState(false);
   const [newNoticeTitle, setNewNoticeTitle] = useState('');
   const [newNoticeBody, setNewNoticeBody] = useState('');
+  const [newNoticeAudience, setNewNoticeAudience] = useState('all');
   const [isSavingNotice, setIsSavingNotice] = useState(false);
   const [isAddingRelease, setIsAddingRelease] = useState(false);
   const [newReleaseVersion, setNewReleaseVersion] = useState('');
@@ -2432,13 +2447,32 @@ export default function App() {
   }, [user]);
 
   const mustAcceptGdpr = Boolean(user && userDataLoaded && !hasAcceptedGdpr);
+  const mustSelectMajor = Boolean(user && userDataLoaded && hasAcceptedGdpr && !userMajorId);
+
+  const userMajorObj = useMemo(
+    () => BGE_MAJORS.find(m => m.id === userMajorId) || null,
+    [userMajorId]
+  );
+
+  const isUserGazdinfo = Boolean(userMajorObj?.isGazdinfo || userMajorId === 'gazdasaginformatikus');
+
+  const visibleNoticeboardItems = useMemo(() => {
+    return (noticeboardItems || []).filter(notice => {
+      if (isAdmin) return true;
+      const audience = notice.targetAudience || 'all';
+      if (audience === 'gazdinfo') {
+        return isUserGazdinfo;
+      }
+      return true;
+    });
+  }, [noticeboardItems, isAdmin, isUserGazdinfo]);
 
   useEffect(() => {
-    if (!user || !userDataLoaded || mustAcceptGdpr) return;
+    if (!user || !userDataLoaded || mustAcceptGdpr || mustSelectMajor) return;
     if (isGazdinfoOnboardingOpen || isWelcomeOpen || isTutorialOpen || isChangelogOpen) return;
-    if (!noticeboardItems || noticeboardItems.length === 0) return;
+    if (!visibleNoticeboardItems || visibleNoticeboardItems.length === 0) return;
 
-    const latestNotice = noticeboardItems[0];
+    const latestNotice = visibleNoticeboardItems[0];
     if (latestNotice && latestNotice.id && !seenNoticeIds.includes(latestNotice.id)) {
       setActiveNoticePopup(latestNotice);
     }
@@ -2446,11 +2480,12 @@ export default function App() {
     user,
     userDataLoaded,
     mustAcceptGdpr,
+    mustSelectMajor,
     isGazdinfoOnboardingOpen,
     isWelcomeOpen,
     isTutorialOpen,
     isChangelogOpen,
-    noticeboardItems,
+    visibleNoticeboardItems,
     seenNoticeIds
   ]);
 
@@ -2481,10 +2516,12 @@ export default function App() {
     try {
       const nowMs = Date.now();
       const noticeId = `notice_${nowMs}_${Math.random().toString(36).slice(2, 6)}`;
+      const audience = newNoticeAudience === 'gazdinfo' ? 'gazdinfo' : 'all';
       const payload = {
         id: noticeId,
         title: titleTrimmed || 'Közérdekű információ',
         message: bodyTrimmed,
+        targetAudience: audience,
         date: getTodayFormattedHu(),
         createdAt: new Date(nowMs).toISOString(),
         createdAtMs: nowMs,
@@ -2506,8 +2543,13 @@ export default function App() {
 
       setNewNoticeTitle('');
       setNewNoticeBody('');
+      setNewNoticeAudience('all');
       setIsAddingNotice(false);
-      showToast('Közérdekű információ közzétéve a faliújságon!');
+      showToast(
+        audience === 'gazdinfo'
+          ? 'Közlemény közzétéve a Gazdaságinformatikus hallgatóknak!'
+          : 'Közlemény közzétéve minden felhasználónak!'
+      );
     } catch (err) {
       alert('Hiba a közlemény közzétételekor: ' + err.message);
     } finally {
@@ -2611,6 +2653,9 @@ export default function App() {
       setHasAcceptedGdpr(false);
       setGdprCheckboxChecked(false);
       setIsGdprModalOpen(false);
+      setUserMajorId('');
+      setMajorDraftId('');
+      setIsMajorSelectModalOpen(false);
       return;
     }
 
@@ -2677,6 +2722,16 @@ export default function App() {
             setSortMode(data.subjectSortMode);
             localStorage.setItem('bge_subject_sort_mode', data.subjectSortMode);
           }
+          if (typeof data.majorId === 'string' && BGE_MAJORS.some(m => m.id === data.majorId)) {
+            setUserMajorId(data.majorId);
+            try {
+              localStorage.setItem(`bge_user_major_${user.uid}`, data.majorId);
+            } catch {
+              // ignore
+            }
+          } else {
+            setUserMajorId('');
+          }
           if (data.gdprAcceptedVersion === GDPR_POLICY_VERSION) {
             setHasAcceptedGdpr(true);
             try {
@@ -2688,6 +2743,7 @@ export default function App() {
             setHasAcceptedGdpr(false);
           }
         } else {
+          setUserMajorId('');
           setHasAcceptedGdpr(false);
         }
         prefsReady = true;
@@ -2696,8 +2752,11 @@ export default function App() {
       () => {
         try {
           setHasAcceptedGdpr(localStorage.getItem(`bge_gdpr_accepted_${user.uid}`) === GDPR_POLICY_VERSION);
+          const cachedMajor = localStorage.getItem(`bge_user_major_${user.uid}`) || '';
+          setUserMajorId(BGE_MAJORS.some(m => m.id === cachedMajor) ? cachedMajor : '');
         } catch {
           setHasAcceptedGdpr(false);
+          setUserMajorId('');
         }
         prefsReady = true;
         checkAllReady();
@@ -2809,6 +2868,9 @@ export default function App() {
       setHasAcceptedGdpr(true);
       setIsGdprModalOpen(false);
       setGdprCheckboxChecked(false);
+      if (!userMajorId) {
+        setMajorDraftId('');
+      }
       showToast('Adatvédelmi tájékoztató elfogadva. Köszönjük!');
     } catch (err) {
       alert('Hiba az adatvédelmi hozzájárulás mentésekor: ' + err.message);
@@ -2817,16 +2879,59 @@ export default function App() {
     }
   };
 
+  const handleOpenMajorSelectModal = () => {
+    setMajorDraftId(userMajorId || '');
+    setIsMajorSelectModalOpen(true);
+  };
+
+  const handleSaveUserMajor = async (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    if (!user || !majorDraftId || isSavingMajor) return;
+    const chosenMajor = BGE_MAJORS.find(m => m.id === majorDraftId);
+    if (!chosenMajor) return;
+
+    setIsSavingMajor(true);
+    try {
+      const isGazdinfoVal = Boolean(chosenMajor.isGazdinfo);
+      await setDoc(
+        doc(db, 'users', user.uid, 'settings', 'preferences'),
+        {
+          majorId: chosenMajor.id,
+          majorLabel: chosenMajor.label,
+          isGazdinfo: isGazdinfoVal,
+          majorUpdatedAt: serverTimestamp()
+        },
+        { merge: true }
+      );
+      try {
+        localStorage.setItem(`bge_user_major_${user.uid}`, chosenMajor.id);
+        localStorage.setItem('bge_is_gazdinfo', String(isGazdinfoVal));
+      } catch {
+        // ignore
+      }
+      setUserMajorId(chosenMajor.id);
+      setIsMajorSelectModalOpen(false);
+      showToast(`Szak elmentve: ${chosenMajor.label}`);
+    } catch (err) {
+      alert('Hiba a szak mentésekor: ' + err.message);
+    } finally {
+      setIsSavingMajor(false);
+    }
+  };
+
   useEffect(() => {
     if (!user || !userDataLoaded || activeView !== 'home') return;
-    if (mustAcceptGdpr) return;
+    if (mustAcceptGdpr || mustSelectMajor) return;
 
     const alreadySeenLocal = localStorage.getItem('bge_gazdinfo_prompt_seen') === 'true';
     const hasExistingData = subjects.length > 0 || savedSemesterDocs.length > 0;
 
     if (!alreadySeenLocal && !hasServerGazdinfoPref) {
-      if (hasExistingData) {
+      if (hasExistingData || (userMajorObj && !userMajorObj.isGazdinfo)) {
         localStorage.setItem('bge_gazdinfo_prompt_seen', 'true');
+        if (userMajorObj && !userMajorObj.isGazdinfo) {
+          setHasServerGazdinfoPref(true);
+        }
       } else {
         setIsGazdinfoOnboardingOpen(true);
         return;
@@ -2859,6 +2964,8 @@ export default function App() {
     userDataLoaded,
     activeView,
     mustAcceptGdpr,
+    mustSelectMajor,
+    userMajorObj,
     subjects.length,
     savedSemesterDocs.length,
     hasServerGazdinfoPref,
@@ -4441,7 +4548,7 @@ export default function App() {
     setAddedTemplateIds({});
     setTemplateSearch('');
     setTemplateSemesterScope('current');
-    setSelectedSubjectMajorId(null);
+    setSelectedSubjectMajorId(userMajorId || null);
     setSubjectModalMode('template');
     setIsSubjectModalOpen(true);
   };
@@ -4701,8 +4808,8 @@ export default function App() {
   );
 
   const unreadNoticesCount = useMemo(
-    () => noticeboardItems.filter(n => n.id && !seenNoticeIds.includes(n.id)).length,
-    [noticeboardItems, seenNoticeIds]
+    () => visibleNoticeboardItems.filter(n => n.id && !seenNoticeIds.includes(n.id)).length,
+    [visibleNoticeboardItems, seenNoticeIds]
   );
 
   const isAnyModalOpen = Boolean(
@@ -4729,6 +4836,8 @@ export default function App() {
     isInstallGuideOpen ||
     mustAcceptGdpr ||
     isGdprModalOpen ||
+    mustSelectMajor ||
+    isMajorSelectModalOpen ||
     isNoticeboardOpen ||
     Boolean(activeNoticePopup)
   );
@@ -4741,7 +4850,8 @@ export default function App() {
 
       if (e.key === 'Escape') {
         e.preventDefault();
-        if (mustAcceptGdpr) return;
+        if (mustAcceptGdpr || mustSelectMajor) return;
+        if (isMajorSelectModalOpen && !isSavingMajor) { setIsMajorSelectModalOpen(false); return; }
         if (activeNoticePopup) { handleMarkNoticeAsRead(activeNoticePopup.id); return; }
         if (isNoticeboardOpen) { setIsNoticeboardOpen(false); setIsAddingNotice(false); return; }
         if (isGdprModalOpen) { setIsGdprModalOpen(false); return; }
@@ -4780,6 +4890,13 @@ export default function App() {
 
       if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey) {
         if (mustAcceptGdpr) return;
+        if (mustSelectMajor || isMajorSelectModalOpen) {
+          if (majorDraftId && !isSavingMajor) {
+            e.preventDefault();
+            handleSaveUserMajor();
+          }
+          return;
+        }
         const tag = (e.target?.tagName || '').toLowerCase();
         if (tag === 'textarea' || tag === 'button' || tag === 'a') return;
 
@@ -5199,8 +5316,8 @@ export default function App() {
         onClick={() => {
           setIsAddingNotice(false);
           setIsNoticeboardOpen(true);
-          if (noticeboardItems.length > 0) {
-            const allIds = noticeboardItems.map(n => n.id).filter(Boolean);
+          if (visibleNoticeboardItems.length > 0) {
+            const allIds = visibleNoticeboardItems.map(n => n.id).filter(Boolean);
             setSeenNoticeIds(prev => {
               const merged = Array.from(new Set([...prev, ...allIds]));
               try {
@@ -5250,11 +5367,40 @@ export default function App() {
         </button>
 
         {isMenuOpen && (
-          <div className={`absolute right-0 mt-2 w-72 rounded-2xl border shadow-2xl p-3.5 space-y-3.5 z-50 ${
+          <div className={`absolute right-0 mt-2 w-72 sm:w-80 rounded-2xl border shadow-2xl p-3.5 space-y-3.5 z-50 ${
             darkMode
               ? 'bg-slate-900 border-slate-700 text-slate-100'
               : 'bg-white border-slate-200 text-slate-800'
           }`}>
+            <div className="space-y-1.5">
+              <p className={`text-[10px] font-bold uppercase tracking-wider px-1 ${textMuted}`}>
+                Hallgatói profil • Szakod
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsMenuOpen(false);
+                  handleOpenMajorSelectModal();
+                }}
+                title="Kattints a szakod módosításához (pl. szakváltás esetén)"
+                className={`w-full px-3 py-2.5 rounded-xl text-xs font-bold border flex items-center justify-between gap-2 text-left transition cursor-pointer ${
+                  darkMode
+                    ? 'bg-amber-400/10 hover:bg-amber-400/20 text-amber-300 border-amber-400/35'
+                    : 'bg-amber-50/90 hover:bg-amber-100 text-slate-900 border-amber-300'
+                }`}
+              >
+                <span className="flex items-center gap-2 min-w-0">
+                  <GraduationCap className="w-4 h-4 text-amber-500 shrink-0" />
+                  <span className="truncate">
+                    {userMajorObj ? userMajorObj.label : 'Szak kiválasztása'}
+                  </span>
+                </span>
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-extrabold bg-amber-400 text-slate-950 shrink-0">
+                  <Pencil className="w-2.5 h-2.5" /> Módosítás
+                </span>
+              </button>
+            </div>
+
             <div className="space-y-1.5">
               <p className={`text-[10px] font-bold uppercase tracking-wider px-1 ${textMuted}`}>
                 Megjelenés
@@ -8414,10 +8560,10 @@ export default function App() {
                     A bejelentkezés és az adattárolás a Google által üzemeltetett <strong>Firebase Authentication</strong> és <strong>Cloud Firestore</strong> felhőszolgáltatáson keresztül, titkosított (HTTPS/TLS) kapcsolaton történik.
                   </li>
                   <li>
-                    Bejelentkezéskor kizárólag a Google-fiókod alapvető azonosító adatait (e-mail cím, megjelenített név, egyedi felhasználói azonosító – UID) használjuk a fiókod elkülönítéséhez. <strong>A jelszavadhoz az alkalmazás nem fér hozzá és nem tárolja azt.</strong>
+                    Bejelentkezéskor kizárólag a Google-fiókod alapvető azonosító adatait (e-mail cím, megjelenített név, egyedi felhasználói azonosító – UID), valamint a profilodban általad kiválasztott <strong>BGE alapszakot</strong> tároljuk a fiókodhoz rendelve. <strong>A jelszavadhoz az alkalmazás nem fér hozzá és nem tárolja azt.</strong>
                   </li>
                   <li>
-                    Az általad rögzített félévek, tantárgyak, ZH-pontok, jelenlétek és beállítások kizárólag a saját, egyedi azonosítód alatti elszigetelt adatbázis-területen tárolódnak, így más felhasználók nem láthatják azokat.
+                    Az általad kiválasztott szakot, valamint a rögzített féléveidet, tantárgyaidat, ZH-pontjaidat, jelenléteidet és beállításaidat a rendszer kizárólag a saját, egyedi azonosítód alatti elszigetelt adatbázis-területen tárolja biztonságosan — más felhasználók nem férnek hozzá, és azt bármikor módosíthatod a Menüben.
                   </li>
                   <li>
                     Bizonyos megjelenítési beállítások (pl. sötét mód, rendezés, helyi gyorsítótár) a saját böngésződ tárhelyében (<code>localStorage</code>) is mentésre kerülnek.
@@ -8432,13 +8578,13 @@ export default function App() {
                 </h3>
                 <ul className={`list-disc pl-5 space-y-1.5 text-xs ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>
                   <li>
-                    Az adataid <strong>semmilyen formában nem kerülnek felhasználásra</strong> marketing-, hirdetési, profilalkotási vagy kereskedelmi célokra.
+                    Sem a személyes azonosítóidat, sem a kiválasztott <strong>szakodra vonatkozó információt nem gyűjti adatbányászati vagy statisztikai célból a rendszer</strong>, és azokat <strong>semmilyen formában nem használjuk fel</strong> marketing-, hirdetési vagy kereskedelmi célokra.
                   </li>
                   <li>
-                    Az adataidat <strong>harmadik félnek nem adjuk ki, nem osztjuk meg és nem értékesítjük</strong>.
+                    Az adataidat — beleértve a kiválasztott szakodat és tanulmányi eredményeidet — <strong>harmadik félnek (sem az egyetemnek, sem külső szervezetnek) nem adjuk ki, nem osztjuk meg és nem értékesítjük</strong>.
                   </li>
                   <li>
-                    A rögzített pontszámokat és adatokat kizárólag az alkalmazás saját funkcióinak (átlagszámítás, kreditindex, szinkronizáció az eszközeid között) működtetésére használjuk.
+                    A megadott szakodat és a rögzített pontszámaidat kizárólag az alkalmazás saját, személyre szabott funkcióinak (pl. szakodhoz igazított mintatantervek és célzott faliújság-hirdetmények megjelenítése, átlagszámítás, szinkronizáció az eszközeid között) biztonságos működtetéséhez tárolja a rendszer.
                   </li>
                   <li>
                     Az „App statisztika” kizárólag összesített, névtelen darabszámot (regisztráltak és aktív felhasználók száma) jelenít meg, személyes adatok felfedése nélkül.
@@ -8531,6 +8677,113 @@ export default function App() {
                 </div>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+
+      {/* SZAK KIVÁLASZTÁSA / MÓDOSÍTÁSA — KÖTELEZŐ BELÉPÉS UTÁN, KÉSŐBB MÓDOSÍTHATÓ A MENÜBEN */}
+      {(mustSelectMajor || isMajorSelectModalOpen) && (
+        <div
+          data-top-modal="true"
+          onClick={() => {
+            if (!mustSelectMajor && !isSavingMajor) setIsMajorSelectModalOpen(false);
+          }}
+          className="fixed inset-0 bg-black/85 backdrop-blur-sm z-[79] flex items-center justify-center p-2.5 sm:p-4 overscroll-none"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className={`rounded-2xl max-w-lg w-full max-h-[92dvh] flex flex-col shadow-2xl overflow-hidden border-2 border-amber-400 ${bgCard}`}
+          >
+            <div className="px-4 sm:px-6 py-3.5 sm:py-4 bg-slate-900 text-white flex justify-between items-center border-b border-slate-800 shrink-0">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-amber-400 text-slate-950 flex items-center justify-center shrink-0">
+                  <GraduationCap className="w-5 h-5 sm:w-6 sm:h-6" />
+                </div>
+                <div className="min-w-0">
+                  <h2 className="font-extrabold text-sm sm:text-base leading-tight">
+                    {mustSelectMajor ? 'Milyen szakra jársz a BGE-n?' : 'Szak módosítása'}
+                  </h2>
+                  <p className="text-[11px] text-amber-400 font-semibold truncate">
+                    {mustSelectMajor
+                      ? 'A folytatáshoz válaszd ki a szakodat (később a Menüben módosítható)'
+                      : 'Profilodhoz rendelt BGE alapszak frissítése'}
+                  </p>
+                </div>
+              </div>
+              {!mustSelectMajor && (
+                <button
+                  type="button"
+                  disabled={isSavingMajor}
+                  onClick={() => setIsMajorSelectModalOpen(false)}
+                  title="Bezárás"
+                  className="text-slate-400 hover:text-white p-1.5 cursor-pointer shrink-0 disabled:opacity-50"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              )}
+            </div>
+
+            <form onSubmit={handleSaveUserMajor} className="flex flex-col flex-1 min-h-0">
+              <div className="p-4 sm:p-6 overflow-y-auto overscroll-contain space-y-3 flex-1 min-h-0">
+                <div className={`p-3 rounded-xl border text-xs leading-relaxed ${
+                  darkMode
+                    ? 'bg-amber-400/10 border-amber-400/35 text-amber-100'
+                    : 'bg-amber-50/90 border-amber-300 text-slate-800'
+                }`}>
+                  Válaszd ki a listából, hogy jelenleg melyik BGE szakon tanulsz. Ez az információ hozzárendelődik a profilodhoz, így a szakodnak megfelelő mintatantervi sablonokat és hirdetményeket kapod. Ha később szakot váltanál, a jobb felső <strong>Menü</strong> gomb alatt bármikor átállíthatod.
+                </div>
+
+                <div className="space-y-1.5">
+                  {BGE_MAJORS.map(major => {
+                    const isSelected = majorDraftId === major.id;
+                    return (
+                      <button
+                        key={major.id}
+                        type="button"
+                        onClick={() => setMajorDraftId(major.id)}
+                        className={`w-full px-3.5 py-3 rounded-xl border text-left flex items-center justify-between gap-2.5 transition cursor-pointer ${
+                          isSelected
+                            ? 'bg-amber-400 text-slate-950 border-amber-400 font-extrabold shadow-sm'
+                            : darkMode
+                              ? 'bg-slate-800/75 hover:bg-slate-800 text-slate-200 border-slate-700 font-semibold'
+                              : 'bg-slate-50 hover:bg-amber-50/80 text-slate-800 border-slate-200 font-semibold'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <GraduationCap className={`w-4 h-4 shrink-0 ${isSelected ? 'text-slate-950' : 'text-amber-500'}`} />
+                          <span className="text-xs sm:text-sm leading-snug">{major.label}</span>
+                        </div>
+                        {isSelected && <Check className="w-4 h-4 shrink-0 stroke-[2.75]" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className={`px-4 sm:px-6 py-3.5 border-t flex items-center justify-end gap-2 shrink-0 ${
+                darkMode ? 'border-slate-800 bg-slate-900/80' : 'border-slate-200 bg-slate-50'
+              }`}>
+                {!mustSelectMajor && (
+                  <button
+                    type="button"
+                    disabled={isSavingMajor}
+                    onClick={() => setIsMajorSelectModalOpen(false)}
+                    className={`px-4 py-2 text-xs sm:text-sm rounded-xl cursor-pointer ${textMuted}`}
+                  >
+                    Mégse
+                  </button>
+                )}
+                <button
+                  type="submit"
+                  disabled={!majorDraftId || isSavingMajor}
+                  className="w-full sm:w-auto px-5 py-2.5 rounded-xl text-xs sm:text-sm font-extrabold bg-amber-400 hover:bg-amber-300 disabled:opacity-45 disabled:cursor-not-allowed text-slate-950 shadow-md flex items-center justify-center gap-1.5 transition cursor-pointer"
+                >
+                  <Check className="w-4 h-4" />
+                  <span>{isSavingMajor ? 'Mentés...' : 'Szak mentése és tovább'}</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
@@ -12011,9 +12264,10 @@ export default function App() {
                     onClick={() => {
                       setNewNoticeTitle('');
                       setNewNoticeBody('');
+                      setNewNoticeAudience('all');
                       setIsAddingNotice(prev => !prev);
                     }}
-                    title="Új közérdekű információ közzététele minden felhasználónak"
+                    title="Új közérdekű információ közzététele"
                     className="px-3 py-1.5 rounded-xl text-xs font-extrabold bg-amber-400 hover:bg-amber-300 text-slate-950 flex items-center gap-1 transition cursor-pointer"
                   >
                     <Plus className="w-4 h-4 stroke-[2.75]" />
@@ -12043,7 +12297,7 @@ export default function App() {
                 >
                   <div className="flex items-center justify-between gap-2">
                     <p className="text-xs sm:text-sm font-extrabold text-amber-500 flex items-center gap-1.5">
-                      <Bell className="w-4 h-4" /> Közérdekű információ küldése mindenkinek
+                      <Bell className="w-4 h-4" /> Új faliújság közlemény létrehozása
                     </p>
                     <button
                       type="button"
@@ -12052,6 +12306,42 @@ export default function App() {
                     >
                       <X className="w-4 h-4" />
                     </button>
+                  </div>
+
+                  <div>
+                    <label className={`block text-[11px] font-semibold mb-1.5 ${textMuted}`}>
+                      Célközönség kiválasztása
+                    </label>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setNewNoticeAudience('all')}
+                        className={`px-3 py-2.5 rounded-xl text-xs font-extrabold border flex items-center justify-center gap-1.5 transition cursor-pointer ${
+                          newNoticeAudience === 'all'
+                            ? 'bg-amber-400 text-slate-950 border-amber-400 shadow-xs'
+                            : darkMode
+                              ? 'bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-700'
+                              : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200'
+                        }`}
+                      >
+                        <Users className="w-3.5 h-3.5 shrink-0" />
+                        <span>Minden felhasználónak</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setNewNoticeAudience('gazdinfo')}
+                        className={`px-3 py-2.5 rounded-xl text-xs font-extrabold border flex items-center justify-center gap-1.5 transition cursor-pointer ${
+                          newNoticeAudience === 'gazdinfo'
+                            ? 'bg-sky-500 text-white border-sky-500 shadow-xs'
+                            : darkMode
+                              ? 'bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-700'
+                              : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200'
+                        }`}
+                      >
+                        <GraduationCap className="w-3.5 h-3.5 shrink-0" />
+                        <span>Csak gazdinfósoknak</span>
+                      </button>
+                    </div>
                   </div>
 
                   <div>
@@ -12074,7 +12364,11 @@ export default function App() {
                     <textarea
                       required
                       rows={4}
-                      placeholder="Írd ide a közérdekű információt, amely minden felhasználónak nagy pop-up ablakban is megjelenik belépéskor..."
+                      placeholder={
+                        newNoticeAudience === 'gazdinfo'
+                          ? 'Írd ide a közleményt, amely csak a Gazdaságinformatikus hallgatóknak jelenik meg...'
+                          : 'Írd ide a közérdekű információt, amely szaktól függetlenül minden felhasználónak megjelenik...'
+                      }
                       value={newNoticeBody}
                       onChange={e => setNewNoticeBody(e.target.value)}
                       className={`w-full border rounded-xl px-3 py-2 text-xs sm:text-sm focus:outline-none resize-y ${inputStyle}`}
@@ -12095,13 +12389,19 @@ export default function App() {
                       className="px-4 py-2 text-xs font-extrabold bg-amber-400 hover:bg-amber-300 disabled:opacity-50 text-slate-950 rounded-xl flex items-center gap-1.5 transition cursor-pointer"
                     >
                       <Check className="w-4 h-4" />
-                      <span>{isSavingNotice ? 'Közzététel...' : 'Közzététel mindenkinek'}</span>
+                      <span>
+                        {isSavingNotice
+                          ? 'Közzététel...'
+                          : newNoticeAudience === 'gazdinfo'
+                            ? 'Közzététel gazdinfósoknak'
+                            : 'Közzététel mindenkinek'}
+                      </span>
                     </button>
                   </div>
                 </form>
               )}
 
-              {noticeboardItems.length === 0 ? (
+              {visibleNoticeboardItems.length === 0 ? (
                 <div className={`p-6 rounded-2xl border text-center space-y-2 ${bgSubCard}`}>
                   <Bell className={`w-7 h-7 mx-auto opacity-60 ${textMuted}`} />
                   <p className={`text-sm font-bold ${textStrong}`}>Még nincs közzétett információ</p>
@@ -12111,7 +12411,7 @@ export default function App() {
                 </div>
               ) : (
                 <div className="space-y-2.5">
-                  {noticeboardItems.map((notice, idx) => (
+                  {visibleNoticeboardItems.map((notice, idx) => (
                     <div
                       key={notice.id}
                       className={`p-3.5 rounded-xl border space-y-1.5 ${
@@ -12132,6 +12432,19 @@ export default function App() {
                               <span className="px-1.5 py-0.2 rounded bg-amber-400 text-slate-950 text-[9px] font-extrabold uppercase">
                                 Legfrissebb
                               </span>
+                            )}
+                            {notice.targetAudience === 'gazdinfo' ? (
+                              <span className="px-2 py-0.2 rounded-full bg-sky-500/20 text-sky-400 border border-sky-500/35 text-[9px] font-extrabold">
+                                Csak gazdinfósoknak
+                              </span>
+                            ) : (
+                              isAdmin && (
+                                <span className={`px-2 py-0.2 rounded-full text-[9px] font-bold ${
+                                  darkMode ? 'bg-slate-800 text-slate-300' : 'bg-slate-200 text-slate-700'
+                                }`}>
+                                  Mindenkinek
+                                </span>
+                              )
                             )}
                           </div>
                           <h3 className={`text-xs sm:text-sm font-extrabold mt-0.5 ${textStrong}`}>
@@ -12200,7 +12513,9 @@ export default function App() {
                 </div>
                 <div className="min-w-0">
                   <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-amber-400/20 text-amber-300 border border-amber-400/35 mb-0.5">
-                    Faliújság • Közérdekű információ
+                    {activeNoticePopup.targetAudience === 'gazdinfo'
+                      ? 'Faliújság • Gazdaságinformatikus közlemény'
+                      : 'Faliújság • Közérdekű információ'}
                   </span>
                   <h2 className="font-extrabold text-base sm:text-lg leading-tight truncate">
                     {activeNoticePopup.title || 'Közérdekű információ'}

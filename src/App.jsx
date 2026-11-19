@@ -4699,6 +4699,11 @@ export default function App() {
     [subjects, activeSubjectId]
   );
 
+  const unreadNoticesCount = useMemo(
+    () => noticeboardItems.filter(n => n.id && !seenNoticeIds.includes(n.id)).length,
+    [noticeboardItems, seenNoticeIds]
+  );
+
   const isAnyModalOpen = Boolean(
     activeSubject ||
     bucketModal ||
@@ -5179,11 +5184,6 @@ export default function App() {
     points_asc: 'Pontszám (növekvő)',
     custom: 'Egyéni sorrend'
   };
-
-  const unreadNoticesCount = useMemo(
-    () => noticeboardItems.filter(n => n.id && !seenNoticeIds.includes(n.id)).length,
-    [noticeboardItems, seenNoticeIds]
-  );
 
   const renderNoticeboardBellButton = (isDarkHeader = false) => {
     const btnClass = isDarkHeader

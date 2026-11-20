@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
 import {
- collection, doc, getDocs, onSnapshot, setDoc, updateDoc, deleteDoc, writeBatch,
+ collection, collectionGroup, doc, getDocs, onSnapshot, setDoc, updateDoc, deleteDoc, writeBatch,
  serverTimestamp
 } from 'firebase/firestore';
 import {
@@ -634,6 +634,13 @@ function buildTemplatesForMajor(majorId) {
 }
 
 const APP_RELEASES = [
+ {
+ version: 'v2.2.4',
+ date: '2026. 11. 20.',
+ changes: [
+ 'App statisztika szakbontás visszamenőleges szinkronizáció: az app statisztika mostantól a már korábban szakot választott hallgatók mentett profilbeállításaiból (preferences) is beolvassa és automatikusan összesíti a szakokat'
+ ]
+ },
  {
  version: 'v2.2.3',
  date: '2026. 11. 20.',
@@ -3045,14 +3052,18 @@ export default function App() {
 
  setStatsLoading(true);
  const ACTIVE_WINDOW_MS = 3 * 60 * 1000;
+ let cancelled = false;
 
- const unsubAppUsers = onSnapshot(
- collection(db, 'appUsers'),
- (snapshot) => {
+ const legacyPrefsMajorMap = new Map();
+ let latestAppUsersSnapshot = null;
+
+ const recomputeStats = (snapshot) => {
+ if (!snapshot || cancelled) return;
  const now = Date.now();
  const uniqueTotalIds = new Set();
  const uniqueActiveIds = new Set();
- const userMajorMap = new Map();
+ const userMajorMap = new Map(legacyPrefsMajorMap);
+ const docsToBackfill = [];
 
  snapshot.forEach((docSnap) => {
  const data = docSnap.data() || {};
@@ -3062,6 +3073,12 @@ export default function App() {
 
  if (typeof data.majorId === 'string' && BGE_MAJORS.some(m => m.id === data.majorId)) {
  userMajorMap.set(uidKey, data.majorId);
+ } else if (legacyPrefsMajorMap.has(uidKey)) {
+ const foundMajorId = legacyPrefsMajorMap.get(uidKey);
+ const foundMajorObj = BGE_MAJORS.find(m => m.id === foundMajorId);
+ if (foundMajorObj) {
+ docsToBackfill.push({ uid: uidKey, majorObj: foundMajorObj });
+ }
  }
 
  const lastSeenMs =
@@ -3080,6 +3097,22 @@ export default function App() {
  uniqueActiveIds.add(user.uid);
  if (userMajorId && BGE_MAJORS.some(m => m.id === userMajorId)) {
  userMajorMap.set(user.uid, userMajorId);
+ }
+
+ if (isAdmin && docsToBackfill.length > 0) {
+ const batch = writeBatch(db);
+ docsToBackfill.slice(0, 400).forEach(({ uid, majorObj }) => {
+ batch.set(
+ doc(db, 'appUsers', uid),
+ {
+ uid,
+ majorId: majorObj.id,
+ majorLabel: majorObj.label
+ },
+ { merge: true }
+ );
+ });
+ batch.commit().catch(() => {});
  }
 
  const majorCounts = {};
@@ -3104,6 +3137,65 @@ export default function App() {
  unknownMajorCount
  });
  setStatsLoading(false);
+ };
+
+ // Read previously saved majors from users/{uid}/settings/preferences (and root users collection if any)
+ (async () => {
+ try {
+ const settingsGroupSnap = await getDocs(collectionGroup(db, 'settings'));
+ settingsGroupSnap.forEach((prefSnap) => {
+ if (prefSnap.id !== 'preferences') return;
+ const pData = prefSnap.data() || {};
+ const parentUid = prefSnap.ref?.parent?.parent?.id;
+ if (parentUid && typeof pData.majorId === 'string' && BGE_MAJORS.some(m => m.id === pData.majorId)) {
+ legacyPrefsMajorMap.set(parentUid, pData.majorId);
+ } else if (parentUid && typeof pData.isGazdinfo === 'boolean') {
+ if (pData.isGazdinfo === true) {
+ legacyPrefsMajorMap.set(parentUid, 'gazdasaginformatikus');
+ }
+ }
+ });
+ } catch {
+ // Fallback if collectionGroup rule is restricted: check individual appUsers docs
+ try {
+ if (latestAppUsersSnapshot) {
+ const uidList = [];
+ latestAppUsersSnapshot.forEach(d => {
+ const u = String(d.data()?.uid || d.id).trim();
+ if (u) uidList.push(u);
+ });
+ await Promise.all(
+ uidList.map(async (uidKey) => {
+ try {
+ const prefSnap = await getDocs(collection(db, 'users', uidKey, 'settings'));
+ prefSnap.forEach(ps => {
+ if (ps.id !== 'preferences') return;
+ const pData = ps.data() || {};
+ if (typeof pData.majorId === 'string' && BGE_MAJORS.some(m => m.id === pData.majorId)) {
+ legacyPrefsMajorMap.set(uidKey, pData.majorId);
+ }
+ });
+ } catch {
+ // ignore
+ }
+ })
+ );
+ }
+ } catch {
+ // ignore
+ }
+ }
+
+ if (!cancelled && latestAppUsersSnapshot) {
+ recomputeStats(latestAppUsersSnapshot);
+ }
+ })();
+
+ const unsubAppUsers = onSnapshot(
+ collection(db, 'appUsers'),
+ (snapshot) => {
+ latestAppUsersSnapshot = snapshot;
+ recomputeStats(snapshot);
  },
  (err) => {
  console.error('App statisztika lekérdezési hiba:', err);
@@ -3118,9 +3210,10 @@ export default function App() {
  );
 
  return () => {
+ cancelled = true;
  unsubAppUsers();
  };
- }, [user, isStatsModalOpen]);
+ }, [user, isStatsModalOpen, userMajorId, isAdmin]);
 
  const fetchTemplates = async (forceRefresh = false) => {
  if (!forceRefresh) {

@@ -635,6 +635,13 @@ function buildTemplatesForMajor(majorId) {
 
 const APP_RELEASES = [
  {
+ version: 'v2.2.1',
+ date: '2026. 11. 20.',
+ changes: [
+ 'JOKER ZH menü finomhangolása: közérthető magyarázó tájékoztató került a ZH-összefoglaló táblázat fölé, amely bemutatja, hogyan választható ki kattintással az újraírandó ZH, és hogyan rögzíthető később az elért eredmény'
+ ]
+ },
+ {
  version: 'v2.2.0',
  date: '2026. 11. 20.',
  changes: [
@@ -10917,6 +10924,17 @@ export default function App() {
  </div>
  </div>
  )}
+
+ <div className={`p-3.5 rounded-xl border flex items-start gap-2.5 text-xs leading-relaxed ${
+ darkMode
+ ? 'bg-violet-500/10 border-violet-500/35 text-violet-100'
+ : 'bg-violet-50/80 border-violet-200 text-slate-800'
+ }`}>
+ <Lightbulb className="w-4 h-4 text-violet-500 shrink-0 mt-0.5" />
+ <p>
+ <strong>Hogyan működik?</strong> A táblázatban lévő pontszámok <strong>kattinthatók</strong>: válassz ki egy ZH-t a táblázatból (vagy az alatta lévő listából) a <strong>Joker ZH</strong> megírásához, majd mentsd el a kijelölést. Ezután nyugodtan bezárhatod a menüt, és később — miután megírtad a Joker ZH-t és megvan az eredményed — visszalépve már közvetlenül beírhatod az új pontszámot.
+ </p>
+ </div>
 
  <div className="space-y-2">
  <div className="flex flex-wrap items-center justify-between gap-2">

@@ -635,6 +635,14 @@ function buildTemplatesForMajor(majorId) {
 
 const APP_RELEASES = [
  {
+ version: 'v2.2.3',
+ date: '2026. 11. 20.',
+ changes: [
+ 'App statisztika mobil elrendezés javítása: a lenyitható „Szakok szerinti bontás” mostantól telefonon és asztali nézetben is közvetlenül a „Regisztráltak” kártya alatt (az élő munkamenet / „Jelenleg aktív” blokk felett) nyílik le',
+ 'Kötelező szakválasztás és visszamenőleges szinkronizáció: minden felhasználónak egyszer kötelezően ki kell választania a szakját belépéskor (ha még nincs rögzítve), a korábban választott szakok pedig automatikusan rögzítésre kerülnek a profilban, a személyre szabott hirdetményeknél és az app statisztikában'
+ ]
+ },
+ {
  version: 'v2.2.2',
  date: '2026. 11. 20.',
  changes: [
@@ -3030,7 +3038,7 @@ export default function App() {
  window.removeEventListener('beforeunload', handleBeforeUnload);
  updatePresence(false);
  };
- }, [user]);
+ }, [user, userMajorId]);
 
  useEffect(() => {
  if (!user || !isStatsModalOpen) return;
@@ -3468,18 +3476,48 @@ export default function App() {
  // ignore
  }
  }
- if (typeof data.majorId === 'string' && BGE_MAJORS.some(m => m.id === data.majorId)) {
- setUserMajorId(data.majorId);
- const foundM = BGE_MAJORS.find(m => m.id === data.majorId);
+ const cachedLocalMajor = (() => {
+ try {
+ return localStorage.getItem(`bge_user_major_${user.uid}`) || '';
+ } catch {
+ return '';
+ }
+ })();
+ const resolvedMajorId =
+ (typeof data.majorId === 'string' && BGE_MAJORS.some(m => m.id === data.majorId))
+ ? data.majorId
+ : (BGE_MAJORS.some(m => m.id === cachedLocalMajor) ? cachedLocalMajor : '');
+
+ if (resolvedMajorId) {
+ setUserMajorId(resolvedMajorId);
+ const foundM = BGE_MAJORS.find(m => m.id === resolvedMajorId);
  if (foundM) {
+ // Ensure both preferences and appUsers have the saved major for personalized notices & statistics
+ if (data.majorId !== foundM.id || data.majorLabel !== foundM.label) {
+ setDoc(
+ doc(db, 'users', user.uid, 'settings', 'preferences'),
+ {
+ majorId: foundM.id,
+ majorLabel: foundM.label,
+ isGazdinfo: Boolean(foundM.isGazdinfo)
+ },
+ { merge: true }
+ ).catch(() => {});
+ }
  setDoc(
  doc(db, 'appUsers', user.uid),
- { majorId: foundM.id, majorLabel: foundM.label },
+ {
+ uid: user.uid,
+ email: user.email || '',
+ displayName: user.displayName || '',
+ majorId: foundM.id,
+ majorLabel: foundM.label
+ },
  { merge: true }
  ).catch(() => {});
  }
  try {
- localStorage.setItem(`bge_user_major_${user.uid}`, data.majorId);
+ localStorage.setItem(`bge_user_major_${user.uid}`, resolvedMajorId);
  } catch {
  // ignore
  }
@@ -3497,7 +3535,38 @@ export default function App() {
  setHasAcceptedGdpr(false);
  }
  } else {
+ let cachedLocalMajor = '';
+ try {
+ cachedLocalMajor = localStorage.getItem(`bge_user_major_${user.uid}`) || '';
+ } catch {
+ // ignore
+ }
+ if (BGE_MAJORS.some(m => m.id === cachedLocalMajor)) {
+ const foundM = BGE_MAJORS.find(m => m.id === cachedLocalMajor);
+ setUserMajorId(foundM.id);
+ setDoc(
+ doc(db, 'users', user.uid, 'settings', 'preferences'),
+ {
+ majorId: foundM.id,
+ majorLabel: foundM.label,
+ isGazdinfo: Boolean(foundM.isGazdinfo)
+ },
+ { merge: true }
+ ).catch(() => {});
+ setDoc(
+ doc(db, 'appUsers', user.uid),
+ {
+ uid: user.uid,
+ email: user.email || '',
+ displayName: user.displayName || '',
+ majorId: foundM.id,
+ majorLabel: foundM.label
+ },
+ { merge: true }
+ ).catch(() => {});
+ } else {
  setUserMajorId('');
+ }
  setHasAcceptedGdpr(false);
  }
  prefsReady = true;
@@ -9171,70 +9240,45 @@ export default function App() {
  </button>
  </div>
 
- <div className="p-4 sm:p-6 overflow-y-auto overscroll-contain space-y-4 flex-1 min-h-0">
- <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
- <div className={`p-4 rounded-2xl border space-y-2 ${bgSubCard}`}>
+ <div className="p-4 sm:p-6 overflow-y-auto overscroll-contain space-y-3.5 flex-1 min-h-0">
+ {/* 1. REGISZTRÁLTAK + LENYITHATÓ SZAKOK SZERINTI BONTÁS (AZ ÉLŐ MUNKAMENET FELETT) */}
+ <div className={`p-4 rounded-2xl border space-y-2.5 ${bgSubCard}`}>
  <div className="flex items-center justify-between">
  <span className={`text-[11px] font-bold uppercase tracking-wide ${textMuted}`}>
  Regisztráltak
  </span>
  <Users className="w-4 h-4 text-sky-500" />
  </div>
+ <div className="flex items-baseline justify-between gap-2">
  <p className={`text-2xl sm:text-3xl font-extrabold ${textStrong}`}>
  {statsLoading ? '...' : `${appUsersStats.totalUsers} fő`}
  </p>
  <p className={`text-[11px] ${textMuted}`}>Összes valaha belépett felhasználó</p>
+ </div>
 
- <div className={`pt-2 border-t ${darkMode ? 'border-slate-700/80' : 'border-slate-200'}`}>
+ <div className={`pt-2.5 border-t ${darkMode ? 'border-slate-700/80' : 'border-slate-200'}`}>
  <button
  type="button"
  onClick={() => setIsStatsMajorsExpanded(prev => !prev)}
  aria-expanded={isStatsMajorsExpanded}
- className={`w-full py-1.5 px-2.5 rounded-xl text-xs font-extrabold flex items-center justify-between gap-1.5 transition cursor-pointer ${
+ className={`w-full py-2 px-3 rounded-xl text-xs font-extrabold flex items-center justify-between gap-2 transition cursor-pointer ${
  darkMode
  ? 'bg-slate-900/90 hover:bg-slate-900 text-sky-400 border border-slate-700'
  : 'bg-white hover:bg-sky-50 text-sky-700 border border-slate-200 shadow-2xs'
  }`}
  >
  <span className="flex items-center gap-1.5 truncate">
- <GraduationCap className="w-3.5 h-3.5 shrink-0" />
+ <GraduationCap className="w-4 h-4 shrink-0" />
  <span className="truncate">Szakok szerinti bontás</span>
  </span>
- <ChevronDown className={`w-3.5 h-3.5 shrink-0 transition-transform duration-200 ${isStatsMajorsExpanded ? 'rotate-180' : ''}`} />
+ <ChevronDown className={`w-4 h-4 shrink-0 transition-transform duration-200 ${isStatsMajorsExpanded ? 'rotate-180' : ''}`} />
  </button>
- </div>
- </div>
-
- <div className={`p-4 rounded-2xl border-2 space-y-1.5 ${
- darkMode
- ? 'bg-emerald-950/25 border-emerald-500/45'
- : 'bg-emerald-50/70 border-emerald-300'
- }`}>
- <div className="flex items-center justify-between">
- <span className="text-[11px] font-bold uppercase tracking-wide text-emerald-500">
- Jelenleg aktív
- </span>
- <span className="relative flex h-2.5 w-2.5">
- <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
- <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
- </span>
- </div>
- <p className={`text-2xl sm:text-3xl font-extrabold ${textStrong}`}>
- {statsLoading ? '...' : `${appUsersStats.activeUsers} fő`}
- </p>
- <p className={`text-[11px] ${textMuted}`}>Éppen most használja az appot</p>
- </div>
  </div>
 
  {isStatsMajorsExpanded && (
- <div className={`p-3.5 sm:p-4 rounded-2xl border space-y-2.5 ${
- darkMode
- ? 'bg-slate-800/60 border-sky-500/35'
- : 'bg-sky-50/50 border-sky-200'
- }`}>
- <div className="flex items-center justify-between gap-2">
- <p className={`text-xs font-extrabold uppercase tracking-wide flex items-center gap-1.5 ${textStrong}`}>
- <GraduationCap className="w-4 h-4 text-sky-500 shrink-0" />
+ <div className={`pt-2 space-y-2 border-t ${darkMode ? 'border-slate-700/70' : 'border-slate-200/80'}`}>
+ <div className="flex items-center justify-between gap-2 px-0.5">
+ <p className={`text-[11px] font-extrabold uppercase tracking-wide flex items-center gap-1.5 ${textStrong}`}>
  <span>Regisztráltak szakok szerint</span>
  </p>
  <span className={`text-[11px] font-bold ${textMuted}`}>
@@ -9323,6 +9367,30 @@ export default function App() {
  )}
  </div>
  )}
+ </div>
+
+ {/* 2. JELENLEG AKTÍV (ÉLŐ MUNKAMENET) */}
+ <div className={`p-4 rounded-2xl border-2 space-y-1.5 ${
+ darkMode
+ ? 'bg-emerald-950/25 border-emerald-500/45'
+ : 'bg-emerald-50/70 border-emerald-300'
+ }`}>
+ <div className="flex items-center justify-between">
+ <span className="text-[11px] font-bold uppercase tracking-wide text-emerald-500">
+ Jelenleg aktív
+ </span>
+ <span className="relative flex h-2.5 w-2.5">
+ <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+ <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
+ </span>
+ </div>
+ <div className="flex items-baseline justify-between gap-2">
+ <p className={`text-2xl sm:text-3xl font-extrabold ${textStrong}`}>
+ {statsLoading ? '...' : `${appUsersStats.activeUsers} fő`}
+ </p>
+ <p className={`text-[11px] ${textMuted}`}>Éppen most használja az appot</p>
+ </div>
+ </div>
 
  <div className={`p-3 rounded-xl border text-xs leading-relaxed ${bgSubCard} ${textMuted}`}>
  A regisztráltak száma minden egyedi belépett Google-fiókot számol, az élő aktív számláló pedig az elmúlt 3 percben aktív munkameneteket mutatja.

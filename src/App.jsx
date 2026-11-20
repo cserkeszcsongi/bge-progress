@@ -635,6 +635,15 @@ function buildTemplatesForMajor(majorId) {
 
 const APP_RELEASES = [
  {
+ version: 'v2.2.0',
+ date: '2026. 11. 20.',
+ changes: [
+ 'Megújult JOKER ZH menü összefoglaló táblázattal: áttekinthető táblázatban mutatja minden ZH-val rendelkező tárgy 1. ZH, 2. ZH és 3. ZH eredményét (hiányzó eredménynél „?”, nem létező ZH oszlopnál szürke „—”)',
+ 'Top 3 legalacsonyabb pontszámú ZH automatikus kiemelése a táblázatban (tárgyanként legfeljebb 1 ZH kiemelésével), alatta pedig megjelenik, hány ponttal kell jobbnak lennie a kiemelt ZH-nak a megajánlott jegyhez vagy a következő jobb jegyhez',
+ 'Kétlépcsős Joker ZH folyamat és élő várakozó jelzés a lebegő gombon: miután kiválasztottad és elmentetted, melyik tárgy melyik ZH-ját írod újra, a JOKER ZH lebegő gomb jelzi, hogy eredményre vár, újranyitáskor pedig közvetlenül a pontszám-beíró párbeszédablak nyílik meg'
+ ]
+ },
+ {
  version: 'v2.1.3',
  date: '2026. 11. 20.',
  changes: [
@@ -2820,6 +2829,15 @@ export default function App() {
  const [jokerAssessmentId, setJokerAssessmentId] = useState('');
  const [jokerNewScore, setJokerNewScore] = useState('');
  const [isSavingJoker, setIsSavingJoker] = useState(false);
+ const [jokerPendingBySem, setJokerPendingBySem] = useState(() => {
+ try {
+ const raw = localStorage.getItem('bge_joker_pending_by_sem_v1');
+ return raw ? JSON.parse(raw) : {};
+ } catch {
+ return {};
+ }
+ });
+ const [jokerModalStep, setJokerModalStep] = useState('select'); // 'select' | 'score'
 
  const [itemModal, setItemModal] = useState(null);
  const [bucketModal, setBucketModal] = useState(null);
@@ -3389,6 +3407,14 @@ export default function App() {
  if (typeof data.subjectSortMode === 'string') {
  setSortMode(data.subjectSortMode);
  localStorage.setItem('bge_subject_sort_mode', data.subjectSortMode);
+ }
+ if (data.jokerPendingBySem && typeof data.jokerPendingBySem === 'object') {
+ setJokerPendingBySem(data.jokerPendingBySem);
+ try {
+ localStorage.setItem('bge_joker_pending_by_sem_v1', JSON.stringify(data.jokerPendingBySem));
+ } catch {
+ // ignore
+ }
  }
  if (typeof data.majorId === 'string' && BGE_MAJORS.some(m => m.id === data.majorId)) {
  setUserMajorId(data.majorId);
@@ -5168,6 +5194,134 @@ export default function App() {
  return null;
  }, [semesterSubjects]);
 
+ const pendingJokerInfo = useMemo(() => {
+ const canonical = getCanonicalSemesterCode(selectedSemester);
+ const saved = jokerPendingBySem[selectedSemester] || (canonical ? jokerPendingBySem[canonical] : null);
+ if (!saved || !saved.subjectId || !saved.assessmentId) return null;
+ const subj = semesterSubjects.find(s => s.id === saved.subjectId && s.courseKind !== 'exam');
+ if (!subj) return null;
+ const zh = (subj.assessments || []).find(a => a.id === saved.assessmentId && a.category === 'ZH');
+ if (!zh) return null;
+ return { subject: subj, assessment: zh };
+ }, [jokerPendingBySem, selectedSemester, semesterSubjects]);
+
+ const persistJokerPendingForSemester = (semName, entryOrNull) => {
+ const canonical = getCanonicalSemesterCode(semName);
+ setJokerPendingBySem(prev => {
+ const next = { ...prev };
+ if (entryOrNull) {
+ next[semName] = entryOrNull;
+ if (canonical) next[canonical] = entryOrNull;
+ } else {
+ delete next[semName];
+ if (canonical) delete next[canonical];
+ }
+ try {
+ localStorage.setItem('bge_joker_pending_by_sem_v1', JSON.stringify(next));
+ } catch {
+ // ignore
+ }
+ if (user) {
+ setDoc(
+ doc(db, 'users', user.uid, 'settings', 'preferences'),
+ { jokerPendingBySem: next },
+ { merge: true }
+ ).catch(() => {});
+ }
+ return next;
+ });
+ };
+
+ const jokerOverviewData = useMemo(() => {
+ const rows = [];
+ const candidateLowZhs = [];
+
+ semesterSubjects.forEach(subj => {
+ if (subj.courseKind === 'exam') return;
+ const zhs = (subj.assessments || []).filter(a => a.category === 'ZH');
+ if (zhs.length === 0) return;
+
+ const st = subjectStatsMap[subj.id] || calcStats(subj);
+ const slots = [0, 1, 2].map(slotIdx => {
+ const zh = zhs[slotIdx] || null;
+ if (!zh) return null;
+ const eff = getEffectiveScore(zh);
+ const hasScore = eff !== null && eff !== undefined && eff !== '' && !isNaN(Number(eff));
+ const basePts = hasScore ? Number(eff) : null;
+ const bonusPts = (zh.bonusPoints !== null && zh.bonusPoints !== undefined && zh.bonusPoints !== '' && !isNaN(Number(zh.bonusPoints)))
+ ? Number(zh.bonusPoints)
+ : 0;
+ const totalPts = basePts !== null ? +(basePts + bonusPts).toFixed(2) : null;
+ return {
+ slotIdx,
+ zh,
+ hasScore,
+ basePts,
+ bonusPts,
+ totalPts
+ };
+ });
+
+ // Find the single lowest scored ZH for this subject (if any ZH has a score)
+ const scoredSlots = slots.filter(s => s && s.hasScore);
+ let lowestSlot = null;
+ if (scoredSlots.length > 0) {
+ lowestSlot = scoredSlots.reduce((minS, curS) =>
+ curS.totalPts < minS.totalPts ? curS : minS
+ );
+ candidateLowZhs.push({
+ subjectId: subj.id,
+ assessmentId: lowestSlot.zh.id,
+ score: lowestSlot.totalPts
+ });
+ }
+
+ // Compute how many extra points this subject's highlighted ZH needs for offered grade (or next better grade)
+ let improvementHint = '';
+ if (lowestSlot) {
+ const offerMin = Number(st.megajanlottMin) || 60;
+ const zhMin = Number(st.megajanlottMinZH) || 0;
+
+ if (!st.megajanlottTeljesul) {
+ const needForTotal2 = Math.max(0, +(offerMin - st.regularOsszElert).toFixed(2));
+ const needForZhMin = zhMin > 0 ? Math.max(0, +(zhMin - st.zhElert).toFixed(2)) : 0;
+ const neededPts = Math.max(needForTotal2, needForZhMin);
+ if (neededPts > 0) {
+ improvementHint = `A ${lowestSlot.zh.title}-nak még +${formatHu(neededPts)} ponttal kell jobbnak lennie a megajánlott 2-eshez`;
+ } else if (!st.alairasTeljesul && st.alairasHianyzik > 0) {
+ improvementHint = `A ${lowestSlot.zh.title}-nak még +${formatHu(st.alairasHianyzik)} ponttal kell jobbnak lennie az aláíráshoz`;
+ }
+ } else {
+ const ms = st.nextOfferedMilestone;
+ if (!ms.allMaxed && ms.needed > 0) {
+ improvementHint = `A ${lowestSlot.zh.title}-nak még +${formatHu(ms.needed)} ponttal kell jobbnak lennie a megajánlott ${ms.targetGrade}-eshez`;
+ } else {
+ improvementHint = `Megajánlott 5-ös már megvan (${formatHu(st.regularOsszElert)} p)`;
+ }
+ }
+ }
+
+ rows.push({
+ subject: subj,
+ stats: st,
+ zhs,
+ slots,
+ lowestAssessmentId: lowestSlot ? lowestSlot.zh.id : null,
+ improvementHint
+ });
+ });
+
+ // Pick top 3 lowest scored ZHs globally (max 1 per subject already guaranteed)
+ const top3Ids = new Set(
+ [...candidateLowZhs]
+ .sort((a, b) => a.score - b.score)
+ .slice(0, 3)
+ .map(item => item.assessmentId)
+ );
+
+ return { rows, top3Ids };
+ }, [semesterSubjects, subjectStatsMap, isSim, simScores]);
+
  const kpis = useMemo(
  () => calcSemesterSummary(selectedSemester),
  [subjects, selectedSemester, subjectStatsMap]
@@ -5278,7 +5432,12 @@ export default function App() {
  };
 
  const handleOpenJokerModal = () => {
- if (activeJokerInfo) {
+ if (pendingJokerInfo) {
+ setJokerSubjectId(pendingJokerInfo.subject.id);
+ setJokerAssessmentId(pendingJokerInfo.assessment.id);
+ setJokerNewScore('');
+ setJokerModalStep('score');
+ } else if (activeJokerInfo) {
  setJokerSubjectId(activeJokerInfo.subject.id);
  setJokerAssessmentId(activeJokerInfo.assessment.id);
  setJokerNewScore(
@@ -5286,6 +5445,7 @@ export default function App() {
  ? String(activeJokerInfo.assessment.achieved)
  : ''
  );
+ setJokerModalStep('select');
  } else {
  const firstSubjWithZh = semesterSubjects.find(s =>
  s.courseKind !== 'exam' && (s.assessments || []).some(a => a.category === 'ZH')
@@ -5295,8 +5455,33 @@ export default function App() {
  setJokerSubjectId(sId);
  setJokerAssessmentId(firstZh?.id || '');
  setJokerNewScore('');
+ setJokerModalStep('select');
  }
  setIsJokerModalOpen(true);
+ };
+
+ const handleSelectJokerTarget = (e) => {
+ if (e && e.preventDefault) e.preventDefault();
+ if (!jokerSubjectId || !jokerAssessmentId) return;
+ const targetSubj = semesterSubjects.find(s => s.id === jokerSubjectId);
+ const targetZh = (targetSubj?.assessments || []).find(a => a.id === jokerAssessmentId && a.category === 'ZH');
+ if (!targetSubj || !targetZh) return;
+
+ persistJokerPendingForSemester(selectedSemester, {
+ subjectId: targetSubj.id,
+ assessmentId: targetZh.id,
+ savedAt: Date.now()
+ });
+ setJokerNewScore('');
+ setJokerModalStep('score');
+ showToast(`Joker ZH kijelölve: ${targetSubj.name} — ${targetZh.title}`);
+ };
+
+ const handleClearPendingJokerSelection = () => {
+ persistJokerPendingForSemester(selectedSemester, null);
+ setJokerNewScore('');
+ setJokerModalStep('select');
+ showToast('Joker ZH kijelölés törölve.');
  };
 
  const handleSaveJokerZh = async (e) => {
@@ -5361,6 +5546,8 @@ export default function App() {
 
  await batch.commit();
 
+ persistJokerPendingForSemester(selectedSemester, null);
+
  setSimScores(prev => {
  const copy = { ...prev };
  delete copy[targetZh.id];
@@ -5369,6 +5556,7 @@ export default function App() {
  });
 
  setIsJokerModalOpen(false);
+ setJokerModalStep('select');
  showToast(`Joker ZH rögzítve: ${targetSubj.name} — ${targetZh.title} (${formatHu(parsedNew)} p)`);
  } catch (err) {
  alert('Hiba a Joker ZH mentésekor: ' + err.message);
@@ -8237,13 +8425,35 @@ export default function App() {
  type="button"
  onClick={handleOpenJokerModal}
  disabled={semesterSubjects.length === 0}
- title="Tetszőleges tantárgy egyik ZH-jának javítása Joker ZH-val"
- className="px-3.5 py-2 rounded-full text-xs font-extrabold bg-violet-600 hover:bg-violet-500 disabled:opacity-45 disabled:cursor-not-allowed text-white shadow-[0_0_20px_rgba(124,58,237,0.75)] hover:shadow-[0_0_28px_rgba(124,58,237,0.95)] flex items-center gap-1.5 transition cursor-pointer"
+ title={
+ pendingJokerInfo
+ ? `Eredményre vár: ${pendingJokerInfo.subject.name} — ${pendingJokerInfo.assessment.title} (Kattints a pontszám megadásához!)`
+ : 'Tetszőleges tantárgy egyik ZH-jának javítása Joker ZH-val'
+ }
+ className={`px-3.5 py-2 rounded-full text-xs font-extrabold disabled:opacity-45 disabled:cursor-not-allowed text-white flex items-center gap-1.5 transition cursor-pointer ${
+ pendingJokerInfo
+ ? 'bg-gradient-to-r from-violet-600 via-fuchsia-600 to-amber-500 ring-2 ring-amber-300 shadow-[0_0_26px_rgba(251,191,36,0.88)] hover:shadow-[0_0_34px_rgba(251,191,36,1)]'
+ : 'bg-violet-600 hover:bg-violet-500 shadow-[0_0_20px_rgba(124,58,237,0.75)] hover:shadow-[0_0_28px_rgba(124,58,237,0.95)]'
+ }`}
  >
  <JokerIcon className="w-4 h-4 shrink-0" />
+ {pendingJokerInfo ? (
+ <span className="flex items-center gap-1.5 max-w-[205px] sm:max-w-[260px]">
+ <span className="relative flex h-2.5 w-2.5 shrink-0">
+ <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-200 opacity-85" />
+ <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-300" />
+ </span>
+ <span className="truncate">
+ JOKER: {pendingJokerInfo.subject.name} ({pendingJokerInfo.assessment.title})
+ </span>
+ </span>
+ ) : (
+ <>
  <span>JOKER ZH</span>
  {activeJokerInfo && (
  <span className="w-2 h-2 rounded-full bg-amber-300" title="Aktív Joker ZH ebben a félévben" />
+ )}
+ </>
  )}
  </button>
 
@@ -10551,14 +10761,20 @@ export default function App() {
  >
  <div
  onClick={(e) => e.stopPropagation()}
- className={`rounded-2xl max-w-md w-full max-h-[92dvh] flex flex-col shadow-2xl overflow-hidden border-2 border-violet-500 ${bgCard}`}
+ className={`rounded-2xl ${jokerModalStep === 'score' ? 'max-w-md' : 'max-w-2xl'} w-full max-h-[92dvh] flex flex-col shadow-2xl overflow-hidden border-2 border-violet-500 ${bgCard}`}
  >
  <div className="px-4 sm:px-6 py-3.5 sm:py-4 bg-violet-600 text-white flex justify-between items-center shrink-0">
  <div className="flex items-center gap-2.5 min-w-0">
  <JokerIcon className="w-5 h-5 shrink-0" />
  <div className="min-w-0">
- <h2 className="font-extrabold text-base leading-tight">JOKER ZH</h2>
- <p className="text-[11px] text-violet-100 truncate">{formatSemesterLabel(selectedSemester)}</p>
+ <h2 className="font-extrabold text-base leading-tight">
+ {jokerModalStep === 'score' ? 'JOKER ZH — Pontszám rögzítése' : 'JOKER ZH'}
+ </h2>
+ <p className="text-[11px] text-violet-100 truncate">
+ {jokerModalStep === 'score' && selectedJokerSubject && selectedJokerZh
+ ? `${selectedJokerSubject.name} • ${selectedJokerZh.title}`
+ : formatSemesterLabel(selectedSemester)}
+ </p>
  </div>
  </div>
  <button
@@ -10571,7 +10787,100 @@ export default function App() {
  </button>
  </div>
 
+ {jokerModalStep === 'score' && selectedJokerSubject && selectedJokerZh ? (
  <form noValidate onSubmit={handleSaveJokerZh} className="p-4 sm:p-6 overflow-y-auto overscroll-contain space-y-4 flex-1 min-h-0">
+ <div className={`p-3.5 rounded-xl border space-y-1.5 ${
+ darkMode
+ ? 'bg-violet-500/15 border-violet-500/40 text-violet-100'
+ : 'bg-violet-50 border-violet-300 text-violet-950'
+ }`}>
+ <div className="flex items-center justify-between gap-2">
+ <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase tracking-wider bg-violet-600 text-white">
+ Kiválasztott Joker ZH
+ </span>
+ <button
+ type="button"
+ disabled={isSavingJoker}
+ onClick={() => setJokerModalStep('select')}
+ className={`text-[11px] font-bold underline hover:opacity-80 cursor-pointer ${
+ darkMode ? 'text-violet-300' : 'text-violet-700'
+ }`}
+ >
+ Másik ZH választása / Táblázat
+ </button>
+ </div>
+ <p className={`text-sm font-extrabold pt-0.5 ${textStrong}`}>
+ {selectedJokerSubject.name} — {selectedJokerZh.title}
+ </p>
+ <p className={`text-xs ${darkMode ? 'text-violet-200/85' : 'text-violet-900'}`}>
+ Jelenlegi eredmény:{' '}
+ <strong>
+ {selectedJokerZh.achieved !== null && selectedJokerZh.achieved !== undefined && selectedJokerZh.achieved !== ''
+ ? `${formatHu(selectedJokerZh.achieved)} p${selectedJokerZh.max ? ` / ${formatHu(selectedJokerZh.max)} p` : ''}`
+ : 'nincs még rögzítve'}
+ </strong>
+ </p>
+ </div>
+
+ <div>
+ <label className={`block text-xs font-semibold mb-1.5 ${textMuted}`}>
+ Joker ZH-n elért új pontszám
+ </label>
+ <div className="flex items-center gap-2">
+ <input
+ type="number"
+ step="0.01"
+ autoFocus
+ required
+ placeholder="Pl. 24,5"
+ value={jokerNewScore}
+ onChange={e => setJokerNewScore(e.target.value)}
+ className={`w-full border rounded-xl px-3.5 py-3 sm:py-2.5 text-base font-extrabold focus:outline-none focus:border-violet-500 ${inputStyle}`}
+ />
+ {selectedJokerZh.max && (
+ <span className={`text-xs font-bold shrink-0 ${textMuted}`}>
+ / {formatHu(selectedJokerZh.max)} p
+ </span>
+ )}
+ </div>
+ {jokerNewScore !== '' && !isNaN(Number(jokerNewScore)) && (
+ <p className={`text-xs mt-1.5 ${textMuted}`}>
+ Új rögzítendő pontszám: <strong className="text-violet-500">{formatHu(Number(jokerNewScore))} p</strong>
+ </p>
+ )}
+ </div>
+
+ <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-700/20">
+ <button
+ type="button"
+ disabled={isSavingJoker}
+ onClick={handleClearPendingJokerSelection}
+ className="text-xs font-semibold text-rose-500 hover:underline cursor-pointer"
+ >
+ Kijelölés törlése
+ </button>
+ <div className="flex items-center gap-2 ml-auto">
+ <button
+ type="button"
+ disabled={isSavingJoker}
+ onClick={() => setIsJokerModalOpen(false)}
+ className={`px-4 py-2 text-sm rounded-lg cursor-pointer ${textMuted}`}
+ >
+ Mégse
+ </button>
+ <button
+ type="submit"
+ disabled={isSavingJoker || jokerNewScore === ''}
+ className="px-4 py-2 text-sm font-bold bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white rounded-lg flex items-center gap-1.5 transition cursor-pointer"
+ >
+ <Check className="w-4 h-4" />
+ {isSavingJoker ? 'Mentés...' : 'Pontszám mentése'}
+ </button>
+ </div>
+ </div>
+ </form>
+ ) : (
+ <form noValidate onSubmit={handleSelectJokerTarget} className="p-4 sm:p-6 overflow-y-auto overscroll-contain space-y-4 flex-1 min-h-0">
  {activeJokerInfo && (
  <div className={`p-3.5 rounded-xl border space-y-2 ${
  darkMode
@@ -10581,7 +10890,7 @@ export default function App() {
  <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
  <div className="text-xs leading-relaxed">
  <p className="font-bold text-violet-500 uppercase tracking-wide text-[11px]">
- Jelenleg aktív Joker ZH
+ Korábban rögzített Joker ZH
  </p>
  <p className="font-semibold mt-0.5">
  {activeJokerInfo.subject.name} — {activeJokerInfo.assessment.title}
@@ -10609,9 +10918,136 @@ export default function App() {
  </div>
  )}
 
+ <div className="space-y-2">
+ <div className="flex flex-wrap items-center justify-between gap-2">
+ <p className={`text-xs font-extrabold uppercase tracking-wide ${textStrong}`}>
+ Féléves ZH összefoglaló táblázat
+ </p>
+ <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-amber-500">
+ <span className="w-2.5 h-2.5 rounded-sm bg-amber-400/30 border border-amber-400 inline-block" />
+ Top 3 legalacsonyabb pontszámú ZH
+ </span>
+ </div>
+
+ {jokerOverviewData.rows.length === 0 ? (
+ <p className={`text-xs italic p-4 rounded-xl border text-center ${bgSubCard} ${textMuted}`}>
+ Ebben a félévben jelenleg nincs olyan tantárgy, amelyhez ZH lenne rögzítve.
+ </p>
+ ) : (
+ <div className={`rounded-xl border overflow-x-auto ${darkMode ? 'border-slate-700' : 'border-slate-200'}`}>
+ <table className="w-full text-left border-collapse text-xs">
+ <thead>
+ <tr className={darkMode ? 'bg-slate-800/95 text-slate-300 border-b border-slate-700' : 'bg-slate-100 text-slate-700 border-b border-slate-200'}>
+ <th className="py-2.5 px-3 font-extrabold">Tantárgy</th>
+ <th className="py-2.5 px-2.5 text-center font-extrabold whitespace-nowrap">1. ZH</th>
+ <th className="py-2.5 px-2.5 text-center font-extrabold whitespace-nowrap">2. ZH</th>
+ <th className="py-2.5 px-2.5 text-center font-extrabold whitespace-nowrap">3. ZH</th>
+ </tr>
+ </thead>
+ <tbody className={`divide-y ${darkMode ? 'divide-slate-800' : 'divide-slate-200'}`}>
+ {jokerOverviewData.rows.map(row => {
+ const isRowSelected = jokerSubjectId === row.subject.id;
+ return (
+ <tr
+ key={row.subject.id}
+ className={
+ isRowSelected
+ ? darkMode
+ ? 'bg-violet-950/30'
+ : 'bg-violet-50/60'
+ : darkMode
+ ? 'bg-slate-900/40 hover:bg-slate-800/40'
+ : 'bg-white hover:bg-slate-50/80'
+ }
+ >
+ <td className="py-2.5 px-3 align-top min-w-[175px]">
+ <p className={`font-bold leading-snug ${textStrong}`}>
+ {row.subject.name}
+ </p>
+ {row.improvementHint && (
+ <p className={`text-[11px] mt-0.5 leading-snug font-medium ${
+ darkMode ? 'text-amber-300/90' : 'text-amber-700'
+ }`}>
+ {row.improvementHint}
+ </p>
+ )}
+ </td>
+
+ {row.slots.map((slot, sIdx) => {
+ if (!slot) {
+ return (
+ <td key={sIdx} className="py-2.5 px-2.5 text-center align-middle">
+ <span className="text-slate-400 dark:text-slate-500 font-bold select-none">—</span>
+ </td>
+ );
+ }
+
+ const isTop3Low =
+ slot.hasScore &&
+ slot.zh.id === row.lowestAssessmentId &&
+ jokerOverviewData.top3Ids.has(slot.zh.id);
+
+ const isChosenCell =
+ jokerSubjectId === row.subject.id && jokerAssessmentId === slot.zh.id;
+
+ return (
+ <td key={sIdx} className="py-2 px-2 text-center align-middle whitespace-nowrap">
+ <button
+ type="button"
+ onClick={() => {
+ setJokerSubjectId(row.subject.id);
+ setJokerAssessmentId(slot.zh.id);
+ }}
+ title="Kattints a ZH kiválasztásához"
+ className={`px-2 py-1.5 rounded-lg border text-xs font-extrabold transition cursor-pointer inline-flex flex-col items-center justify-center min-w-[54px] ${
+ isChosenCell
+ ? 'bg-violet-600 text-white border-violet-400 ring-2 ring-violet-400/50 shadow-xs'
+ : isTop3Low
+ ? darkMode
+ ? 'bg-amber-400/20 text-amber-300 border-amber-400/70 ring-1 ring-amber-400/40'
+ : 'bg-amber-100 text-amber-950 border-amber-500 ring-1 ring-amber-400/50'
+ : slot.hasScore
+ ? darkMode
+ ? 'bg-slate-800/80 hover:bg-slate-700 text-slate-100 border-slate-700'
+ : 'bg-slate-50 hover:bg-slate-100 text-slate-900 border-slate-200'
+ : darkMode
+ ? 'bg-slate-800/40 hover:bg-slate-800 text-slate-400 border-dashed border-slate-700'
+ : 'bg-slate-50/70 hover:bg-slate-100 text-slate-500 border-dashed border-slate-300'
+ }`}
+ >
+ <span>
+ {slot.hasScore ? `${formatHu(slot.totalPts)} p` : '?'}
+ </span>
+ {isTop3Low && (
+ <span className={`text-[9px] font-extrabold uppercase tracking-tight leading-none mt-0.5 ${
+ isChosenCell ? 'text-amber-200' : 'text-amber-500'
+ }`}>
+ Alacsony
+ </span>
+ )}
+ </button>
+ </td>
+ );
+ })}
+ </tr>
+ );
+ })}
+ </tbody>
+ </table>
+ </div>
+ )}
+ </div>
+
+ {jokerOverviewData.rows.length > 0 && (
+ <div className={`p-3.5 rounded-2xl border space-y-3 ${bgSubCard}`}>
+ <p className={`text-xs font-extrabold uppercase tracking-wide ${textStrong}`}>
+ Melyik tárgy melyik ZH-ját írod újra?
+ </p>
+
+ <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
  <div>
- <label className={`block text-xs font-semibold mb-1 ${textMuted}`}>
- 1. Tantárgy kiválasztása (csak sima kurzusok)
+ <label className={`block text-[11px] font-semibold mb-1 ${textMuted}`}>
+ 1. Tantárgy kiválasztása
  </label>
  <select
  value={jokerSubjectId}
@@ -10621,52 +11057,35 @@ export default function App() {
  const nextSubj = semesterSubjects.find(s => s.id === nextSubjId);
  const nextFirstZh = (nextSubj?.assessments || []).find(a => a.category === 'ZH');
  setJokerAssessmentId(nextFirstZh?.id || '');
- setJokerNewScore(
- nextFirstZh?.isJokerRewritten && nextFirstZh.achieved !== null && nextFirstZh.achieved !== undefined
- ? String(nextFirstZh.achieved)
- : ''
- );
  }}
- className={`w-full border rounded-lg px-3 py-2.5 sm:py-2 focus:outline-none focus:border-violet-500 ${inputStyle}`}
+ className={`w-full border rounded-xl px-3 py-2.5 sm:py-2 font-semibold focus:outline-none focus:border-violet-500 ${inputStyle}`}
  >
- {semesterSubjects.filter(s => s.courseKind !== 'exam').map(subj => {
- const zhCount = (subj.assessments || []).filter(a => a.category === 'ZH').length;
- return (
- <option key={subj.id} value={subj.id}>
- {subj.name} ({zhCount} ZH)
+ {jokerOverviewData.rows.map(r => (
+ <option key={r.subject.id} value={r.subject.id}>
+ {r.subject.name} ({r.zhs.length} ZH)
  </option>
- );
- })}
+ ))}
  </select>
  </div>
 
  <div>
- <label className={`block text-xs font-semibold mb-1 ${textMuted}`}>
- 2. Javítani kívánt ZH kiválasztása
+ <label className={`block text-[11px] font-semibold mb-1 ${textMuted}`}>
+ 2. Újraírandó ZH kiválasztása
  </label>
  {availableZhsForJoker.length === 0 ? (
- <p className={`text-xs italic p-3 rounded-lg border ${bgSubCard} ${textMuted}`}>
- Ehhez a tantárgyhoz még nincs rögzített ZH tétel.
+ <p className={`text-xs italic p-2.5 rounded-lg border ${bgCard} ${textMuted}`}>
+ Ehhez a tantárgyhoz nincs ZH.
  </p>
  ) : (
  <select
  value={jokerAssessmentId}
- onChange={(e) => {
- const nextZhId = e.target.value;
- setJokerAssessmentId(nextZhId);
- const chosen = availableZhsForJoker.find(a => a.id === nextZhId);
- setJokerNewScore(
- chosen?.isJokerRewritten && chosen.achieved !== null && chosen.achieved !== undefined
- ? String(chosen.achieved)
- : ''
- );
- }}
- className={`w-full border rounded-lg px-3 py-2.5 sm:py-2 focus:outline-none focus:border-violet-500 ${inputStyle}`}
+ onChange={(e) => setJokerAssessmentId(e.target.value)}
+ className={`w-full border rounded-xl px-3 py-2.5 sm:py-2 font-semibold focus:outline-none focus:border-violet-500 ${inputStyle}`}
  >
  {availableZhsForJoker.map(zh => {
- const currentLabel = zh.achieved !== null && zh.achieved !== undefined
+ const currentLabel = zh.achieved !== null && zh.achieved !== undefined && zh.achieved !== ''
  ? `${formatHu(zh.achieved)} p`
- : 'nincs pontszám';
+ : '?';
  const maxLabel = zh.max ? ` / ${formatHu(zh.max)} p` : '';
  return (
  <option key={zh.id} value={zh.id}>
@@ -10677,49 +11096,11 @@ export default function App() {
  </select>
  )}
  </div>
-
- {selectedJokerZh && (
- <div>
- <label className={`block text-xs font-semibold mb-1 ${textMuted}`}>
- 3. Joker ZH-n elért új pontszám
- </label>
- <div className="flex items-center gap-2">
- <input
- type="number"
- step="1"
- required
- placeholder="Pl. 24,5"
- value={jokerNewScore}
- onChange={e => setJokerNewScore(e.target.value)}
- className={`w-full border rounded-lg px-3 py-2.5 sm:py-2 font-bold focus:outline-none focus:border-violet-500 ${inputStyle}`}
- />
- {selectedJokerZh.max && (
- <span className={`text-xs font-semibold shrink-0 ${textMuted}`}>
- / {formatHu(selectedJokerZh.max)} p
- </span>
- )}
  </div>
- <p className={`text-[11px] mt-1.5 ${textMuted}`}>
- Eredeti pontszám:{' '}
- <strong className={textStrong}>
- {selectedJokerZh.isJokerRewritten
- ? (selectedJokerZh.jokerOriginalAchieved !== null && selectedJokerZh.jokerOriginalAchieved !== undefined
- ? `${formatHu(selectedJokerZh.jokerOriginalAchieved)} p`
- : 'nincs rögzítve')
- : (selectedJokerZh.achieved !== null && selectedJokerZh.achieved !== undefined
- ? `${formatHu(selectedJokerZh.achieved)} p`
- : 'nincs rögzítve')}
- </strong>
- {jokerNewScore !== '' && !isNaN(Number(jokerNewScore)) && (
- <>
- {' '}→ Új pontszám: <strong className="text-violet-500">{formatHu(Number(jokerNewScore))} p</strong>
- </>
- )}
- </p>
  </div>
  )}
 
- <div className="flex justify-end gap-2 pt-2">
+ <div className="flex justify-end gap-2 pt-1">
  <button
  type="button"
  disabled={isSavingJoker}
@@ -10730,14 +11111,15 @@ export default function App() {
  </button>
  <button
  type="submit"
- disabled={isSavingJoker || !selectedJokerZh || jokerNewScore === ''}
+ disabled={isSavingJoker || !selectedJokerZh}
  className="px-4 py-2 text-sm font-bold bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white rounded-lg flex items-center gap-1.5 transition cursor-pointer"
  >
  <JokerIcon className="w-4 h-4" />
- {isSavingJoker ? 'Mentés...' : 'Joker ZH mentése'}
+ <span>Joker ZH kiválasztása és mentése</span>
  </button>
  </div>
  </form>
+ )}
  </div>
  </div>
  )}

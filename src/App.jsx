@@ -44,7 +44,7 @@ const NOTICEBOARD_CACHE_KEY = 'bge_noticeboard_cache_v1';
 const NOTICEBOARD_CACHE_TTL_MS = 10 * 60 * 1000;
 const SEEN_NOTICES_STORAGE_KEY = 'bge_seen_notice_ids_v1';
 const UPDATE_CHECK_THROTTLE_MS = 30 * 1000;
-const GDPR_POLICY_VERSION = 'v2.0.3.1';
+const GDPR_POLICY_VERSION = 'v2.2.4';
 
 const BGE_MAJORS = [
  { id: 'emberi_eroforrasok', label: 'Emberi erőforrások', isGazdinfo: false },
@@ -9925,7 +9925,7 @@ export default function App() {
  <p className="text-[11px] text-emerald-400 font-semibold truncate">
  {mustAcceptGdpr
  ? 'A folytatáshoz egyszeri elfogadás szükséges'
- : `Adatkezelési tájékoztató • ${GDPR_POLICY_VERSION}`}
+ : `Adatkezelési tájékoztató • ${GDPR_POLICY_VERSION} (2026. 11. 20.)`}
  </p>
  </div>
  </div>
@@ -9958,20 +9958,20 @@ export default function App() {
  <div className={`p-3.5 rounded-xl border space-y-2 ${bgSubCard}`}>
  <h3 className={`font-extrabold text-xs sm:text-sm flex items-center gap-2 ${textStrong}`}>
  <Database className="w-4 h-4 text-sky-500 shrink-0" />
- 1. Hogyan és hol tároljuk az adataidat? (Google Firebase)
+ 1. Milyen adatokat tárolunk és hol? (Google Firebase & Böngésző)
  </h3>
  <ul className={`list-disc pl-5 space-y-1.5 text-xs ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>
  <li>
- A bejelentkezés és az adattárolás a Google által üzemeltetett <strong>Firebase Authentication</strong> és <strong>Cloud Firestore</strong> felhőszolgáltatáson keresztül, titkosított (HTTPS/TLS) kapcsolaton történik.
+ <strong>Felhőalapú tárolás:</strong> A bejelentkezés és az adattárolás a Google által üzemeltetett <strong>Firebase Authentication</strong> és <strong>Cloud Firestore</strong> szolgáltatáson keresztül, titkosított (HTTPS/TLS) kapcsolaton történik.
  </li>
  <li>
- Bejelentkezéskor kizárólag a Google-fiókod alapvető azonosító adatait (e-mail cím, megjelenített név, egyedi felhasználói azonosító – UID), valamint a profilodban általad kiválasztott <strong>BGE alapszakot</strong> tároljuk a fiókodhoz rendelve. <strong>A jelszavadhoz az alkalmazás nem fér hozzá és nem tárolja azt.</strong>
+ <strong>Fiók- és profiladatok:</strong> Bejelentkezéskor a Google-fiókod alapvető azonosító adatait (e-mail cím, megjelenített név, egyedi felhasználói azonosító – UID), az utolsó aktivitás időpontját (online jelenlét), valamint az általad kötelezően kiválasztott <strong>BGE alapszakot</strong> tároljuk. <strong>A jelszavadhoz az alkalmazás nem fér hozzá és nem tárolja azt.</strong>
  </li>
  <li>
- Az általad kiválasztott szakot, valamint a rögzített féléveidet, tantárgyaidat, ZH-pontjaidat, jelenléteidet és beállításaidat a rendszer kizárólag a saját, egyedi azonosítód alatti elszigetelt adatbázis-területen tárolja biztonságosan — más felhasználók nem férnek hozzá, és azt bármikor módosíthatod a Menüben.
+ <strong>Tanulmányi adatok:</strong> A rögzített féléveidet, tantárgyaidat (kreditek, besorolás, gyakorlati jelenlétek, ZH- és vizsgapontszámok, JOKER ZH-k, egyéni tárgyrend és küszöbértékek) a rendszer kizárólag a saját, UID-alapú elszigetelt adatbázis-területeden tárolja — más felhasználók nem férnek hozzá.
  </li>
  <li>
- Bizonyos megjelenítési beállítások (pl. sötét mód, rendezés, helyi gyorsítótár) a saját böngésződ tárhelyében (<code>localStorage</code>) is mentésre kerülnek.
+ <strong>Helyi böngészőtárhely (<code>localStorage</code>):</strong> A gyorsabb betöltés és kényelmes használat érdekében a böngésződ helyi tárhelyében mentjük a megjelenítési beállításokat (sötét mód, monokróm paletta, egyszerű/részletes kártyanézet, rendezési mód), a tárgysablonok és faliújság-közlemények átmeneti gyorsítótárát, a függőben lévő JOKER ZH kijelölést, a PWA telepítési állapotot, valamint a karbantartási minijáték rekordpontszámát.
  </li>
  </ul>
  </div>
@@ -9979,23 +9979,20 @@ export default function App() {
  <div className={`p-3.5 rounded-xl border space-y-2 ${bgSubCard}`}>
  <h3 className={`font-extrabold text-xs sm:text-sm flex items-center gap-2 ${textStrong}`}>
  <Lock className="w-4 h-4 text-amber-500 shrink-0" />
- 2. Mire (NEM) használjuk fel az adataidat?
+ 2. Mire használjuk (és mire NEM) az adataidat?
  </h3>
  <ul className={`list-disc pl-5 space-y-1.5 text-xs ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>
  <li>
- Sem a személyes azonosítóidat, sem a kiválasztott <strong>szakodra vonatkozó információt nem gyűjti adatbányászati vagy statisztikai célból a rendszer</strong>, és azokat <strong>semmilyen formában nem használjuk fel</strong> marketing-, hirdetési vagy kereskedelmi célokra.
+ <strong>Személyre szabott funkciók:</strong> A kiválasztott BGE szakodat és tanulmányi adataidat kizárólag az alkalmazás funkcióinak működtetéséhez (szakspecifikus mintatantervi sablonok betöltése, célzott faliújság-közlemények megjelenítése, átlag- és KKI-számítás, eszközök közötti szinkronizáció) használjuk fel.
  </li>
  <li>
- Az adataidat — beleértve a kiválasztott szakodat és tanulmányi eredményeidet — <strong>harmadik félnek (sem az egyetemnek, sem külső szervezetnek) nem adjuk ki, nem osztjuk meg és nem értékesítjük</strong>.
+ <strong>Névtelen összesített App statisztika:</strong> Az „App statisztika” menüpontban kizárólag összesített, személyazonosításra alkalmatlan darabszámok jelennek meg: az összes regisztrált felhasználó száma, a szakok szerinti összesített megoszlás (fő és százalék), valamint az elmúlt 3 percben aktív munkamenetek száma. Egyéni hallgatói adatok, nevek vagy e-mail címek soha nem jelennek meg mások számára.
  </li>
  <li>
- A megadott szakodat és a rögzített pontszámaidat kizárólag az alkalmazás saját, személyre szabott funkcióinak (pl. szakodhoz igazított mintatantervek és célzott faliújság-hirdetmények megjelenítése, átlagszámítás, szinkronizáció az eszközeid között) biztonságos működtetéséhez tárolja a rendszer.
+ <strong>Neptun Excel import (.xlsx / .xls):</strong> A „Múltbéli félévek feltöltése” funkcióban kiválasztott Neptun Törzslap Excel fájl feldolgozása <strong>100%-ban helyben, a saját böngésződben</strong> történik. Magát az Excel fájlt nem töltjük fel és nem tároljuk semmilyen szerveren; kizárólag a kinyert tárgynevek, kreditek és jegyek kerülnek mentésre a fiókodba.
  </li>
  <li>
- Az „App statisztika” kizárólag összesített, névtelen darabszámot (regisztráltak és aktív felhasználók száma) jelenít meg, személyes adatok felfedése nélkül.
- </li>
- <li>
- A Neptunból exportált Excel fájlok feldolgozása helyben, a böngésződben történik — magát az Excel fájlt nem töltjük fel és nem tároljuk szerveren.
+ <strong>Adatvédelmi garancia:</strong> Adataidat <strong>harmadik félnek (sem a BGE-nek, sem más intézménynek vagy cégnek) nem adjuk ki, nem osztjuk meg és nem értékesítjük</strong>, továbbá semmilyen hirdetési, profilalkotási vagy kereskedelmi célra nem használjuk fel.
  </li>
  </ul>
  </div>
@@ -10003,10 +10000,10 @@ export default function App() {
  <div className={`p-3.5 rounded-xl border space-y-1.5 ${bgSubCard}`}>
  <h3 className={`font-extrabold text-xs sm:text-sm flex items-center gap-2 ${textStrong}`}>
  <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
- 3. Jogaid és adattörlés
+ 3. Jogaid, adatmódosítás és törlés
  </h3>
  <p className={`text-xs ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>
- Adataidat bármikor szabadon módosíthatod vagy törölheted az alkalmazáson belül. Teljes fiók- és adattörlési kérelem, illetve bármilyen adatvédelmi kérdés esetén írj közvetlenül a fejlesztőnek a(z){' '}
+ A kiválasztott szakodat bármikor módosíthatod a jobb felső <strong>Menü</strong> gomb alatt, a féléveidet és tantárgyaidat pedig szabadon szerkesztheted vagy törölheted az alkalmazáson belül. Teljes fiók- és minden kapcsolódó felhőadat végleges törléséhez, illetve bármilyen adatvédelmi kérdés esetén írj közvetlenül a fejlesztőnek a(z){' '}
  <a
  href={`mailto:${CREATOR_EMAIL}?subject=${encodeURIComponent('BGE Progress — Adatvédelem / Adattörlési kérelem')}`}
  className="font-bold text-amber-500 underline underline-offset-2"

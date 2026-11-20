@@ -635,6 +635,13 @@ function buildTemplatesForMajor(majorId) {
 
 const APP_RELEASES = [
  {
+ version: 'v2.2.2',
+ date: '2026. 11. 20.',
+ changes: [
+ 'Bővített App statisztika: az összes regisztrált felhasználó száma alatt lenyitható nézetben megtekinthető, hogy melyik BGE szakról hány hallgató regisztrált az alkalmazásba'
+ ]
+ },
+ {
  version: 'v2.2.1',
  date: '2026. 11. 20.',
  changes: [
@@ -2502,8 +2509,9 @@ export default function App() {
  const [isMenuOpen, setIsMenuOpen] = useState(false);
 
  const [isStatsModalOpen, setIsStatsModalOpen] = useState(false);
- const [appUsersStats, setAppUsersStats] = useState({ totalUsers: 0, activeUsers: 0 });
+ const [appUsersStats, setAppUsersStats] = useState({ totalUsers: 0, activeUsers: 0, majorCounts: {}, unknownMajorCount: 0 });
  const [statsLoading, setStatsLoading] = useState(true);
+ const [isStatsMajorsExpanded, setIsStatsMajorsExpanded] = useState(false);
 
  const [sortMode, setSortMode] = useState(() => localStorage.getItem('bge_subject_sort_mode') || 'custom');
  const [isSortMenuOpen, setIsSortMenuOpen] = useState(false);
@@ -2969,12 +2977,22 @@ export default function App() {
 
  const updatePresence = (isOnline = true) => {
  const nowMs = Date.now();
+ const cachedMajorId = (() => {
+ try {
+ return localStorage.getItem(`bge_user_major_${user.uid}`) || '';
+ } catch {
+ return '';
+ }
+ })();
+ const effectiveMajorId = userMajorId || cachedMajorId;
+ const effectiveMajorObj = BGE_MAJORS.find(m => m.id === effectiveMajorId) || null;
  setDoc(
  userPresenceRef,
  {
  uid: user.uid,
  email: user.email || '',
  displayName: user.displayName || '',
+ ...(effectiveMajorObj ? { majorId: effectiveMajorObj.id, majorLabel: effectiveMajorObj.label } : {}),
  online: isOnline,
  lastSeenMs: nowMs,
  lastSeen: serverTimestamp()
@@ -3026,12 +3044,17 @@ export default function App() {
  const now = Date.now();
  const uniqueTotalIds = new Set();
  const uniqueActiveIds = new Set();
+ const userMajorMap = new Map();
 
  snapshot.forEach((docSnap) => {
  const data = docSnap.data() || {};
  const uidKey = String(data.uid || docSnap.id).trim();
  if (!uidKey) return;
  uniqueTotalIds.add(uidKey);
+
+ if (typeof data.majorId === 'string' && BGE_MAJORS.some(m => m.id === data.majorId)) {
+ userMajorMap.set(uidKey, data.majorId);
+ }
 
  const lastSeenMs =
  typeof data.lastSeenMs === 'number'
@@ -3047,10 +3070,30 @@ export default function App() {
 
  uniqueTotalIds.add(user.uid);
  uniqueActiveIds.add(user.uid);
+ if (userMajorId && BGE_MAJORS.some(m => m.id === userMajorId)) {
+ userMajorMap.set(user.uid, userMajorId);
+ }
+
+ const majorCounts = {};
+ BGE_MAJORS.forEach(m => {
+ majorCounts[m.id] = 0;
+ });
+ let unknownMajorCount = 0;
+
+ uniqueTotalIds.forEach((uidKey) => {
+ const mId = userMajorMap.get(uidKey);
+ if (mId && Object.prototype.hasOwnProperty.call(majorCounts, mId)) {
+ majorCounts[mId] += 1;
+ } else {
+ unknownMajorCount += 1;
+ }
+ });
 
  setAppUsersStats({
  totalUsers: uniqueTotalIds.size,
- activeUsers: uniqueActiveIds.size
+ activeUsers: uniqueActiveIds.size,
+ majorCounts,
+ unknownMajorCount
  });
  setStatsLoading(false);
  },
@@ -3058,7 +3101,9 @@ export default function App() {
  console.error('App statisztika lekérdezési hiba:', err);
  setAppUsersStats(prev => ({
  totalUsers: Math.max(1, prev.totalUsers),
- activeUsers: Math.max(1, prev.activeUsers)
+ activeUsers: Math.max(1, prev.activeUsers),
+ majorCounts: prev.majorCounts || {},
+ unknownMajorCount: prev.unknownMajorCount || 0
  }));
  setStatsLoading(false);
  }
@@ -3425,6 +3470,14 @@ export default function App() {
  }
  if (typeof data.majorId === 'string' && BGE_MAJORS.some(m => m.id === data.majorId)) {
  setUserMajorId(data.majorId);
+ const foundM = BGE_MAJORS.find(m => m.id === data.majorId);
+ if (foundM) {
+ setDoc(
+ doc(db, 'appUsers', user.uid),
+ { majorId: foundM.id, majorLabel: foundM.label },
+ { merge: true }
+ ).catch(() => {});
+ }
  try {
  localStorage.setItem(`bge_user_major_${user.uid}`, data.majorId);
  } catch {
@@ -3604,6 +3657,15 @@ export default function App() {
  },
  { merge: true }
  );
+ setDoc(
+ doc(db, 'appUsers', user.uid),
+ {
+ uid: user.uid,
+ majorId: chosenMajor.id,
+ majorLabel: chosenMajor.label
+ },
+ { merge: true }
+ ).catch(() => {});
  try {
  localStorage.setItem(`bge_user_major_${user.uid}`, chosenMajor.id);
  localStorage.setItem('bge_is_gazdinfo', String(isGazdinfoVal));
@@ -9073,7 +9135,14 @@ export default function App() {
  );
  })()}
  {/* APP STATISZTIKA MODAL */}
- {isStatsModalOpen && (
+ {isStatsModalOpen && (() => {
+ const sortedMajorsWithCounts = BGE_MAJORS.map(m => ({
+ id: m.id,
+ label: m.label,
+ count: Number(appUsersStats.majorCounts?.[m.id] || 0)
+ })).sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, 'hu'));
+
+ return (
  <div
  data-top-modal="true"
  onClick={() => setIsStatsModalOpen(false)}
@@ -9081,9 +9150,9 @@ export default function App() {
  >
  <div
  onClick={(e) => e.stopPropagation()}
- className={`rounded-2xl max-w-md w-full shadow-2xl overflow-hidden border ${bgCard}`}
+ className={`rounded-2xl max-w-lg w-full max-h-[92dvh] flex flex-col shadow-2xl overflow-hidden border ${bgCard}`}
  >
- <div className="px-4 sm:px-6 py-3.5 sm:py-4 bg-slate-900 text-white flex justify-between items-center border-b border-slate-800">
+ <div className="px-4 sm:px-6 py-3.5 sm:py-4 bg-slate-900 text-white flex justify-between items-center border-b border-slate-800 shrink-0">
  <div className="flex items-center gap-2.5 min-w-0">
  <div className="w-8 h-8 rounded-lg bg-violet-500 text-white flex items-center justify-center shrink-0">
  <BarChart3 className="w-4 h-4" />
@@ -9102,9 +9171,9 @@ export default function App() {
  </button>
  </div>
 
- <div className="p-4 sm:p-6 space-y-4">
+ <div className="p-4 sm:p-6 overflow-y-auto overscroll-contain space-y-4 flex-1 min-h-0">
  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
- <div className={`p-4 rounded-2xl border space-y-1.5 ${bgSubCard}`}>
+ <div className={`p-4 rounded-2xl border space-y-2 ${bgSubCard}`}>
  <div className="flex items-center justify-between">
  <span className={`text-[11px] font-bold uppercase tracking-wide ${textMuted}`}>
  Regisztráltak
@@ -9115,6 +9184,25 @@ export default function App() {
  {statsLoading ? '...' : `${appUsersStats.totalUsers} fő`}
  </p>
  <p className={`text-[11px] ${textMuted}`}>Összes valaha belépett felhasználó</p>
+
+ <div className={`pt-2 border-t ${darkMode ? 'border-slate-700/80' : 'border-slate-200'}`}>
+ <button
+ type="button"
+ onClick={() => setIsStatsMajorsExpanded(prev => !prev)}
+ aria-expanded={isStatsMajorsExpanded}
+ className={`w-full py-1.5 px-2.5 rounded-xl text-xs font-extrabold flex items-center justify-between gap-1.5 transition cursor-pointer ${
+ darkMode
+ ? 'bg-slate-900/90 hover:bg-slate-900 text-sky-400 border border-slate-700'
+ : 'bg-white hover:bg-sky-50 text-sky-700 border border-slate-200 shadow-2xs'
+ }`}
+ >
+ <span className="flex items-center gap-1.5 truncate">
+ <GraduationCap className="w-3.5 h-3.5 shrink-0" />
+ <span className="truncate">Szakok szerinti bontás</span>
+ </span>
+ <ChevronDown className={`w-3.5 h-3.5 shrink-0 transition-transform duration-200 ${isStatsMajorsExpanded ? 'rotate-180' : ''}`} />
+ </button>
+ </div>
  </div>
 
  <div className={`p-4 rounded-2xl border-2 space-y-1.5 ${
@@ -9138,6 +9226,104 @@ export default function App() {
  </div>
  </div>
 
+ {isStatsMajorsExpanded && (
+ <div className={`p-3.5 sm:p-4 rounded-2xl border space-y-2.5 ${
+ darkMode
+ ? 'bg-slate-800/60 border-sky-500/35'
+ : 'bg-sky-50/50 border-sky-200'
+ }`}>
+ <div className="flex items-center justify-between gap-2">
+ <p className={`text-xs font-extrabold uppercase tracking-wide flex items-center gap-1.5 ${textStrong}`}>
+ <GraduationCap className="w-4 h-4 text-sky-500 shrink-0" />
+ <span>Regisztráltak szakok szerint</span>
+ </p>
+ <span className={`text-[11px] font-bold ${textMuted}`}>
+ {statsLoading ? '...' : `${appUsersStats.totalUsers} fő összesen`}
+ </span>
+ </div>
+
+ {statsLoading ? (
+ <p className={`text-xs py-2 text-center ${textMuted}`}>Adatok betöltése...</p>
+ ) : (
+ <div className="space-y-1.5">
+ {sortedMajorsWithCounts.map(item => {
+ const pct = appUsersStats.totalUsers > 0
+ ? Math.round((item.count / appUsersStats.totalUsers) * 100)
+ : 0;
+ return (
+ <div
+ key={item.id}
+ className={`px-3 py-2 rounded-xl border flex items-center justify-between gap-2.5 ${
+ item.count > 0
+ ? darkMode
+ ? 'bg-slate-900/90 border-slate-700'
+ : 'bg-white border-slate-200'
+ : darkMode
+ ? 'bg-slate-900/40 border-slate-800/80 opacity-65'
+ : 'bg-white/60 border-slate-200/70 opacity-70'
+ }`}
+ >
+ <div className="min-w-0 flex-1">
+ <p className={`text-xs font-bold leading-snug break-words ${textStrong}`}>
+ {item.label}
+ </p>
+ {item.count > 0 && (
+ <div className={`w-full h-1.5 rounded-full overflow-hidden mt-1.5 ${
+ darkMode ? 'bg-slate-800' : 'bg-slate-100'
+ }`}>
+ <div
+ className="h-full bg-sky-500 rounded-full transition-all duration-300"
+ style={{ width: `${Math.max(4, pct)}%` }}
+ />
+ </div>
+ )}
+ </div>
+
+ <div className="flex items-center gap-1.5 shrink-0">
+ {item.count > 0 && (
+ <span className={`text-[10px] font-semibold ${textMuted}`}>
+ ({pct}%)
+ </span>
+ )}
+ <span className={`px-2.5 py-0.5 rounded-full text-xs font-extrabold ${
+ item.count > 0
+ ? darkMode
+ ? 'bg-sky-500/20 text-sky-300 border border-sky-500/35'
+ : 'bg-sky-100 text-sky-800 border border-sky-300'
+ : darkMode
+ ? 'bg-slate-800 text-slate-400'
+ : 'bg-slate-100 text-slate-500'
+ }`}>
+ {item.count} fő
+ </span>
+ </div>
+ </div>
+ );
+ })}
+
+ {appUsersStats.unknownMajorCount > 0 && (
+ <div
+ className={`px-3 py-2 rounded-xl border flex items-center justify-between gap-2.5 ${
+ darkMode
+ ? 'bg-slate-900/60 border-slate-800'
+ : 'bg-slate-50 border-slate-200'
+ }`}
+ >
+ <span className={`text-xs font-semibold ${textMuted}`}>
+ Még nem választott szakot
+ </span>
+ <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
+ darkMode ? 'bg-slate-800 text-slate-300' : 'bg-slate-200 text-slate-700'
+ }`}>
+ {appUsersStats.unknownMajorCount} fő
+ </span>
+ </div>
+ )}
+ </div>
+ )}
+ </div>
+ )}
+
  <div className={`p-3 rounded-xl border text-xs leading-relaxed ${bgSubCard} ${textMuted}`}>
  A regisztráltak száma minden egyedi belépett Google-fiókot számol, az élő aktív számláló pedig az elmúlt 3 percben aktív munkameneteket mutatja.
  </div>
@@ -9154,7 +9340,8 @@ export default function App() {
  </div>
  </div>
  </div>
- )}
+ );
+ })()}
 
  {/* ÁTLAGSZÁMOLÓ MODAL */}
  {isAvgCalcOpen && (

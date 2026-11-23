@@ -2903,8 +2903,6 @@ export default function App() {
  const [darkMode, setDarkMode] = useState(() => localStorage.getItem('bge_theme') === 'dark');
  const [monochrome, setMonochrome] = useState(() => localStorage.getItem('bge_palette') === 'monochrome');
  const [simpleView, setSimpleView] = useState(() => localStorage.getItem('bge_card_view') === 'simple');
- const [isMenuOpen, setIsMenuOpen] = useState(false);
- const [isBottomMenuOpen, setIsBottomMenuOpen] = useState(false);
 
  const [isStatsModalOpen, setIsStatsModalOpen] = useState(false);
  const [appUsersStats, setAppUsersStats] = useState({ totalUsers: 0, activeUsers: 0, majorCounts: {}, unknownMajorCount: 0 });
@@ -3422,46 +3420,6 @@ export default function App() {
  localStorage.setItem('bge_subject_sort_mode', sortMode);
  }, [sortMode]);
 
- useEffect(() => {
- if (!isBottomMenuOpen) return;
- const handleOutsideBottomMenu = (event) => {
- if (
- event.target &&
- typeof event.target.closest === 'function' &&
- event.target.closest('[data-bottom-nav-root="true"]')
- ) {
- return;
- }
- setIsBottomMenuOpen(false);
- setIsEditingNickname(false);
- };
- document.addEventListener('mousedown', handleOutsideBottomMenu);
- document.addEventListener('touchstart', handleOutsideBottomMenu);
- return () => {
- document.removeEventListener('mousedown', handleOutsideBottomMenu);
- document.removeEventListener('touchstart', handleOutsideBottomMenu);
- };
- }, [isBottomMenuOpen]);
-
- useEffect(() => {
- if (!isMenuOpen) return;
- const handleOutsideClick = (event) => {
- if (
- event.target &&
- typeof event.target.closest === 'function' &&
- event.target.closest('[data-dropdown-menu="true"]')
- ) {
- return;
- }
- setIsMenuOpen(false);
- };
- document.addEventListener('mousedown', handleOutsideClick);
- document.addEventListener('touchstart', handleOutsideClick);
- return () => {
- document.removeEventListener('mousedown', handleOutsideClick);
- document.removeEventListener('touchstart', handleOutsideClick);
- };
- }, [isMenuOpen]);
 
  useEffect(() => {
  if (!isHomePlusMenuOpen) return;
@@ -4480,7 +4438,6 @@ export default function App() {
  useEffect(() => {
  if (!user || !userDataLoaded || activeView !== 'home') return;
  if (mustAcceptGdpr || mustSelectMajor) return;
- if (isBottomMenuOpen) return;
 
  const alreadySeenLocal = localStorage.getItem('bge_gazdinfo_prompt_seen') === 'true';
  const hasExistingData = subjects.length > 0 || savedSemesterDocs.length > 0;
@@ -4860,16 +4817,22 @@ export default function App() {
  return getCurrentSemesterCode();
  }, [semesters, selectedSemester]);
 
- const navigateWithSlide = (targetView, targetSem = null) => {
- setIsMenuOpen(false);
+ const navigateWithSlide = (targetView, targetSem = null, options = {}) => {
+ if (!options.preserveNicknameEdit) {
  setIsEditingNickname(false);
+ }
  closeHomePlusMenuAnimated();
  closeCollectorMenuAnimated();
+
+ const viewOrder = { home: 0, semester: 1, menu: 2 };
+ const currentIdx = viewOrder[activeView] ?? 0;
+ const targetIdx = viewOrder[targetView] ?? 0;
+ const slideDirection = targetIdx >= currentIdx ? 'left' : 'right';
 
  if (targetView === 'home') {
  if (activeView !== 'home') {
  window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
- setViewSlideDir('right');
+ setViewSlideDir(slideDirection);
  setActiveView('home');
  }
  return;
@@ -4882,8 +4845,17 @@ export default function App() {
  }
  if (activeView !== 'semester') {
  window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
- setViewSlideDir('left');
+ setViewSlideDir(slideDirection);
  setActiveView('semester');
+ }
+ return;
+ }
+
+ if (targetView === 'menu') {
+ if (activeView !== 'menu') {
+ window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+ setViewSlideDir(slideDirection);
+ setActiveView('menu');
  }
  }
  };
@@ -6700,7 +6672,7 @@ export default function App() {
  );
 
  useEffect(() => {
- if (!isAnyModalOpen && !isBottomMenuOpen) return;
+ if (!isAnyModalOpen && !(activeView === 'menu' && isEditingNickname)) return;
 
  const handleModalKeyDown = (e) => {
  if (e.isComposing) return;
@@ -6708,8 +6680,7 @@ export default function App() {
  if (e.key === 'Escape') {
  e.preventDefault();
  if (mustAcceptGdpr || mustSelectMajor) return;
- if (!isAnyModalOpen && isBottomMenuOpen) {
- setIsBottomMenuOpen(false);
+ if (!isAnyModalOpen && activeView === 'menu' && isEditingNickname) {
  setIsEditingNickname(false);
  return;
  }
@@ -6836,36 +6807,24 @@ export default function App() {
  return () => window.removeEventListener('keydown', handleModalKeyDown);
  });
 
- const shouldLockBackgroundScroll = isAnyModalOpen || isBottomMenuOpen;
+ const shouldLockBackgroundScroll = isAnyModalOpen;
 
  useEffect(() => {
  if (!shouldLockBackgroundScroll) return;
+ const scrollY = window.scrollY || window.pageYOffset || 0;
  const body = document.body;
  const html = document.documentElement;
 
- const prevBodyOverflow = body.style.overflow;
- const prevHtmlOverflow = html.style.overflow;
- const prevBodyOverscroll = body.style.overscrollBehavior;
-
- html.style.overflow = 'hidden';
- body.style.overflow = 'hidden';
- body.style.overscrollBehavior = 'none';
-
- if (!isAnyModalOpen) {
- return () => {
- html.style.overflow = prevHtmlOverflow;
- body.style.overflow = prevBodyOverflow;
- body.style.overscrollBehavior = prevBodyOverscroll;
- };
- }
-
- const scrollY = window.scrollY || window.pageYOffset || 0;
  const prevBodyPosition = body.style.position;
  const prevBodyTop = body.style.top;
  const prevBodyLeft = body.style.left;
  const prevBodyRight = body.style.right;
  const prevBodyWidth = body.style.width;
+ const prevBodyOverflow = body.style.overflow;
+ const prevHtmlOverflow = html.style.overflow;
 
+ html.style.overflow = 'hidden';
+ body.style.overflow = 'hidden';
  body.style.position = 'fixed';
  body.style.top = `-${scrollY}px`;
  body.style.left = '0';
@@ -6875,7 +6834,6 @@ export default function App() {
  return () => {
  html.style.overflow = prevHtmlOverflow;
  body.style.overflow = prevBodyOverflow;
- body.style.overscrollBehavior = prevBodyOverscroll;
  body.style.position = prevBodyPosition;
  body.style.top = prevBodyTop;
  body.style.left = prevBodyLeft;
@@ -6883,7 +6841,7 @@ export default function App() {
  body.style.width = prevBodyWidth;
  window.scrollTo(0, scrollY);
  };
- }, [shouldLockBackgroundScroll, isAnyModalOpen]);
+ }, [shouldLockBackgroundScroll]);
 
  const handleSaveBucketModal = async (e) => {
  if (e && e.preventDefault) e.preventDefault();
@@ -7553,54 +7511,130 @@ export default function App() {
  );
  };
 
- const renderMenuBody = (closeMenuFn) => (
- <>
- <div className="space-y-2">
- <p className={`text-[10px] font-bold uppercase tracking-wider px-1 ${textMuted}`}>
- Hallgatói profil
- </p>
-
- <div className={`p-3 rounded-xl border space-y-2.5 ${
+ const renderMenuPage = () => (
+ <div
+ key="view-menu"
+ className={viewSlideDir === 'left' ? 'bge-view-slide-left' : viewSlideDir === 'right' ? 'bge-view-slide-right' : ''}
+ >
+ <header className={`bge-dashboard-header sticky top-0 z-30 shadow-md border-b backdrop-blur-2xl transition-colors duration-200 ${
  darkMode
- ? 'bg-slate-800/75 border-slate-700/90'
- : 'bg-slate-50/95 border-slate-200'
+ ? 'bg-slate-900/48 text-white border-white/15'
+ : 'bg-white/44 text-slate-900 border-white/75'
  }`}>
- <div className="flex items-start gap-2.5 min-w-0">
- <div className="w-8 h-8 rounded-xl bg-amber-400/20 border border-amber-400/40 text-amber-500 flex items-center justify-center shrink-0 mt-0.5">
- <User className="w-4 h-4" />
+ <div className="max-w-4xl mx-auto px-3 sm:px-4 py-2.5 flex items-center justify-between gap-2">
+ <button
+ type="button"
+ data-no-glass="true"
+ onClick={() => navigateWithSlide('home')}
+ className="flex items-center gap-2 sm:gap-2.5 text-left cursor-pointer group min-w-0 bg-transparent border-0 shadow-none"
+ >
+ <img
+ src="/logo.png"
+ onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = 'https://tudasterkep.uni-bge.hu/images/logo.png'; }}
+ alt="BGE Logó"
+ className="h-9 sm:h-11 w-auto object-contain shrink-0"
+ />
+ <div className="min-w-0">
+ <h1 className={`font-bold text-sm sm:text-lg leading-tight transition truncate ${
+ darkMode ? 'text-white group-hover:text-amber-400' : 'text-slate-900 group-hover:text-amber-600'
+ }`}>
+ Menü és beállítások
+ </h1>
+ <p className={`text-[11px] sm:text-xs font-semibold truncate max-w-[200px] sm:max-w-xs ${
+ darkMode ? 'text-slate-300' : 'text-slate-600'
+ }`}>
+ Profil, megjelenés és eszközök
+ </p>
+ </div>
+ </button>
+
+ <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+ {renderTopFeedbackButton(darkMode)}
+ {renderNoticeboardBellButton(darkMode)}
+ </div>
+ </div>
+
+ {isAdmin && isMaintenanceMode && (
+ <div className="bg-amber-400 text-slate-950 text-xs font-bold px-3 sm:px-4 py-2 text-center flex flex-wrap items-center justify-center gap-2 shadow-sm">
+ <Wrench className="w-4 h-4 shrink-0" />
+ <span>
+ <strong>Maintenance mód AKTÍV:</strong> Jelenleg csak te (admin) éred el az alkalmazást.
+ </span>
+ <button
+ type="button"
+ disabled={isTogglingMaintenance}
+ onClick={handleToggleMaintenanceMode}
+ className="px-2.5 py-1 rounded-lg bg-slate-950 text-amber-400 hover:bg-slate-800 text-[11px] font-extrabold transition cursor-pointer"
+ >
+ Kikapcsolás most
+ </button>
+ </div>
+ )}
+
+ {isSim && (
+ <div className="bg-amber-400 text-slate-950 text-xs font-medium px-3 sm:px-4 py-1.5 text-center">
+ <strong>„Mi lenne, ha?” szimulációs mód aktív:</strong> Tervezett pontszámokkal és szimulált jegyekkel számol az app (nem ment az adatbázisba).
+ <button onClick={handleResetAndExitSimulator} className="underline ml-2 font-bold cursor-pointer">
+ Visszaállítás
+ </button>
+ </div>
+ )}
+ </header>
+
+ <main className="max-w-4xl w-full min-w-0 mx-auto px-3 sm:px-4 pt-5 sm:pt-7 space-y-5 overflow-x-clip">
+ {/* 1. HALLGATÓI PROFIL KÁRTYA */}
+ <div className={`bge-menu-card bge-menu-card-1 rounded-2xl border p-4 sm:p-6 space-y-4 ${bgCard}`}>
+ <div className="flex items-center justify-between gap-2">
+ <div className="flex items-center gap-2">
+ <User className="w-4 h-4 text-amber-500 shrink-0" />
+ <h2 className={`text-xs sm:text-sm font-extrabold uppercase tracking-wider ${textStrong}`}>
+ Hallgatói profil
+ </h2>
+ </div>
+ {isAdmin && (
+ <span className="px-2.5 py-0.5 text-[10px] font-extrabold uppercase rounded-full bg-amber-400/20 text-amber-500 border border-amber-400/35 shrink-0">
+ Admin
+ </span>
+ )}
+ </div>
+
+ <div className={`p-3.5 sm:p-4 rounded-2xl border space-y-3.5 ${bgSubCard}`}>
+ <div className="flex items-start gap-3 min-w-0">
+ <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-amber-400/20 border border-amber-400/40 text-amber-500 flex items-center justify-center shrink-0">
+ <User className="w-5 h-5 sm:w-6 sm:h-6" />
  </div>
  <div className="min-w-0 flex-1">
- <div className="flex items-center gap-1.5 flex-wrap">
- <p className={`text-xs sm:text-sm font-extrabold truncate ${textStrong}`}>
+ <div className="flex items-center gap-2 flex-wrap">
+ <p className={`text-base sm:text-lg font-extrabold truncate ${textStrong}`}>
  {userNickname || user.displayName || 'Hallgató'}
  </p>
  {userNickname && (
- <span className="px-1.5 py-0.2 rounded-md text-[10px] font-extrabold bg-amber-400/20 text-amber-500 border border-amber-400/35 shrink-0">
+ <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-400/20 text-amber-500 border border-amber-400/35 shrink-0">
  Becenév
  </span>
  )}
  </div>
  {user.displayName && (
- <p className={`text-[11px] truncate mt-0.5 ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>
+ <p className={`text-xs sm:text-sm truncate mt-0.5 ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>
  <span className={textMuted}>Teljes név:</span>{' '}
  <strong className="font-semibold">{user.displayName}</strong>
  </p>
  )}
- <p className={`text-[11px] truncate mt-0.5 flex items-center gap-1 ${textMuted}`} title={user.email || ''}>
- <Mail className="w-3 h-3 shrink-0 text-amber-500/80" />
+ <p className={`text-xs truncate mt-1 flex items-center gap-1.5 ${textMuted}`} title={user.email || ''}>
+ <Mail className="w-3.5 h-3.5 shrink-0 text-amber-500/80" />
  <span className="truncate">{user.email}</span>
  </p>
  </div>
  </div>
 
- <div className={`pt-2 border-t ${darkMode ? 'border-slate-700/80' : 'border-slate-200/90'}`}>
+ <div className={`pt-3 border-t ${darkMode ? 'border-white/10' : 'border-slate-200/80'}`}>
  {!isEditingNickname ? (
- <div className="flex items-center justify-between gap-2">
+ <div className="flex items-center justify-between gap-3">
  <div className="min-w-0">
  <span className={`text-[10px] font-bold uppercase tracking-wider block ${textMuted}`}>
  Becenév
  </span>
- <span className={`text-xs font-bold truncate block ${userNickname ? textStrong : textMuted}`}>
+ <span className={`text-sm font-bold truncate block mt-0.5 ${userNickname ? textStrong : textMuted}`}>
  {userNickname || 'Nincs megadva'}
  </span>
  </div>
@@ -7610,19 +7644,19 @@ export default function App() {
  setNicknameDraft(userNickname || '');
  setIsEditingNickname(true);
  }}
- className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border inline-flex items-center gap-1 transition cursor-pointer shrink-0 ${
+ className={`px-3 py-2 rounded-xl text-xs font-bold border inline-flex items-center gap-1.5 transition cursor-pointer shrink-0 ${
  darkMode
- ? 'bg-slate-900 hover:bg-slate-700 text-amber-300 border-slate-700'
- : 'bg-white hover:bg-amber-50 text-slate-800 border-slate-300 shadow-2xs'
+ ? 'bg-slate-900/75 hover:bg-slate-800 text-amber-300 border-white/15'
+ : 'bg-white/80 hover:bg-amber-50 text-slate-800 border-slate-300 shadow-2xs'
  }`}
  >
- <Pencil className="w-3 h-3 text-amber-500" />
+ <Pencil className="w-3.5 h-3.5 text-amber-500" />
  <span>{userNickname ? 'Módosítás' : 'Becenév adása'}</span>
  </button>
  </div>
  ) : (
- <form onSubmit={handleSaveUserNickname} className="space-y-2">
- <label className={`block text-[10px] font-bold uppercase tracking-wider ${textMuted}`}>
+ <form onSubmit={handleSaveUserNickname} className="bge-fluid-reveal space-y-2.5">
+ <label className={`block text-[11px] font-bold uppercase tracking-wider ${textMuted}`}>
  Saját becenév megadása
  </label>
  <input
@@ -7632,38 +7666,36 @@ export default function App() {
  placeholder="Pl. Csongi"
  value={nicknameDraft}
  onChange={(e) => setNicknameDraft(e.target.value)}
- className={`w-full border rounded-lg px-2.5 py-1.5 text-xs font-bold focus:outline-none ${inputStyle}`}
+ className={`w-full border rounded-xl px-3 py-2.5 text-sm font-bold focus:outline-none ${inputStyle}`}
  />
- <div className="flex items-center justify-between gap-1.5">
+ <div className="flex items-center justify-between gap-2">
  {userNickname ? (
  <button
  type="button"
  disabled={isSavingNickname}
- onClick={() => {
- setNicknameDraft('');
- }}
- className="text-[11px] font-semibold text-rose-500 hover:underline cursor-pointer"
+ onClick={() => setNicknameDraft('')}
+ className="text-xs font-semibold text-rose-500 hover:underline cursor-pointer"
  >
  Törlés
  </button>
  ) : (
  <span />
  )}
- <div className="flex items-center gap-1.5">
+ <div className="flex items-center gap-2">
  <button
  type="button"
  disabled={isSavingNickname}
  onClick={() => setIsEditingNickname(false)}
- className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold cursor-pointer ${textMuted}`}
+ className={`px-3 py-1.5 rounded-xl text-xs font-semibold cursor-pointer ${textMuted}`}
  >
  Mégse
  </button>
  <button
  type="submit"
  disabled={isSavingNickname}
- className="px-3 py-1 rounded-lg text-[11px] font-extrabold bg-amber-400 hover:bg-amber-300 text-slate-950 inline-flex items-center gap-1 transition cursor-pointer disabled:opacity-50"
+ className="px-4 py-1.5 rounded-xl text-xs font-extrabold bg-amber-400 hover:bg-amber-300 text-slate-950 inline-flex items-center gap-1.5 transition cursor-pointer disabled:opacity-50"
  >
- <Check className="w-3 h-3" />
+ <Check className="w-3.5 h-3.5" />
  <span>{isSavingNickname ? 'Mentés...' : 'Mentés'}</span>
  </button>
  </div>
@@ -7676,40 +7708,56 @@ export default function App() {
  <button
  type="button"
  onClick={() => {
- closeMenuFn();
  setIsEditingNickname(false);
  handleOpenMajorSelectModal();
  }}
  title="Kattints a szakod módosításához (pl. szakváltás esetén)"
- className={`w-full px-3 py-2.5 rounded-xl text-xs font-bold border flex items-center justify-between gap-2 text-left transition cursor-pointer ${
+ className={`w-full px-4 py-3.5 rounded-2xl text-xs sm:text-sm font-bold border flex items-center justify-between gap-3 text-left transition cursor-pointer ${
  darkMode
- ? 'bg-amber-400/10 hover:bg-amber-400/20 text-amber-300 border-amber-400/35'
- : 'bg-amber-50/90 hover:bg-amber-100 text-slate-900 border-amber-300'
+ ? 'bg-amber-400/12 hover:bg-amber-400/20 text-amber-200 border-amber-400/35'
+ : 'bg-amber-50/85 hover:bg-amber-100/90 text-slate-900 border-amber-300'
  }`}
  >
- <span className="flex items-center gap-2 min-w-0">
- <GraduationCap className="w-4 h-4 text-amber-500 shrink-0" />
- <span className="truncate">
+ <span className="flex items-center gap-2.5 min-w-0">
+ <span className="w-9 h-9 rounded-xl bg-amber-400/20 text-amber-500 flex items-center justify-center shrink-0">
+ <GraduationCap className="w-5 h-5" />
+ </span>
+ <span className="min-w-0">
+ <span className={`block text-[10px] font-bold uppercase tracking-wider ${textMuted}`}>
+ Aktuális szakod
+ </span>
+ <span className="block truncate font-extrabold">
  {userMajorObj ? userMajorObj.label : 'Szak kiválasztása'}
  </span>
  </span>
- <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-extrabold bg-amber-400 text-slate-950 shrink-0">
- <Pencil className="w-2.5 h-2.5" /> Szak váltása
+ </span>
+ <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-extrabold bg-amber-400 text-slate-950 shrink-0">
+ <Pencil className="w-3 h-3" /> Szak váltása
  </span>
  </button>
  </div>
 
+ {/* 2. MEGJELENÉS ÉS NÉZET KÁRTYA */}
+ <div className={`bge-menu-card bge-menu-card-2 rounded-2xl border p-4 sm:p-6 space-y-4 ${bgCard}`}>
+ <div className="flex items-center gap-2">
+ <Palette className="w-4 h-4 text-amber-500 shrink-0" />
+ <h2 className={`text-xs sm:text-sm font-extrabold uppercase tracking-wider ${textStrong}`}>
+ Megjelenés és nézet
+ </h2>
+ </div>
+
+ <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
  <div className="space-y-1.5">
- <p className={`text-[10px] font-bold uppercase tracking-wider px-1 ${textMuted}`}>
- Megjelenés
+ <p className={`text-[11px] font-bold uppercase tracking-wider px-1 ${textMuted}`}>
+ Téma
  </p>
  <div className={`grid grid-cols-2 gap-1 p-1 rounded-xl border ${
- darkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-100 border-slate-200'
+ darkMode ? 'bg-slate-800/75 border-white/10' : 'bg-slate-100/80 border-slate-200'
  }`}>
  <button
  type="button"
  onClick={() => setDarkMode(false)}
- className={`py-2 px-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${
+ className={`py-2.5 px-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${
  !darkMode
  ? 'bg-amber-400 text-slate-950 shadow-xs'
  : 'text-slate-300 hover:text-white'
@@ -7720,7 +7768,7 @@ export default function App() {
  <button
  type="button"
  onClick={() => setDarkMode(true)}
- className={`py-2 px-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${
+ className={`py-2.5 px-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${
  darkMode
  ? 'bg-amber-400 text-slate-950 shadow-xs'
  : 'text-slate-600 hover:text-slate-900'
@@ -7732,16 +7780,16 @@ export default function App() {
  </div>
 
  <div className="space-y-1.5">
- <p className={`text-[10px] font-bold uppercase tracking-wider px-1 ${textMuted}`}>
+ <p className={`text-[11px] font-bold uppercase tracking-wider px-1 ${textMuted}`}>
  Színpaletta
  </p>
  <div className={`grid grid-cols-2 gap-1 p-1 rounded-xl border ${
- darkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-100 border-slate-200'
+ darkMode ? 'bg-slate-800/75 border-white/10' : 'bg-slate-100/80 border-slate-200'
  }`}>
  <button
  type="button"
  onClick={() => setMonochrome(false)}
- className={`py-2 px-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${
+ className={`py-2.5 px-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${
  !monochrome
  ? 'bg-amber-400 text-slate-950 shadow-xs'
  : darkMode ? 'text-slate-300 hover:text-white' : 'text-slate-600 hover:text-slate-900'
@@ -7752,7 +7800,7 @@ export default function App() {
  <button
  type="button"
  onClick={() => setMonochrome(true)}
- className={`py-2 px-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${
+ className={`py-2.5 px-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${
  monochrome
  ? 'bg-amber-400 text-slate-950 shadow-xs'
  : darkMode ? 'text-slate-300 hover:text-white' : 'text-slate-600 hover:text-slate-900'
@@ -7767,16 +7815,16 @@ export default function App() {
  </div>
 
  <div className="space-y-1.5">
- <p className={`text-[10px] font-bold uppercase tracking-wider px-1 ${textMuted}`}>
+ <p className={`text-[11px] font-bold uppercase tracking-wider px-1 ${textMuted}`}>
  Tárgykártyák nézete
  </p>
  <div className={`grid grid-cols-2 gap-1 p-1 rounded-xl border ${
- darkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-100 border-slate-200'
+ darkMode ? 'bg-slate-800/75 border-white/10' : 'bg-slate-100/80 border-slate-200'
  }`}>
  <button
  type="button"
  onClick={() => setSimpleView(true)}
- className={`py-2 px-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${
+ className={`py-2.5 px-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${
  simpleView
  ? 'bg-amber-400 text-slate-950 shadow-xs'
  : darkMode ? 'text-slate-300 hover:text-white' : 'text-slate-600 hover:text-slate-900'
@@ -7787,7 +7835,7 @@ export default function App() {
  <button
  type="button"
  onClick={() => setSimpleView(false)}
- className={`py-2 px-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${
+ className={`py-2.5 px-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${
  !simpleView
  ? 'bg-amber-400 text-slate-950 shadow-xs'
  : darkMode ? 'text-slate-300 hover:text-white' : 'text-slate-600 hover:text-slate-900'
@@ -7797,26 +7845,52 @@ export default function App() {
  </button>
  </div>
  </div>
+ </div>
+ </div>
 
- <div className={`pt-2.5 border-t space-y-2 ${darkMode ? 'border-slate-800' : 'border-slate-200'}`}>
+ {/* 3. TANULMÁNYI BEÁLLÍTÁSOK KÁRTYA */}
+ <div className={`bge-menu-card bge-menu-card-3 rounded-2xl border p-4 sm:p-6 space-y-3.5 ${bgCard}`}>
+ <div className="flex items-center gap-2">
+ <Settings className="w-4 h-4 text-amber-500 shrink-0" />
+ <h2 className={`text-xs sm:text-sm font-extrabold uppercase tracking-wider ${textStrong}`}>
+ Tanulmányi beállítások
+ </h2>
+ </div>
+
+ <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3">
  <button
  type="button"
- onClick={() => {
- closeMenuFn();
- handleOpenThresholdModal();
- }}
- className={`w-full px-3 py-2.5 rounded-xl text-xs font-bold border flex items-center justify-between transition cursor-pointer ${
+ onClick={handleOpenThresholdModal}
+ className={`w-full px-4 py-3.5 rounded-2xl text-xs sm:text-sm font-bold border flex items-center justify-between gap-2 text-left transition cursor-pointer ${
  darkMode
- ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
- : 'bg-slate-50 hover:bg-slate-100 text-slate-800 border-slate-200'
+ ? 'bg-slate-800/65 hover:bg-slate-800 text-slate-100 border-white/12'
+ : 'bg-white/65 hover:bg-amber-50/75 text-slate-800 border-slate-200/90'
  }`}
  >
- <span className="flex items-center gap-2">
- <SlidersHorizontal className="w-4 h-4 text-amber-500" />
- Átsorolási küszöb
+ <span className="flex items-center gap-2.5 min-w-0">
+ <SlidersHorizontal className="w-4 h-4 text-amber-500 shrink-0" />
+ <span className="truncate">Átsorolási küszöb</span>
  </span>
- <span className="px-2 py-0.5 rounded-full text-[11px] font-extrabold bg-amber-400/20 text-amber-500 border border-amber-400/30">
+ <span className="px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-amber-400/20 text-amber-500 border border-amber-400/30 shrink-0">
  {thresholdFormatted}
+ </span>
+ </button>
+
+ <button
+ type="button"
+ onClick={handleOpenDegreeCreditsModal}
+ className={`w-full px-4 py-3.5 rounded-2xl text-xs sm:text-sm font-bold border flex items-center justify-between gap-2 text-left transition cursor-pointer ${
+ darkMode
+ ? 'bg-slate-800/65 hover:bg-slate-800 text-slate-100 border-white/12'
+ : 'bg-white/65 hover:bg-emerald-50/75 text-slate-800 border-slate-200/90'
+ }`}
+ >
+ <span className="flex items-center gap-2.5 min-w-0">
+ <GraduationCap className="w-4 h-4 text-emerald-500 shrink-0" />
+ <span className="truncate">Képzési kreditek</span>
+ </span>
+ <span className="px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-emerald-500/15 text-emerald-500 border border-emerald-500/30 shrink-0">
+ {degreeTotalCredits} kr.
  </span>
  </button>
 
@@ -7827,22 +7901,27 @@ export default function App() {
  handleResetAndExitSimulator();
  } else {
  setIsSim(true);
+ showToast('Szimulátor mód bekapcsolva!');
  }
- closeMenuFn();
  }}
- className={`w-full px-3 py-2.5 rounded-xl text-xs font-bold border flex items-center justify-between transition cursor-pointer ${
+ className={`sm:col-span-2 w-full px-4 py-3.5 rounded-2xl text-xs sm:text-sm font-bold border flex items-center justify-between gap-3 text-left transition cursor-pointer ${
  isSim
- ? 'bg-amber-400 text-slate-950 border-amber-400'
+ ? 'bg-amber-400 text-slate-950 border-amber-400 shadow-md shadow-amber-400/25'
  : darkMode
- ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
- : 'bg-slate-50 hover:bg-slate-100 text-slate-800 border-slate-200'
+ ? 'bg-slate-800/65 hover:bg-slate-800 text-slate-100 border-white/12'
+ : 'bg-white/65 hover:bg-amber-50/75 text-slate-800 border-slate-200/90'
  }`}
  >
- <span className="flex items-center gap-2">
- <FlaskConical className="w-4 h-4" />
- Szimulátor mód
+ <span className="flex items-center gap-2.5 min-w-0">
+ <FlaskConical className={`w-4 h-4 shrink-0 ${isSim ? 'text-slate-950' : 'text-amber-500'}`} />
+ <span className="min-w-0">
+ <span className="block font-extrabold">Szimulátor mód („Mi lenne, ha?”)</span>
+ <span className={`block text-[11px] font-medium mt-0.5 ${isSim ? 'text-slate-900/80' : textMuted}`}>
+ Pontszámok és jegyek kockázatmentes kipróbálása adatbázis-mentés nélkül
  </span>
- <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+ </span>
+ </span>
+ <span className={`px-3 py-1 rounded-full text-[11px] font-extrabold shrink-0 ${
  isSim
  ? 'bg-slate-950 text-amber-400'
  : darkMode ? 'bg-slate-700 text-slate-300' : 'bg-slate-200 text-slate-700'
@@ -7851,109 +7930,138 @@ export default function App() {
  </span>
  </button>
  </div>
+ </div>
 
- <div className={`pt-2.5 border-t space-y-2 ${darkMode ? 'border-slate-800' : 'border-slate-200'}`}>
- <p className={`text-[10px] font-bold uppercase tracking-wider px-1 ${textMuted}`}>
+ {/* 4. INFORMÁCIÓK & ESZKÖZÖK KÁRTYA */}
+ <div className={`bge-menu-card bge-menu-card-4 rounded-2xl border p-4 sm:p-6 space-y-3.5 ${bgCard}`}>
+ <div className="flex items-center gap-2">
+ <Sparkles className="w-4 h-4 text-amber-500 shrink-0" />
+ <h2 className={`text-xs sm:text-sm font-extrabold uppercase tracking-wider ${textStrong}`}>
  Információk & Eszközök
- </p>
+ </h2>
+ </div>
 
+ <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3">
  {canShowMobileInstall && (
  <button
  type="button"
- onClick={() => {
- closeMenuFn();
- handleTriggerMobileInstall();
- }}
- className={`w-full px-3 py-2.5 rounded-xl text-xs font-extrabold border flex items-center justify-between transition cursor-pointer ${
+ onClick={handleTriggerMobileInstall}
+ className={`sm:col-span-2 w-full px-4 py-3.5 rounded-2xl text-xs sm:text-sm font-extrabold border flex items-center justify-between gap-2 text-left transition cursor-pointer ${
  darkMode
  ? 'bg-amber-400/15 hover:bg-amber-400/25 text-amber-300 border-amber-400/40'
- : 'bg-amber-50 hover:bg-amber-100 text-amber-900 border-amber-300'
+ : 'bg-amber-50/90 hover:bg-amber-100 text-amber-900 border-amber-300'
  }`}
  >
- <span className="flex items-center gap-2">
- <Download className="w-4 h-4 text-amber-500" />
- Letöltés parancsikonként
+ <span className="flex items-center gap-2.5">
+ <Download className="w-4 h-4 text-amber-500 shrink-0" />
+ <span>Letöltés parancsikonként</span>
  </span>
- <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+ <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse shrink-0" />
  </button>
  )}
 
  <button
  type="button"
- onClick={() => {
- closeMenuFn();
- setIsStatsModalOpen(true);
- }}
- className={`w-full px-3 py-2.5 rounded-xl text-xs font-bold border flex items-center justify-between transition cursor-pointer ${
+ onClick={() => setIsStatsModalOpen(true)}
+ className={`w-full px-4 py-3.5 rounded-2xl text-xs sm:text-sm font-bold border flex items-center justify-between gap-2 text-left transition cursor-pointer ${
  darkMode
- ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
- : 'bg-slate-50 hover:bg-slate-100 text-slate-800 border-slate-200'
+ ? 'bg-slate-800/65 hover:bg-slate-800 text-slate-100 border-white/12'
+ : 'bg-white/65 hover:bg-slate-100/80 text-slate-800 border-slate-200/90'
  }`}
  >
- <span className="flex items-center gap-2">
- <BarChart3 className="w-4 h-4 text-violet-500" />
- App statisztika
+ <span className="flex items-center gap-2.5">
+ <BarChart3 className="w-4 h-4 text-violet-500 shrink-0" />
+ <span>App statisztika</span>
  </span>
+ <ChevronRight className={`w-4 h-4 shrink-0 ${textMuted}`} />
  </button>
 
  <button
  type="button"
- onClick={() => {
- closeMenuFn();
- handleOpenTutorial();
- }}
- className={`w-full px-3 py-2.5 rounded-xl text-xs font-bold border flex items-center justify-between transition cursor-pointer ${
+ onClick={handleOpenTutorial}
+ className={`w-full px-4 py-3.5 rounded-2xl text-xs sm:text-sm font-bold border flex items-center justify-between gap-2 text-left transition cursor-pointer ${
  darkMode
- ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
- : 'bg-slate-50 hover:bg-slate-100 text-slate-800 border-slate-200'
+ ? 'bg-slate-800/65 hover:bg-slate-800 text-slate-100 border-white/12'
+ : 'bg-white/65 hover:bg-slate-100/80 text-slate-800 border-slate-200/90'
  }`}
  >
- <span className="flex items-center gap-2">
- <BookOpen className="w-4 h-4 text-sky-500" />
- Bemutató
+ <span className="flex items-center gap-2.5">
+ <BookOpen className="w-4 h-4 text-sky-500 shrink-0" />
+ <span>Bemutató</span>
  </span>
+ <ChevronRight className={`w-4 h-4 shrink-0 ${textMuted}`} />
  </button>
 
  <button
  type="button"
- onClick={() => {
- closeMenuFn();
- setIsWelcomeOpen(true);
- }}
- className={`w-full px-3 py-2.5 rounded-xl text-xs font-bold border flex items-center justify-between transition cursor-pointer ${
+ onClick={() => setIsWelcomeOpen(true)}
+ className={`w-full px-4 py-3.5 rounded-2xl text-xs sm:text-sm font-bold border flex items-center justify-between gap-2 text-left transition cursor-pointer ${
  darkMode
- ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
- : 'bg-slate-50 hover:bg-slate-100 text-slate-800 border-slate-200'
+ ? 'bg-slate-800/65 hover:bg-slate-800 text-slate-100 border-white/12'
+ : 'bg-white/65 hover:bg-slate-100/80 text-slate-800 border-slate-200/90'
  }`}
  >
- <span className="flex items-center gap-2">
- <User className="w-4 h-4 text-emerald-500" />
- Köszöntő
+ <span className="flex items-center gap-2.5">
+ <User className="w-4 h-4 text-emerald-500 shrink-0" />
+ <span>Köszöntő</span>
  </span>
+ <ChevronRight className={`w-4 h-4 shrink-0 ${textMuted}`} />
  </button>
 
  {latestRelease && (
  <button
  type="button"
- onClick={() => {
- closeMenuFn();
- setIsChangelogOpen(true);
- }}
- className={`w-full px-3 py-2.5 rounded-xl text-xs font-bold border flex items-center justify-between transition cursor-pointer ${
+ onClick={() => setIsChangelogOpen(true)}
+ className={`w-full px-4 py-3.5 rounded-2xl text-xs sm:text-sm font-bold border flex items-center justify-between gap-2 text-left transition cursor-pointer ${
  darkMode
- ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
- : 'bg-slate-50 hover:bg-slate-100 text-slate-800 border-slate-200'
+ ? 'bg-slate-800/65 hover:bg-slate-800 text-slate-100 border-white/12'
+ : 'bg-white/65 hover:bg-slate-100/80 text-slate-800 border-slate-200/90'
  }`}
  >
- <span className="flex items-center gap-2">
- <History className="w-4 h-4 text-amber-500" />
- Verziótörténet & Újdonságok
+ <span className="flex items-center gap-2.5 min-w-0">
+ <History className="w-4 h-4 text-amber-500 shrink-0" />
+ <span className="truncate">Verziótörténet</span>
  </span>
- <span className="px-2 py-0.5 rounded-full text-[11px] font-extrabold bg-amber-400/20 text-amber-500 border border-amber-400/30">
+ <span className="px-2 py-0.5 rounded-full text-[11px] font-extrabold bg-amber-400/20 text-amber-500 border border-amber-400/30 shrink-0">
  {latestRelease.version}
  </span>
  </button>
  )}
+
+ <button
+ type="button"
+ onClick={() => setIsGdprModalOpen(true)}
+ className={`w-full px-4 py-3.5 rounded-2xl text-xs sm:text-sm font-bold border flex items-center justify-between gap-2 text-left transition cursor-pointer ${
+ darkMode
+ ? 'bg-slate-800/65 hover:bg-slate-800 text-slate-100 border-white/12'
+ : 'bg-white/65 hover:bg-slate-100/80 text-slate-800 border-slate-200/90'
+ }`}
+ >
+ <span className="flex items-center gap-2.5">
+ <ShieldCheck className="w-4 h-4 text-emerald-500 shrink-0" />
+ <span>Adatvédelem (GDPR)</span>
+ </span>
+ <ChevronRight className={`w-4 h-4 shrink-0 ${textMuted}`} />
+ </button>
+
+ <button
+ type="button"
+ onClick={() => {
+ setFeedbackMailTriggered(false);
+ setIsFeedbackOpen(true);
+ }}
+ className={`w-full px-4 py-3.5 rounded-2xl text-xs sm:text-sm font-bold border flex items-center justify-between gap-2 text-left transition cursor-pointer ${
+ darkMode
+ ? 'bg-slate-800/65 hover:bg-slate-800 text-slate-100 border-white/12'
+ : 'bg-white/65 hover:bg-slate-100/80 text-slate-800 border-slate-200/90'
+ }`}
+ >
+ <span className="flex items-center gap-2.5">
+ <MessageSquare className="w-4 h-4 text-amber-500 shrink-0" />
+ <span>Visszajelzés küldése</span>
+ </span>
+ <ChevronRight className={`w-4 h-4 shrink-0 ${textMuted}`} />
+ </button>
 
  {isAdmin && (
  <button
@@ -7961,93 +8069,57 @@ export default function App() {
  role="switch"
  aria-checked={isMaintenanceMode}
  disabled={isTogglingMaintenance}
- onClick={() => {
- handleToggleMaintenanceMode();
- }}
- className={`w-full px-3 py-2.5 rounded-xl text-xs font-extrabold border flex items-center justify-between transition cursor-pointer ${
+ onClick={handleToggleMaintenanceMode}
+ className={`sm:col-span-2 w-full px-4 py-3.5 rounded-2xl text-xs sm:text-sm font-extrabold border flex items-center justify-between gap-3 text-left transition cursor-pointer ${
  isMaintenanceMode
- ? 'bg-amber-400 text-slate-950 border-amber-500'
+ ? 'bg-amber-400 text-slate-950 border-amber-500 shadow-md shadow-amber-400/25'
  : darkMode
- ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
- : 'bg-slate-50 hover:bg-slate-100 text-slate-800 border-slate-200'
+ ? 'bg-slate-800/65 hover:bg-slate-800 text-slate-100 border-white/12'
+ : 'bg-white/65 hover:bg-slate-100/80 text-slate-800 border-slate-200/90'
  }`}
  >
- <span className="flex items-center gap-2">
- <Wrench className={`w-4 h-4 ${isMaintenanceMode ? 'text-slate-950' : 'text-amber-500'}`} />
- Maintenance mód
+ <span className="flex items-center gap-2.5">
+ <Wrench className={`w-4 h-4 shrink-0 ${isMaintenanceMode ? 'text-slate-950' : 'text-amber-500'}`} />
+ <span>Maintenance mód (Admin)</span>
  </span>
  <span
- className={`relative inline-flex h-4 w-7 items-center rounded-full transition-colors ${
+ className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors shrink-0 ${
  isMaintenanceMode
  ? 'bg-slate-950'
  : darkMode ? 'bg-slate-700' : 'bg-slate-300'
  }`}
  >
  <span
- className={`inline-block h-3 w-3 transform rounded-full transition-transform ${
+ className={`inline-block h-3.5 w-3.5 transform rounded-full transition-transform ${
  isMaintenanceMode
- ? 'translate-x-3.5 bg-amber-400'
- : 'translate-x-0.5 bg-white'
+ ? 'translate-x-4.5 bg-amber-400'
+ : 'translate-x-1 bg-white'
  }`}
  />
  </span>
  </button>
  )}
  </div>
+ </div>
 
- <div className={`pt-2.5 border-t ${darkMode ? 'border-slate-800' : 'border-slate-200'}`}>
+ {/* 5. KIJELENTKEZÉS KÁRTYA */}
+ <div className={`bge-menu-card bge-menu-card-5 rounded-2xl border p-4 sm:p-5 ${bgCard}`}>
  <button
  type="button"
  onClick={() => {
- closeMenuFn();
+ setIsEditingNickname(false);
  signOut(auth);
  }}
- className="w-full px-3 py-2.5 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-500 text-white flex items-center justify-center gap-2 transition cursor-pointer"
+ className="w-full px-4 py-3 rounded-xl text-xs sm:text-sm font-extrabold bg-rose-600 hover:bg-rose-500 text-white flex items-center justify-center gap-2 shadow-md shadow-rose-600/20 transition cursor-pointer"
  >
  <LogOut className="w-4 h-4" /> Kijelentkezés
  </button>
  </div>
 
- </>
- );
-
- const renderDropdownMenu = (isDarkHeader = false) => {
- const triggerClass = isDarkHeader
- ? 'px-3 py-2 sm:py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 text-xs sm:text-sm font-bold flex items-center gap-1.5 transition cursor-pointer relative'
- : darkMode
- ? 'px-3 py-2 sm:py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-100 border border-slate-800 text-xs font-bold flex items-center gap-1.5 transition cursor-pointer relative'
- : 'px-3 py-2 sm:py-1.5 rounded-lg bg-white hover:bg-slate-100 text-slate-800 border border-slate-200 shadow-2xs text-xs font-bold flex items-center gap-1.5 transition cursor-pointer relative';
-
- return (
- <div data-dropdown-menu="true" className="relative">
- <button
- type="button"
- onClick={() => setIsMenuOpen(prev => { if (prev) setIsEditingNickname(false); return !prev; })}
- aria-expanded={isMenuOpen}
- className={triggerClass}
- >
- <Menu className="w-4 h-4 text-amber-400 shrink-0" />
- <span>Menü</span>
- {(isSim || canShowMobileInstall) && (
- <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" title={isSim ? 'Szimulátor mód aktív' : 'Alkalmazás telepíthető'} />
- )}
- <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-150 ${isMenuOpen ? 'rotate-180' : ''}`} />
- </button>
-
- <AnimatedPresence show={Boolean(isMenuOpen)} variant="dropdown" duration={190}>
- {isMenuOpen && (
- <div className={`absolute right-0 mt-2 w-72 sm:w-80 max-h-[85dvh] overflow-y-auto rounded-2xl border shadow-2xl p-3.5 space-y-3.5 z-50 ${
- darkMode
- ? 'bg-slate-900/66 border-white/15 text-slate-100 backdrop-blur-2xl'
- : 'bg-white/68 border-white/80 text-slate-800 backdrop-blur-2xl'
- }`}>
- {renderMenuBody(() => setIsMenuOpen(false))}
- </div>
- )}
- </AnimatedPresence>
+ {appFooter}
+ </main>
  </div>
  );
- };
 
  const appFooter = (
  <footer className={`mt-12 sm:mt-14 pt-6 border-t space-y-4 bg-transparent ${
@@ -8318,11 +8390,13 @@ export default function App() {
  @keyframes bgeBottomSheetSlideUp {
  0% {
  opacity: 0;
- transform: translate3d(0, 14px, 0) scale(0.97);
+ transform: translate3d(0, 18px, 0) scale(0.96);
+ filter: blur(8px);
  }
  100% {
  opacity: 1;
  transform: translate3d(0, 0, 0) scale(1);
+ filter: blur(0px);
  }
  }
  @keyframes bgeMobileSlideFromRight {
@@ -8383,18 +8457,27 @@ export default function App() {
  pointer-events: none;
  background: linear-gradient(135deg, rgba(255, 255, 255, 0.36) 0%, rgba(255, 255, 255, 0.08) 45%, rgba(251, 191, 36, 0.14) 100%);
  }
- .bge-bottom-menu-sheet {
- animation: bgeBottomSheetSlideUp 240ms cubic-bezier(0.22, 1, 0.36, 1) both;
- backdrop-filter: blur(20px) saturate(170%);
- -webkit-backdrop-filter: blur(20px) saturate(170%);
+ @keyframes bgeMenuCardIn {
+ 0% {
+ opacity: 0;
+ transform: translate3d(0, 14px, 0) scale(0.98);
+ filter: blur(4px);
+ }
+ 100% {
+ opacity: 1;
+ transform: translate3d(0, 0, 0) scale(1);
+ filter: blur(0px);
+ }
+ }
+ .bge-menu-card {
+ animation: bgeMenuCardIn 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
  will-change: transform, opacity;
- contain: layout style paint;
  }
- .bge-bottom-menu-sheet button,
- .bge-bottom-menu-sheet .rounded-xl {
- backdrop-filter: none !important;
- -webkit-backdrop-filter: none !important;
- }
+ .bge-menu-card-1 { animation-delay: 25ms; }
+ .bge-menu-card-2 { animation-delay: 70ms; }
+ .bge-menu-card-3 { animation-delay: 115ms; }
+ .bge-menu-card-4 { animation-delay: 160ms; }
+ .bge-menu-card-5 { animation-delay: 205ms; }
  /* === TELJES APPLIKÁCIÓS FROSTED GLASS RENDSZER === */
  .bge-fluid-app header,
  .bge-fluid-app .rounded-2xl,
@@ -8465,8 +8548,8 @@ export default function App() {
  to { opacity: 0; transform: translate3d(0, 16px, 0) scale(0.94); filter: blur(8px); }
  }
  @keyframes bgeSheetOut {
- from { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
- to { opacity: 0; transform: translate3d(0, 14px, 0) scale(0.97); }
+ from { opacity: 1; transform: translate3d(0, 0, 0) scale(1); filter: blur(0px); }
+ to { opacity: 0; transform: translate3d(0, 22px, 0) scale(0.95); filter: blur(10px); }
  }
  @keyframes bgeDropdownIn {
  from { opacity: 0; transform: translate3d(0, -8px, 0) scale(0.95); filter: blur(6px); }
@@ -8634,46 +8717,13 @@ export default function App() {
 
  {/* ALSÓ FROSTED GLASS NAVIGÁCIÓS KAPSZULA (FŐOLDAL • JELENLEGI FÉLÉV • MENÜ) */}
  {!isAnyModalOpen && (
- <>
- <AnimatedPresence show={Boolean(isBottomMenuOpen)} variant="backdrop" duration={200}>
- {isBottomMenuOpen && (
- <div
- aria-hidden="true"
- onClick={() => {
- setIsBottomMenuOpen(false);
- setIsEditingNickname(false);
- }}
- className={`fixed inset-0 z-35 transition-opacity duration-200 touch-none ${
- darkMode ? 'bg-slate-950/60' : 'bg-slate-900/35'
- }`}
- />
- )}
- </AnimatedPresence>
-
  <nav
  data-bottom-nav-root="true"
  aria-label="Alsó navigációs sáv"
  className="fixed bottom-3 left-3 right-3 max-w-[calc(100vw-24px)] sm:left-1/2 sm:right-auto sm:-translate-x-1/2 sm:w-full sm:max-w-md z-40 pointer-events-none"
  >
- <AnimatedPresence show={Boolean(isBottomMenuOpen)} variant="sheet" duration={220}>
- {isBottomMenuOpen && (
- <div
- className={`bge-bottom-menu-sheet pointer-events-auto mb-2.5 w-full max-h-[74dvh] overflow-y-auto overscroll-contain touch-pan-y rounded-3xl border p-3.5 space-y-3.5 shadow-2xl ${
- darkMode
- ? 'bg-slate-900/66 border-white/15 text-slate-100 shadow-black/75'
- : 'bg-white/68 border-white/80 text-slate-800 shadow-slate-900/18'
- }`}
- >
- {renderMenuBody(() => {
- setIsBottomMenuOpen(false);
- setIsEditingNickname(false);
- })}
- </div>
- )}
- </AnimatedPresence>
-
  {(() => {
- const activeNavIndex = isBottomMenuOpen ? 2 : activeView === 'semester' ? 1 : 0;
+ const activeNavIndex = activeView === 'menu' ? 2 : activeView === 'semester' ? 1 : 0;
  return (
  <div
  className={`bge-bottom-nav-capsule pointer-events-auto relative w-full rounded-full border p-1.5 shadow-2xl grid grid-cols-3 items-stretch gap-1 ${
@@ -8697,12 +8747,9 @@ export default function App() {
  <button
  type="button"
  data-no-glass="true"
- onClick={() => {
- setIsBottomMenuOpen(false);
- navigateWithSlide('home');
- }}
+ onClick={() => navigateWithSlide('home')}
  data-nav-pill="true"
- aria-current={activeView === 'home' && !isBottomMenuOpen ? 'page' : undefined}
+ aria-current={activeView === 'home' ? 'page' : undefined}
  className={`relative z-10 min-w-0 py-2 px-2 rounded-full flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 text-[11px] sm:text-xs font-extrabold touch-manipulation select-none transition-colors duration-200 cursor-pointer bg-transparent ${
  activeNavIndex === 0
  ? 'text-slate-950'
@@ -8718,12 +8765,9 @@ export default function App() {
  <button
  type="button"
  data-no-glass="true"
- onClick={() => {
- setIsBottomMenuOpen(false);
- navigateWithSlide('semester', currentTargetSemester);
- }}
+ onClick={() => navigateWithSlide('semester', currentTargetSemester)}
  data-nav-pill="true"
- aria-current={activeView === 'semester' && !isBottomMenuOpen ? 'page' : undefined}
+ aria-current={activeView === 'semester' ? 'page' : undefined}
  title={`Jelenlegi félév megnyitása (${formatSemesterLabel(currentTargetSemester)})`}
  className={`relative z-10 min-w-0 py-2 px-2 rounded-full flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 text-[11px] sm:text-xs font-extrabold touch-manipulation select-none transition-colors duration-200 cursor-pointer bg-transparent ${
  activeNavIndex === 1
@@ -8740,17 +8784,9 @@ export default function App() {
  <button
  type="button"
  data-no-glass="true"
- onClick={() => {
- setIsMenuOpen(false);
- closeHomePlusMenuAnimated();
- closeCollectorMenuAnimated();
- setIsBottomMenuOpen(prev => {
- if (prev) setIsEditingNickname(false);
- return !prev;
- });
- }}
+ onClick={() => navigateWithSlide('menu')}
  data-nav-pill="true"
- aria-expanded={isBottomMenuOpen}
+ aria-current={activeView === 'menu' ? 'page' : undefined}
  className={`relative z-10 min-w-0 py-2 px-2 rounded-full flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 text-[11px] sm:text-xs font-extrabold touch-manipulation select-none transition-colors duration-200 cursor-pointer bg-transparent ${
  activeNavIndex === 2
  ? 'text-slate-950'
@@ -8761,7 +8797,7 @@ export default function App() {
  >
  <Menu className="w-4 h-4 shrink-0" />
  <span className="truncate max-w-full">Menü</span>
- {(isSim || canShowMobileInstall) && !isBottomMenuOpen && (
+ {(isSim || canShowMobileInstall) && activeView !== 'menu' && (
  <span className="absolute top-1.5 right-3 sm:static w-2 h-2 rounded-full bg-amber-400 shrink-0" />
  )}
  </button>
@@ -8769,7 +8805,6 @@ export default function App() {
  );
  })()}
  </nav>
- </>
  )}
 
  <AnimatedPresence show={Boolean(templateToast)} variant="toast" duration={220}>
@@ -9030,7 +9065,7 @@ export default function App() {
  onClick={() => {
  setNicknameDraft('');
  setIsEditingNickname(true);
- setIsBottomMenuOpen(true);
+ navigateWithSlide('menu', null, { preserveNicknameEdit: true });
  }}
  className="px-2.5 py-1.5 rounded-xl text-[11px] font-extrabold bg-amber-400 hover:bg-amber-300 text-slate-950 shrink-0 transition cursor-pointer"
  >
@@ -9582,6 +9617,8 @@ export default function App() {
  </main>
 
  </div>
+ ) : activeView === 'menu' ? (
+ renderMenuPage()
  ) : (
  <div
  key={`view-semester-${selectedSemester}`}
@@ -10696,7 +10733,7 @@ export default function App() {
  <Plus className={`w-8 h-8 stroke-[2.75] transition-transform duration-200 ${isHomePlusMenuOpen ? 'rotate-45' : ''}`} />
  </button>
  </div>
- ) : (
+ ) : activeView === 'semester' ? (
  <div data-collector-menu="true" className="fixed bottom-[82px] right-4 sm:bottom-[86px] sm:right-7 z-30 flex flex-col items-end gap-3">
  {(isCollectorMenuOpen || isCollectorClosing) && (() => {
  const selectedJokerForCapsule = pendingJokerInfo || activeJokerInfo;
@@ -10807,7 +10844,7 @@ export default function App() {
  )}
  </button>
  </div>
- )}
+ ) : null}
 
  {/* MÚLTBÉLI FÉLÉVEK FELTÖLTÉSE VARÁZSLÓ MODAL */}
  <AnimatedPresence show={Boolean(isPastSemestersWizardOpen)} variant="modal" duration={240}>

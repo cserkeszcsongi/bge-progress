@@ -6478,10 +6478,9 @@ export default function App() {
  };
 
  const semLabelStr = safeStr(activeStatsSemesterCode, '').trim();
- if (!semLabelStr) return null;
-
  const targetCanonical = getCanonicalSemesterCode(semLabelStr);
- const directSemSubjs = Array.isArray(semesterSubjects) && semesterSubjects.length > 0 && selectedSemester === semLabelStr
+
+ const directSemSubjs = (Array.isArray(semesterSubjects) && semesterSubjects.length > 0)
  ? semesterSubjects
  : toArraySafe(subjects).filter((s) => {
  if (!s || typeof s !== 'object') return false;
@@ -6504,33 +6503,36 @@ export default function App() {
 
  directSemSubjs.forEach((subj, sIdx) => {
  if (!subj || typeof subj !== 'object') return;
- try {
+ const st = (subj.id && subjectStatsMap && subjectStatsMap[subj.id])
+ ? subjectStatsMap[subj.id]
+ : calcStats(subj);
+
  const isExam = subj.courseKind === 'exam';
  const rawPracticeSessions = toArraySafe(subj.attendanceSessions);
  const rawLectureSessions = toArraySafe(subj.lectureAttendanceSessions);
 
- const pPres = rawPracticeSessions.filter(x => x && x.status === 'present').length;
- const pAbs = rawPracticeSessions.filter(x => x && x.status === 'absent').length;
- const configuredClasses = Number(subj.totalClasses);
+ const pPres = st ? (Number(st.presentCount) || 0) : rawPracticeSessions.filter(x => x && x.status === 'present').length;
+ const pAbs = st ? (Number(st.absentCount) || 0) : rawPracticeSessions.filter(x => x && x.status === 'absent').length;
  const pTot = isExam
  ? 0
  : Math.max(
- !isNaN(configuredClasses) && configuredClasses > 0 ? configuredClasses : 0,
+ st ? (Number(st.totalClasses) || 0) : 0,
+ Number(subj.totalClasses) || 0,
  rawPracticeSessions.length
  );
 
- const lPres = rawLectureSessions.filter(x => x && x.status === 'present').length;
- const lAbs = rawLectureSessions.filter(x => x && x.status === 'absent').length;
- const configuredLectures = Number(subj.totalLectures);
+ const lPres = st ? (Number(st.lecturePresentCount) || 0) : rawLectureSessions.filter(x => x && x.status === 'present').length;
+ const lAbs = st ? (Number(st.lectureAbsentCount) || 0) : rawLectureSessions.filter(x => x && x.status === 'absent').length;
  const lTot = isExam
  ? 0
  : Math.max(
- !isNaN(configuredLectures) && configuredLectures > 0 ? configuredLectures : 0,
+ st ? (Number(st.totalLectures) || 0) : 0,
+ Number(subj.totalLectures) || 0,
  pTot,
  rawLectureSessions.length
  );
 
- if (!isExam && (pTot > 0 || lTot > 0)) {
+ if (!isExam) {
  totalPracticePresent += pPres;
  totalPracticeClasses += pTot;
  totalLecturePresent += lPres;
@@ -6552,18 +6554,16 @@ export default function App() {
  lectureTotal: lTot,
  lecturePct
  });
- }
 
- if (!isExam) {
- const zhs = toArraySafe(subj.assessments).filter(
- (a) => a && typeof a === 'object' && a.category === 'ZH'
- );
+ const zhs = toArraySafe(subj.assessments).filter((a) => {
+ if (!a || typeof a !== 'object') return false;
+ const cat = safeStr(a.category, '').trim().toUpperCase();
+ return cat === 'ZH';
+ });
 
  zhs.forEach((zh, zIdx) => {
  totalZhSlots++;
- const eff = (isSim && zh.id && simScores[zh.id] !== undefined && simScores[zh.id] !== '')
- ? simScores[zh.id]
- : zh.achieved;
+ const eff = getEffectiveScore(zh);
  const parsedEff = safeParseNumber(eff);
  if (!isNaN(parsedEff)) {
  const parsedBonus = safeParseNumber(zh.bonusPoints);
@@ -6591,9 +6591,6 @@ export default function App() {
  });
  }
  });
- }
- } catch (subjErr) {
- console.warn('Tárgy statisztika feldolgozási figyelmeztetés:', subjErr);
  }
  });
 
@@ -6633,7 +6630,7 @@ export default function App() {
  worstZh,
  bestZh
  };
- }, [activeStatsSemesterCode, semesterSubjects, subjects, selectedSemester, isSim, simScores]);
+ }, [activeStatsSemesterCode, semesterSubjects, subjects, subjectStatsMap, isSim, simScores]);
 
  const handleReloadForUpdate = async () => {
  if (isReloadingApp) return;
@@ -10415,7 +10412,7 @@ export default function App() {
  darkMode ? 'border-slate-800 bg-slate-900/70' : 'border-slate-200 bg-slate-50'
  }`}>
  <span className={`text-[11px] ${textMuted}`}>
- {formatSemesterLabel(activeStatsSemesterCode)} élő összesített mutatói
+ {formatSemesterLabel(activeStatsSemesterCode)} • {currentAcademicStats?.subjectCount || 0} tárgy élő adatai
  </span>
  <button
  type="button"

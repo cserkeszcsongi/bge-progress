@@ -638,6 +638,14 @@ function buildTemplatesForMajor(majorId) {
 
 const APP_RELEASES = [
   {
+    version: 'v2.5.1',
+    date: '2026. 11. 23.',
+    changes: [
+      'Alsó navigációs sáv „Jelenlegi félév” gombjának villogás-/elcsúszásmentesítése: az aktív gomb-állapot mostantól nem módosítja a méretet/elrendezést váltáskor, és a nézetváltás (slide) nem indítja újra a belső kártya-animációkat',
+      'Felső „Menü” gomb eltávolítása a főoldal és a féléves dashboard felső sávjából, mivel a teljes menü az alsó frosted glass navigációs sávban érhető el'
+    ]
+  },
+  {
     version: 'v2.5.0',
     date: '2026. 11. 23.',
     changes: [
@@ -3495,7 +3503,7 @@ export default function App() {
  const headline = preferredName ? `${timeGreeting}, ${preferredName}!` : `${timeGreeting}!`;
  const subline = userNickname
  ? 'Örülök, hogy újra itt vagy! Nézzük, hogyan állnak a féléveid.'
- : 'Tipp: A jobb felső Menü → Hallgatói profil alatt saját becenevet is beállíthatsz magadnak!';
+ : 'Tipp: Az alsó navigációs sáv Menü → Hallgatói profil pontja alatt saját becenevet is beállíthatsz magadnak!';
 
  return {
  headline,
@@ -7870,12 +7878,18 @@ export default function App() {
  }
  }
  .bge-view-slide-left {
- animation: bgeSlideFromRight 340ms cubic-bezier(0.22, 1, 0.36, 1) both;
+ animation: bgeSlideFromRight 300ms cubic-bezier(0.22, 1, 0.36, 1) both;
  will-change: transform, opacity;
  }
  .bge-view-slide-right {
- animation: bgeSlideFromLeft 340ms cubic-bezier(0.22, 1, 0.36, 1) both;
+ animation: bgeSlideFromLeft 300ms cubic-bezier(0.22, 1, 0.36, 1) both;
  will-change: transform, opacity;
+ }
+ .bge-view-slide-left section,
+ .bge-view-slide-left article,
+ .bge-view-slide-right section,
+ .bge-view-slide-right article {
+ animation: none !important;
  }
  .bge-bottom-nav-capsule {
  backdrop-filter: blur(24px) saturate(185%);
@@ -7973,10 +7987,10 @@ export default function App() {
  )}
 
  <div
- className={`bge-bottom-nav-capsule pointer-events-auto relative w-full rounded-full border p-1.5 shadow-2xl grid grid-cols-3 items-center gap-1 ${
+ className={`bge-bottom-nav-capsule pointer-events-auto relative w-full rounded-full border p-1.5 shadow-2xl grid grid-cols-3 items-stretch gap-1 ${
  darkMode
- ? 'bg-slate-900/72 border-white/15 ring-1 ring-white/10 shadow-black/70'
- : 'bg-white/75 border-white/85 ring-1 ring-slate-900/10 shadow-slate-900/15'
+ ? 'bg-slate-900/78 border-white/15 ring-1 ring-white/10 shadow-black/70'
+ : 'bg-white/80 border-white/85 ring-1 ring-slate-900/10 shadow-slate-900/15'
  }`}
  >
  <button
@@ -7986,16 +8000,16 @@ export default function App() {
  navigateWithSlide('home');
  }}
  aria-current={activeView === 'home' && !isBottomMenuOpen ? 'page' : undefined}
- className={`relative z-10 py-2 px-2.5 rounded-full flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 text-[11px] sm:text-xs font-extrabold transition-all duration-300 cursor-pointer ${
+ className={`relative z-10 min-w-0 py-2 px-2 rounded-full flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 text-[11px] sm:text-xs font-extrabold touch-manipulation select-none transition-colors duration-200 cursor-pointer ${
  activeView === 'home' && !isBottomMenuOpen
- ? 'bg-amber-400 text-slate-950 shadow-md shadow-amber-400/30 scale-[1.02]'
+ ? 'bg-amber-400 text-slate-950 shadow-md shadow-amber-400/30'
  : darkMode
  ? 'text-slate-300 hover:text-white hover:bg-white/10'
  : 'text-slate-700 hover:text-slate-950 hover:bg-slate-900/5'
  }`}
  >
  <Home className="w-4 h-4 shrink-0" />
- <span className="truncate">Főoldal</span>
+ <span className="truncate max-w-full">Főoldal</span>
  </button>
 
  <button
@@ -8006,16 +8020,16 @@ export default function App() {
  }}
  aria-current={activeView === 'semester' && !isBottomMenuOpen ? 'page' : undefined}
  title={`Jelenlegi félév megnyitása (${formatSemesterLabel(currentTargetSemester)})`}
- className={`relative z-10 py-2 px-2.5 rounded-full flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 text-[11px] sm:text-xs font-extrabold transition-all duration-300 cursor-pointer ${
+ className={`relative z-10 min-w-0 py-2 px-2 rounded-full flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 text-[11px] sm:text-xs font-extrabold touch-manipulation select-none transition-colors duration-200 cursor-pointer ${
  activeView === 'semester' && !isBottomMenuOpen
- ? 'bg-amber-400 text-slate-950 shadow-md shadow-amber-400/30 scale-[1.02]'
+ ? 'bg-amber-400 text-slate-950 shadow-md shadow-amber-400/30'
  : darkMode
  ? 'text-slate-300 hover:text-white hover:bg-white/10'
  : 'text-slate-700 hover:text-slate-950 hover:bg-slate-900/5'
  }`}
  >
  <Calendar className="w-4 h-4 shrink-0" />
- <span className="truncate">Jelenlegi félév</span>
+ <span className="truncate max-w-full">Jelenlegi félév</span>
  </button>
 
  <button
@@ -8030,16 +8044,16 @@ export default function App() {
  });
  }}
  aria-expanded={isBottomMenuOpen}
- className={`relative z-10 py-2 px-2.5 rounded-full flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 text-[11px] sm:text-xs font-extrabold transition-all duration-300 cursor-pointer ${
+ className={`relative z-10 min-w-0 py-2 px-2 rounded-full flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 text-[11px] sm:text-xs font-extrabold touch-manipulation select-none transition-colors duration-200 cursor-pointer ${
  isBottomMenuOpen
- ? 'bg-amber-400 text-slate-950 shadow-md shadow-amber-400/30 scale-[1.02]'
+ ? 'bg-amber-400 text-slate-950 shadow-md shadow-amber-400/30'
  : darkMode
  ? 'text-slate-300 hover:text-white hover:bg-white/10'
  : 'text-slate-700 hover:text-slate-950 hover:bg-slate-900/5'
  }`}
  >
  <Menu className="w-4 h-4 shrink-0" />
- <span className="truncate">Menü</span>
+ <span className="truncate max-w-full">Menü</span>
  {(isSim || canShowMobileInstall) && !isBottomMenuOpen && (
  <span className="absolute top-1.5 right-3 sm:static w-2 h-2 rounded-full bg-amber-400 shrink-0" />
  )}
@@ -8253,7 +8267,6 @@ export default function App() {
  </div>
  <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
  {renderNoticeboardBellButton(false)}
- {renderDropdownMenu(false)}
  </div>
  </div>
 
@@ -8298,7 +8311,7 @@ export default function App() {
  onClick={() => {
  setNicknameDraft('');
  setIsEditingNickname(true);
- setIsMenuOpen(true);
+ setIsBottomMenuOpen(true);
  }}
  className="px-2.5 py-1.5 rounded-xl text-[11px] font-extrabold bg-amber-400 hover:bg-amber-300 text-slate-950 shrink-0 transition cursor-pointer"
  >
@@ -8958,7 +8971,6 @@ export default function App() {
  >
  <Home className="w-4 h-4" />
  </button>
- {renderDropdownMenu(true)}
  </div>
  </div>
 

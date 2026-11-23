@@ -26,7 +26,7 @@ async function getXlsxLib() {
 
 const BONUS_POINTS_CAP = 10;
 const DEFAULT_RECLASSIFICATION_AVG_THRESHOLD = 2.75;
-const DEFAULT_DEGREE_MANDATORY_CREDITS = 186;
+const DEFAULT_DEGREE_MANDATORY_CREDITS = 198;
 const DEFAULT_DEGREE_ELECTIVE_CREDITS = 12;
 
 const ADMIN_EMAILS = ['csongorcserkesz@gmail.com'];
@@ -638,12 +638,17 @@ function buildTemplatesForMajor(majorId) {
 
 const APP_RELEASES = [
   {
-    version: 'v2.6.0',
+    version: 'v3.0.0',
     date: '2026. 11. 23.',
     changes: [
-      'Teljes alkalmazásszintű Frosted Glass megjelenés: minden kártya, gomb, grafika, fejléc, modális ablak és háttérréteg áttetsző, finoman elmosott üveghatást kapott világos és sötét módban egyaránt',
-      'Minden állapotváltozás és becsukás animálva: sima ki- és beanimáció a Menü becsukásakor, a tantárgy részletes nézetéből és bármely felugró ablakból való kilépéskor, a lenyitható szekcióknál, a fülváltásoknál és minden lépkedésnél',
-      'Új 3 másodperces betöltőképernyő: a forgó kör helyett az alkalmazás logója szürkén jelenik meg, és hullámos „fill-up” effektussal töltődik fel színesre'
+      'Teljes alkalmazásszintű, letisztult Frosted Glass megjelenés: minden kártya, gomb, grafika, ragadós (sticky) felső fejléc, modális ablak és háttérréteg áttetsző, elmosott üveghatást kapott világos és sötét módban egyaránt',
+      'Új alsó Frosted Glass navigációs kapszula (Főoldal • Jelenlegi félév • Menü): telefonon és asztali nézetben is mindig látható az oldal alján, rugalmasan csúszó aktív fülkiemeléssel és irányhelyes (slide) nézetváltással',
+      'Teljesen új, különálló „Menü és beállítások” oldal: a régi felugró menü helyett átlátható, animált szekciókártyákba rendezve érhető el a Hallgatói profil (egyéni becenévvel és szakváltással), a Megjelenés és nézet (Világos/Sötét, Színes/Monokróm, Egyszerű/Részletes), a Tanulmányi beállítások (Átsorolási küszöb, Képzési kreditek, Szimulátor mód), az Információk & Eszközök és a Kijelentkezés',
+      'Dinamikus, napszakhoz igazodó személyes köszönés a főoldalon (Jó reggelt / Szia / Szép estét) a profilban beállított beceneveddel, a felső sávban pedig a Visszajelzés és a Faliújság (csengő) gomb minden nézetben közvetlenül elérhető',
+      'Lenyitható „Jelenlét és ZH statisztika” blokk a féléves dashboardon: külön kártyákon láthatók a gyakorlatok és előadások jelenlétei, hiányzásai és hátralévő alkalmai, mellette pedig részletes táblázatos ZH statisztika mutatja a tárgyankénti és ZH-nkénti pontokat és százalékos arányt',
+      'Előadás jelenlét adminisztráció minden tárgynál: a Jelenlét fülön külön-külön felületen követhető a gyakorlatokon és az előadásokon való részvétel (az előadásoknál nincs kötelező minimum, így nem veszélyezteti az aláírást)',
+      'Új iOS Liquid Glass lebegő gyűjtő kapszula a féléves dashboardon (JOKER ZH, Átlagszámoló, Új tantárgy +) és a főoldalon (Múltbéli félévek feltöltése, Új félév létrehozása), rugalmas nyitás- és becsukásanimációval, valamint élő JOKER ZH kijelzéssel',
+      'Alkalmazásszintű fluid animációk minden megnyitáskor, becsukáskor, fül- és oldalváltáskor, valamint új, hullámos „fill-up” effektussal feltöltődő logós betöltőképernyő'
     ]
   },
   {
@@ -1184,16 +1189,16 @@ const TUTORIAL_SLIDES = [
  {
  id: 'degree_credits',
  shortLabel: '1. Kreditek',
- badge: '1 / 9 • Képzési kreditkövetés',
- title: 'Így kövesd a diplomádhoz szükséges kreditek állását',
+ badge: '1 / 9 • Főoldal & Képzési kreditkövetés',
+ title: 'Személyes főoldal és képzési kreditek követése',
  description:
- 'A főoldal legfelső blokkja folyamatosan összesíti az összes olyan felvett tárgyad kreditjét, amelyet már teljesítettél — szakodhoz igazítható kreditcélokkal.',
+ 'A főoldalon napszakhoz igazodó személyes köszönés fogad, alatta pedig a képzési kreditblokk folyamatosan összesíti a teljesített kreditjeidet — a szakodhoz igazítható célokkal.',
  steps: [
- 'A „Kreditek szerkesztése” gombbal (vagy a kártyákon lévő ceruza ikonnal) szabadon beállíthatod a szakodra vonatkozó kötelező és szabadon választott kreditek számát, a teljes oklevélkreditet pedig ezekből automatikusan kiszámolja az app.',
- 'A nagy, zöld kártya mutatja az összes megszerzett kreditet a kiszámolt teljes oklevélkredithez képest, alatta pedig két szürkéskék kártyán külön látod a kötelező és a szabadon választott kredit állását.',
- 'Bármelyik tárgykártyán a „Kötelező” vagy „Szabadon választott” címkére kattintva egyetlen érintéssel átválthatod a besorolását.'
+ 'A „Kreditek: 198 + 12” gombbal (vagy a kártyákra koppintva, illetve a Menü oldal Tanulmányi beállítások kártyáján) szabadon beállíthatod a kötelező és szabadon választott kreditszámot, a teljes diplomakreditet pedig automatikusan számolja az app.',
+ 'A nagy, zöld kártyán látod az összes megszerzett kreditet százalékos jelvénnyel, alatta két szürkéskék kártyán pedig külön követheted a kötelező és a szabadon választott kreditek állását.',
+ 'Bármelyik tárgykártyán a „Kötelező” vagy „Szabadon választott” címkére koppintva egyetlen mozdulattal átválthatod a besorolását.'
  ],
- tip: 'Csak azok a tárgyak növelik a teljesített krediteket, amelyeknél már elérted a megajánlott jegyet, beírtál kézi jegyet, és nincsenek „Megbuktam☹️” állapotban.'
+ tip: 'Csak azok a tárgyak növelik a teljesített krediteket, amelyeknél már elérted a megajánlott / vizsgajegyet vagy kézi jegyet adtál meg, és nincsenek „Megbuktam☹️” állapotban.'
  },
  {
  id: 'semesters_kki',
@@ -1201,13 +1206,13 @@ const TUTORIAL_SLIDES = [
  badge: '2 / 9 • Félévek & Neptun Excel import',
  title: 'Félévek (1–7.) kezelése és Neptun Excel importálás',
  description:
- 'A főoldalon félévenként külön kártyán látod a teljesített/felvett krediteket, a Korrigált kreditindexet (KKI) és a súlyozott átlagot.',
+ 'A főoldalon félévenként külön Frosted Glass kártyán látod a teljesített/felvett krediteket, a Korrigált kreditindexet (KKI) és a súlyozott átlagot.',
  steps: [
- 'Új félévhez vagy a korábbi féléveid gyors feltöltéséhez kattints a jobb alsó sarokban lévő nagy, világító „+” gombra.',
+ 'Új félévhez vagy a korábbi féléveid gyors feltöltéséhez koppints az alsó navigációs sáv felett lebegő „+” gombra, ahol a Liquid Glass menüből választhatsz.',
  'A „Múltbéli félévek feltöltése” varázslóban feltöltheted a Neptun Törzslapból kiexportált Excel fájlt (.xlsx), és az app automatikusan beolvassa a tárgyak nevét, kreditjét és érdemjegyét (1–5).',
- 'A félévkártya jobb felső sarkában a ceruza ikonnal bármikor átírhatod az évszámot, a kukával pedig törölheted a félévet.'
+ 'Az alsó navigációs sáv „Jelenlegi félév” gombjával bármikor egyetlen koppintással az aktuális féléved dashboardjára ugorhatsz.'
  ],
- tip: 'Kattints bármelyik félévkártyára, hogy belépj a félév saját dashboardjára és kezeld a tantárgyaidat!'
+ tip: 'A félévkártya jobb felső sarkában a ceruza ikonnal bármikor átírhatod az évszámot vagy az időszakot, a kukával pedig törölheted a félévet.'
  },
  {
  id: 'threshold_avg',
@@ -1217,11 +1222,11 @@ const TUTORIAL_SLIDES = [
  description:
  'A tanéves összesítő kártyák az őszi (/1) és tavaszi (/2) félévek súlyozott átlagát vetik össze a szakodra vonatkozó ösztöndíjas határral.',
  steps: [
- 'Kattints a „Küszöb: 2,75” gombra (vagy nyisd meg a Menü -> Átsorolási küszöb opciót), és állítsd be a saját szakodra vonatkozó átlaghatárt.',
+ 'Kattints a főoldali „Küszöb: 2,75” gombra (vagy nyisd meg az alsó sávban a Menü oldalt → Tanulmányi beállítások → Átsorolási küszöb), és állítsd be a saját szakodra vonatkozó átlaghatárt.',
  'Ha még csak az őszi féléved van meg, a kártya alján az app automatikusan kiszámolja, minimum mekkora súlyozott átlag kell tavasszal a bennmaradáshoz.',
  'A „Megbuktam☹️” jelölésű tárgyakat az átlagszámítás automatikusan figyelmen kívül hagyja.'
  ],
- tip: 'A beállított küszöb elmentődik a fiókodba, így telefonon és laptopon is ugyanazt a határt látod.'
+ tip: 'A beállított küszöb elmentődik a felhőbe a fiókodhoz, így telefonon és laptopon is ugyanazt a határt látod.'
  },
  {
  id: 'templates',
@@ -1229,11 +1234,11 @@ const TUTORIAL_SLIDES = [
  badge: '4 / 9 • Szakválasztó & Rendezés',
  title: 'Szak szerinti tárgysablonok, Vizsgakurzus és Rendezés',
  description:
- 'A féléves dashboardon a jobb alsó „+” gombbal bármelyik BGE alapszak tárgyait betöltheted, a „Rendezés” gombbal pedig testreszabhatod a sorrendjüket.',
+ 'A féléves dashboard jobb alsó sarkában lévő lebegő gyűjtő kapszulából nyithatod meg az „Új tantárgy (+)” ablakot, ahol bármelyik BGE alapszak tárgyait betöltheted.',
  steps: [
  'Új tárgy felvételekor válaszd ki a szakodat: Gazdaságinformatikus esetén az ellenőrzött sablonok, a többi szakon a BGE mintatanterv szerinti tárgyak tölthetők be.',
- 'Üres tárgy létrehozásánál 3 kredit megadásakor automatikusan 6 gyakorlat (3 aláírás min., 4 megajánlott min.), 6 kreditnél 12 gyakorlat (6 aláírás min., 9 megajánlott min.) töltődik ki.',
- 'A félév tetején lévő „Rendezés” gombbal választhatsz A→Z, Z→A, Összesített pontszám vagy húzogatós Egyéni sorrend között.'
+ 'Üres tárgy létrehozásánál 3 kredit megadásakor automatikusan 6 gyakorlat (3 aláírás min., 4 megajánlott min.), 6 kreditnél 12 gyakorlat (6 aláírás min., 9 megajánlott min.) töltődik ki — és Vizsgakurzus vagy Intenzív heti kurzus is választható.',
+ 'A tantárgyak fölötti „Rendezés” gombbal választhatsz A→Z, Z→A, Összesített pontszám vagy húzogatós Egyéni sorrend között.'
  ],
  tip: 'Több sablont is felvehetsz egymás után anélkül, hogy bezárnád az ablakot — a „Felvétel” gomb zöld „Hozzáadva” állapotra vált.'
  },
@@ -1245,9 +1250,9 @@ const TUTORIAL_SLIDES = [
  description:
  'Minden tantárgykártya mutatja, hány pont kell még a következő jegyhez, és automatikusan vizsgaállapotba lép, ha a ZH-kból nem lett megajánlott jegy.',
  steps: [
- 'A kártyán mindig látod, hány pont kell még a megajánlott 2-eshez — ha ez megvan, automatikusan mutatja a 3-ashoz, 4-eshez, majd az 5-öshöz szükséges pontot.',
+ 'A kártyán mindig egyetlen, ténylegesen szükséges pontszám mutatja, hány pont kell még a megajánlott 2-eshez — ha ez megvan, automatikusan mutatja a 3-ashoz, 4-eshez, majd az 5-öshöz szükséges pontot.',
  'Ha egy sima kurzusban minden ZH pontszáma ki van töltve, de nem teljesült a ZH minimum vagy a megajánlott küszöb, a kártyán elszürkül a félévközi pontrész, és megjelenik egy kiemelt narancssárgás-barna VIZSGA rubrika a max (100 p) és elért pontszámmal.',
- 'A Menü -> Tárgykártyák nézete kapcsolóval bármikor válthatsz Egyszerű (kompakt) és Részletes nézet között.'
+ 'A Menü oldal → Megjelenés és nézet → Tárgykártyák nézete kapcsolóval bármikor válthatsz Egyszerű (kompakt) és Részletes nézet között.'
  ],
  tip: 'Az automatikusan megjelenő VIZSGA tétel pontosan úgy működik, mint egy vizsgakurzus: 59,5 ponttól ad jegyet, alatta pedig automatikusan bukottnak jelöli a tárgyat.'
  },
@@ -1255,29 +1260,29 @@ const TUTORIAL_SLIDES = [
  id: 'assessments_buckets',
  shortLabel: '6. ZH-k & Limit',
  badge: '6 / 9 • Biztonságos tételszerkesztés & Gyűjtők',
- title: 'Tételek szerkesztése ceruzával, 10 p sapka és gyűjtők',
+ title: 'Tételek szerkesztése, 10 p sapka és egyéni gyűjtők',
  description:
- 'Bármelyik tantárgykártyára kattintva megnyílik a részletes adatlap, ahol rögzítheted a ZH-kat, pluszpontokat és egyéni feladatokat.',
+ 'Bármelyik tantárgykártyára koppintva megnyílik a részletes adatlap, ahol rögzítheted a ZH-kat, pluszpontokat és egyéni feladatokat.',
  steps: [
- 'Bármelyik felvett tétel (ZH, Pluszpont, Gyűjtő tétel vagy VIZSGA) pontszámát és adatait a sor végén található ceruza ikonra kattintva módosíthatod — a változtatások csak a Mentés gombra kattintva lépnek életbe.',
+ 'Bármelyik felvett tétel (ZH, Pluszpont, Gyűjtő tétel vagy VIZSGA) pontszámát a sor végén található szerkesztés/törlés gombbal módosíthatod — a változtatások csak a Mentés gombra kattintva lépnek életbe, a törlés pedig kétlépcsős megerősítéssel védett.',
  'Új ZH hozzáadásakor a megnevezést üresen is hagyhatod: az app automatikusan tudja, hogy ez az 1. ZH, 2. ZH vagy 3. ZH.',
- 'A Pluszpontok kategóriában az alkalmazás automatikusan érvényesíti a 10 pontos limitet, az „+ Új gyűjtő létrehozása” gombbal pedig egyéni pontgyűjtőket vehetsz fel.'
+ 'A Pluszpontok kategóriában automatikusan érvényesül a 10 pontos limit, az „+ Új gyűjtő létrehozása” gombbal pedig saját pontgyűjtőket vehetsz fel.'
  ],
  tip: 'Bármelyik párbeszédablakot bezárhatod az ablakon kívülre kattintva vagy az Esc billentyűvel, az Enterrel pedig azonnal menthetsz.'
  },
  {
  id: 'joker_simulator',
- shortLabel: '7. Gyűjtő & Joker',
- badge: '7 / 9 • Gyűjtő kapszula, Joker ZH & Átlagszámoló',
- title: 'Lebegő Gyűjtő kapszula, Joker ZH és Átlagszámoló',
+ shortLabel: '7. Gyűjtő & Stat.',
+ badge: '7 / 9 • Liquid Glass kapszula, Joker ZH & ZH statisztika',
+ title: 'Lebegő Gyűjtő kapszula, Joker ZH, Átlagszámoló és Statisztikák',
  description:
- 'A féléves dashboard jobb alsó sarkában található lebegő kapszula egyetlen érintésre előhívja a legfontosabb tervezőeszközöket.',
+ 'A féléves dashboard jobb alsó sarkában lebegő kapszula egyetlen érintésre nyitja meg a legfontosabb tervezőeszközöket, felül pedig részletes jelenlét és ZH statisztika segít.',
  steps: [
- 'Lebegő kapszula (jobb alsó sarok): megnyomásával előugrik az Új tantárgy (+), az Átlagszámoló és a JOKER ZH gomb.',
- 'JOKER ZH kijelzés: ha már kiválasztottál egy újraírandó ZH-t, a kapszula megnyitásakor a JOKER ZH gomb alján azonnal látod, melyik tárgy melyik ZH-ja lett kiválasztva.',
- 'Átlagszámoló: 1–5-ös színes jegygombokkal élőben szimulálhatod a féléved súlyozott átlagát és korrigált kreditindexét.'
+ 'Lebegő Liquid Glass kapszula: megnyomásával előugrik a JOKER ZH, az Átlagszámoló és az Új tantárgy (+) gomb. Kijelölt Joker ZH esetén a gomb alján látszik, melyik tárgy melyik ZH-ja vár eredményre.',
+ 'JOKER ZH összefoglaló táblázat: automatikusan kiemeli a 3 legalacsonyabb pontszámú ZH-t, és megmutatja, hány pont javítás kell a megajánlott vagy következő jobb jegyhez.',
+ 'Lenyitható „Jelenlét és ZH statisztika” blokk a dashboard tetején: egy kattintással megnyílnak a Gyakorlatok, az Előadások és a tárgyankénti/ZH-nkénti részletes ZH statisztika táblázat kártyái.'
  ],
- tip: 'A dashboard tetején található két jelenléti mini kártyán egyetlen pillantással követheted a gyakorlatok és előadások tárgyankénti megoszlását is.'
+ tip: 'Az Átlagszámolóban 1–5-ös színes jegygombokkal élőben szimulálhatod a féléved súlyozott átlagát és korrigált kreditindexét!'
  },
  {
  id: 'failed_attendance_pwa',
@@ -1291,21 +1296,21 @@ const TUTORIAL_SLIDES = [
  'Gyakorlatoknál a rendszer figyeli az aláíráshoz és megajánlott jegyhez szükséges minimumot, míg az előadásoknál nincs kötelező minimum (nem veszélyezteti az aláírást).',
  'Ha egy tárgyból nem sikerült a vizsga vagy az aláírás, nyomd meg az ablak alján a „Megbuktam☹️” gombot: a kártya halvány piros lesz, és nem rontja a súlyozott átlagodat.'
  ],
- tip: 'Az előadások alkalomszáma automatikusan megegyezik a tantárgy Beállítások ablakában megadott gyakorlatok számával.'
+ tip: 'A dashboard tetején lévő lenyitható „Jelenlét és ZH statisztika” kártyákon a jelenlétek mellett a hiányzások és a még hátralévő alkalmak száma is azonnal látható.'
  },
  {
  id: 'menu_pwa',
- shortLabel: '9. Menü & Mobil',
- badge: '9 / 9 • Menü, Nézetváltó & Telefonos app',
- title: 'Testreszabás a Menüben és kirakás a kezdőképernyőre',
+ shortLabel: '9. Navigáció & Menü',
+ badge: '9 / 9 • Alsó navigáció, Menü oldal & Mobil app',
+ title: 'Alsó navigációs sáv, különálló Menü oldal és mobil parancsikon',
  description:
- 'A jobb felső „Menü” gomb alatt találod a megjelenési és nézetbeállításokat, telefonon pedig saját alkalmazásként is kirakhatod a főképernyőre.',
+ 'Az oldal alján lebegő Frosted Glass navigációs sávval egyetlen koppintással válthatsz a Főoldal, a Jelenlegi félév és a teljes képernyős Menü oldal között.',
  steps: [
- 'A Menüben válthatsz Világos/Sötét téma, Színes/Monokróm színpaletta, valamint Egyszerű/Részletes kártyanézet között.',
- 'iPhone-on (Safari): nyomd meg az alsó Megosztás ikont, majd válaszd a „Főképernyőhöz adás” opciót.',
- 'Androidon (Chrome): nyomd meg a jobb felső három pontot, majd válaszd a „Telepítés alkalmazásként” vagy „Hozzáadás a kezdőképernyőhöz” menüpontot.'
+ 'Menü és beállítások oldal: itt kezelheted a Hallgatói profilodat (saját becenév, szakváltás), a Megjelenést (Világos/Sötét, Színes/Monokróm, Egyszerű/Részletes kártyák), a Tanulmányi beállításokat (Átsorolási küszöb, Képzési kreditek, Szimulátor mód) és az Eszközöket (App statisztika, Verziótörténet, GDPR).',
+ 'Felső Frosted Glass sáv: a Visszajelzés és a Faliújság (csengő) gomb minden nézetben közvetlenül elérhető a képernyő tetején.',
+ 'Telefonos parancsikon (PWA): iPhone-on (Safari) a Megosztás → „Főképernyőhöz adás”, Androidon (Chrome) pedig a Menü oldal „Letöltés parancsikonként” gombjával vagy a böngésző ⋮ menüjéből rakhatod ki a főképernyőre.'
  ],
- tip: 'Ha új tárgysablont kérnél a szakodhoz, vagy ötleted van az app fejlesztéséhez, az oldal alján található „Visszajelzés” gombbal közvetlenül írhatsz nekünk.'
+ tip: 'Ha a Hallgatói profilban megadsz egy becenevet, a főoldal személyes köszönése és a felső sáv is ezen fog szólítani!'
  }
 ];
 
@@ -1667,7 +1672,7 @@ function TutorialSlidePreview({ slideId, darkMode }) {
  <div className="grid grid-cols-2 gap-2 text-center">
  <div className={`p-2.5 rounded-xl border ${subBg}`}>
  <span className={`text-[10px] block ${muted}`}>Kötelező</span>
- <strong className={`text-xs font-extrabold ${strong}`}>54 / 186</strong>
+ <strong className={`text-xs font-extrabold ${strong}`}>54 / 198</strong>
  <div className={`h-1.5 rounded-full mt-1.5 ${darkMode ? 'bg-slate-700' : 'bg-slate-200'}`}>
  <div className="h-full rounded-full bg-[#5c7896] w-[29%]" />
  </div>
@@ -1847,14 +1852,18 @@ function TutorialSlidePreview({ slideId, darkMode }) {
  <JokerIcon className="w-3.5 h-3.5" /> JOKER ZH
  </span>
  </div>
- <div className="grid grid-cols-2 gap-2">
- <div className={`p-2.5 rounded-xl border ${subBg}`}>
- <span className="text-[10px] font-bold text-amber-500 uppercase block">Gyakorlatok jelenléte</span>
- <strong className={`text-xs font-extrabold ${strong}`}>83% (25 / 30 alkalom)</strong>
+ <div className="grid grid-cols-3 gap-1.5 sm:gap-2">
+ <div className={`p-2 rounded-xl border ${subBg}`}>
+ <span className="text-[9px] sm:text-[10px] font-bold text-amber-500 uppercase block">Gyakorlatok</span>
+ <strong className={`text-[11px] sm:text-xs font-extrabold ${strong}`}>83% (25/30)</strong>
  </div>
- <div className={`p-2.5 rounded-xl border ${subBg}`}>
- <span className="text-[10px] font-bold text-sky-500 uppercase block">Előadások jelenléte</span>
- <strong className={`text-xs font-extrabold ${strong}`}>70% (21 / 30 alkalom)</strong>
+ <div className={`p-2 rounded-xl border ${subBg}`}>
+ <span className="text-[9px] sm:text-[10px] font-bold text-sky-500 uppercase block">Előadások</span>
+ <strong className={`text-[11px] sm:text-xs font-extrabold ${strong}`}>70% (21/30)</strong>
+ </div>
+ <div className={`p-2 rounded-xl border ${subBg}`}>
+ <span className="text-[9px] sm:text-[10px] font-bold text-emerald-500 uppercase block">ZH arány</span>
+ <strong className={`text-[11px] sm:text-xs font-extrabold ${strong}`}>78,5%</strong>
  </div>
  </div>
  </div>
@@ -1892,17 +1901,28 @@ function TutorialSlidePreview({ slideId, darkMode }) {
 
  return (
  <div className={`rounded-2xl border p-3.5 sm:p-4 shadow-md space-y-2.5 ${cardBg}`}>
- <div className="flex items-center justify-between gap-2">
- <span className="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-800 text-white inline-flex items-center gap-1.5">
- <Menu className="w-3.5 h-3.5 text-amber-400" /> Menü
- </span>
- <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-400/20 text-amber-500">
- Egyszerű / Részletes nézet
- </span>
+ <div className="grid grid-cols-2 gap-2">
+ <div className={`p-2.5 rounded-xl border ${subBg}`}>
+ <span className="text-[10px] font-bold text-amber-500 uppercase block">Hallgatói profil</span>
+ <strong className={`text-xs font-extrabold block truncate ${strong}`}>Becenév & Szak</strong>
  </div>
- <div className={`p-2.5 rounded-xl border text-xs flex items-center justify-between ${subBg}`}>
- <span className={`font-semibold ${strong}`}>Főképernyőhöz adás (iOS / Android)</span>
- <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-500 font-bold text-[11px]">App mód</span>
+ <div className={`p-2.5 rounded-xl border ${subBg}`}>
+ <span className="text-[10px] font-bold text-emerald-500 uppercase block">Beállítások</span>
+ <strong className={`text-xs font-extrabold block truncate ${strong}`}>Téma • Nézet • App mód</strong>
+ </div>
+ </div>
+ <div className={`rounded-full border p-1 grid grid-cols-3 gap-1 text-center text-[10px] sm:text-[11px] font-extrabold ${
+ darkMode ? 'bg-slate-800/80 border-slate-700' : 'bg-slate-100 border-slate-200'
+ }`}>
+ <span className={`py-1.5 rounded-full inline-flex items-center justify-center gap-1 ${muted}`}>
+ <Home className="w-3 h-3" /> Főoldal
+ </span>
+ <span className={`py-1.5 rounded-full inline-flex items-center justify-center gap-1 ${muted}`}>
+ <Calendar className="w-3 h-3" /> Félév
+ </span>
+ <span className="py-1.5 rounded-full bg-amber-400 text-slate-950 inline-flex items-center justify-center gap-1 shadow-xs">
+ <Menu className="w-3 h-3" /> Menü
+ </span>
  </div>
  </div>
  );
@@ -4056,6 +4076,36 @@ export default function App() {
  setReclassificationThreshold(val);
  localStorage.setItem('bge_reclassification_threshold', String(val));
  }
+ const isGazdinfoUserInPrefs =
+ data.majorId === 'gazdasaginformatikus' ||
+ data.isGazdinfo === true ||
+ (() => {
+ try {
+ return localStorage.getItem(`bge_user_major_${user.uid}`) === 'gazdasaginformatikus';
+ } catch {
+ return false;
+ }
+ })();
+
+ if (isGazdinfoUserInPrefs && data.gazdinfoCreditsResetV3 !== true) {
+ setDegreeMandatoryCredits(198);
+ setDegreeElectiveCredits(12);
+ try {
+ localStorage.setItem('bge_degree_mandatory_credits', '198');
+ localStorage.setItem('bge_degree_elective_credits', '12');
+ } catch {
+ // ignore
+ }
+ setDoc(
+ doc(db, 'users', user.uid, 'settings', 'preferences'),
+ {
+ degreeMandatoryCredits: 198,
+ degreeElectiveCredits: 12,
+ gazdinfoCreditsResetV3: true
+ },
+ { merge: true }
+ ).catch(() => {});
+ } else {
  if (data.degreeMandatoryCredits !== undefined && data.degreeMandatoryCredits !== null) {
  const mandVal = parseInt(data.degreeMandatoryCredits, 10);
  if (!isNaN(mandVal) && mandVal >= 0) {
@@ -4068,6 +4118,7 @@ export default function App() {
  if (!isNaN(elecVal) && elecVal >= 0) {
  setDegreeElectiveCredits(elecVal);
  localStorage.setItem('bge_degree_elective_credits', String(elecVal));
+ }
  }
  }
  if (typeof data.isGazdinfo === 'boolean') {
@@ -4181,12 +4232,29 @@ export default function App() {
  if (BGE_MAJORS.some(m => m.id === cachedLocalMajor)) {
  const foundM = BGE_MAJORS.find(m => m.id === cachedLocalMajor);
  setUserMajorId(foundM.id);
+ if (foundM.isGazdinfo) {
+ setDegreeMandatoryCredits(198);
+ setDegreeElectiveCredits(12);
+ try {
+ localStorage.setItem('bge_degree_mandatory_credits', '198');
+ localStorage.setItem('bge_degree_elective_credits', '12');
+ } catch {
+ // ignore
+ }
+ }
  setDoc(
  doc(db, 'users', user.uid, 'settings', 'preferences'),
  {
  majorId: foundM.id,
  majorLabel: foundM.label,
- isGazdinfo: Boolean(foundM.isGazdinfo)
+ isGazdinfo: Boolean(foundM.isGazdinfo),
+ ...(foundM.isGazdinfo
+ ? {
+ degreeMandatoryCredits: 198,
+ degreeElectiveCredits: 12,
+ gazdinfoCreditsResetV3: true
+ }
+ : {})
  },
  { merge: true }
  ).catch(() => {});
@@ -4287,7 +4355,8 @@ export default function App() {
  doc(db, 'users', user.uid, 'settings', 'preferences'),
  {
  degreeMandatoryCredits: parsedMand,
- degreeElectiveCredits: parsedElec
+ degreeElectiveCredits: parsedElec,
+ gazdinfoCreditsResetV3: true
  },
  { merge: true }
  ).catch(() => {});
@@ -12467,42 +12536,6 @@ export default function App() {
  Add meg a szakod mintatantervében előírt <strong>kötelező</strong> és <strong>szabadon választott</strong> kreditek számát — a teljes oklevélkreditet ezek összegéből automatikusan számoljuk ki:
  </p>
 
- <div>
- <label className={`block text-xs font-semibold mb-1.5 ${textMuted}`}>
- Gyors sablonok (gyakori BGE képzések)
- </label>
- <div className="grid grid-cols-3 gap-1.5">
- {[
- { label: '186 + 12 (210)', mand: 186, elec: 12 },
- { label: '171 + 9 (180)', mand: 171, elec: 9 },
- { label: '168 + 12 (180)', mand: 168, elec: 12 }
- ].map(preset => {
- const isSelected =
- String(mandatoryCreditsInput).trim() === String(preset.mand) &&
- String(electiveCreditsInput).trim() === String(preset.elec);
- return (
- <button
- key={preset.label}
- type="button"
- onClick={() => {
- setMandatoryCreditsInput(String(preset.mand));
- setElectiveCreditsInput(String(preset.elec));
- }}
- className={`py-2 px-2 rounded-xl text-[11px] font-extrabold border transition cursor-pointer ${
- isSelected
- ? 'bg-emerald-500 text-white border-emerald-500 shadow-xs'
- : darkMode
- ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
- : 'bg-slate-100 hover:bg-slate-200 text-slate-800 border-slate-200'
- }`}
- >
- {preset.label}
- </button>
- );
- })}
- </div>
- </div>
-
  <div className="grid grid-cols-2 gap-3">
  <div>
  <label className={`block text-xs font-semibold mb-1.5 ${textMuted}`}>
@@ -12514,7 +12547,7 @@ export default function App() {
  max="500"
  step="1"
  required
- placeholder="Pl. 186"
+ placeholder="Pl. 198"
  value={mandatoryCreditsInput}
  onChange={e => setMandatoryCreditsInput(e.target.value)}
  className={`w-full border rounded-xl px-3.5 py-2.5 font-extrabold focus:outline-none ${inputStyle}`}

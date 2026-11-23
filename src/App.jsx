@@ -638,6 +638,14 @@ function buildTemplatesForMajor(majorId) {
 
 const APP_RELEASES = [
   {
+    version: 'v2.5.4',
+    date: '2026. 11. 23.',
+    changes: [
+      'Alsó Menü megnyitásakor lágy elmosódott háttér (backdrop-blur) jelenik meg az oldal felett, amelyre koppintva a menü azonnal bezárható',
+      'Háttérgörgetés teljes tiltása nyitott alsó Menü esetén (overscroll-behavior: contain + body scroll lock), így a menü aljára görgetve sem mozdul el a háttérben lévő dashboard'
+    ]
+  },
+  {
     version: 'v2.5.3',
     date: '2026. 11. 23.',
     changes: [
@@ -4152,7 +4160,7 @@ export default function App() {
  useEffect(() => {
  if (!user || !userDataLoaded || activeView !== 'home') return;
  if (mustAcceptGdpr || mustSelectMajor) return;
- if (isBottomMenuOpen) { setIsBottomMenuOpen(false); setIsEditingNickname(false); return; }
+ if (isBottomMenuOpen) return;
 
  const alreadySeenLocal = localStorage.getItem('bge_gazdinfo_prompt_seen') === 'true';
  const hasExistingData = subjects.length > 0 || savedSemesterDocs.length > 0;
@@ -6359,7 +6367,7 @@ export default function App() {
  );
 
  useEffect(() => {
- if (!isAnyModalOpen) return;
+ if (!isAnyModalOpen && !isBottomMenuOpen) return;
 
  const handleModalKeyDown = (e) => {
  if (e.isComposing) return;
@@ -6367,6 +6375,11 @@ export default function App() {
  if (e.key === 'Escape') {
  e.preventDefault();
  if (mustAcceptGdpr || mustSelectMajor) return;
+ if (!isAnyModalOpen && isBottomMenuOpen) {
+ setIsBottomMenuOpen(false);
+ setIsEditingNickname(false);
+ return;
+ }
  if (isMajorSelectModalOpen && !isSavingMajor) { setIsMajorSelectModalOpen(false); return; }
  if (activeNoticePopup) { handleMarkNoticeAsRead(activeNoticePopup.id); return; }
  if (isNoticeboardOpen) { setIsNoticeboardOpen(false); setIsAddingNotice(false); return; }
@@ -6490,8 +6503,10 @@ export default function App() {
  return () => window.removeEventListener('keydown', handleModalKeyDown);
  });
 
+ const shouldLockBackgroundScroll = isAnyModalOpen || isBottomMenuOpen;
+
  useEffect(() => {
- if (!isAnyModalOpen) return;
+ if (!shouldLockBackgroundScroll) return;
  const scrollY = window.scrollY || window.pageYOffset || 0;
  const body = document.body;
  const html = document.documentElement;
@@ -6522,7 +6537,7 @@ export default function App() {
  body.style.width = prevBodyWidth;
  window.scrollTo(0, scrollY);
  };
- }, [isAnyModalOpen]);
+ }, [shouldLockBackgroundScroll]);
 
  const handleSaveBucketModal = async (e) => {
  if (e && e.preventDefault) e.preventDefault();
@@ -7990,6 +8005,20 @@ export default function App() {
 
  {/* ALSÓ FROSTED GLASS NAVIGÁCIÓS KAPSZULA (FŐOLDAL • JELENLEGI FÉLÉV • MENÜ) */}
  {!isAnyModalOpen && (
+ <>
+ {isBottomMenuOpen && (
+ <div
+ aria-hidden="true"
+ onClick={() => {
+ setIsBottomMenuOpen(false);
+ setIsEditingNickname(false);
+ }}
+ className={`fixed inset-0 z-35 backdrop-blur-md transition-opacity duration-200 touch-none ${
+ darkMode ? 'bg-slate-950/55' : 'bg-slate-900/35'
+ }`}
+ />
+ )}
+
  <nav
  data-bottom-nav-root="true"
  aria-label="Alsó navigációs sáv"
@@ -7997,10 +8026,10 @@ export default function App() {
  >
  {isBottomMenuOpen && (
  <div
- className={`bge-bottom-menu-sheet pointer-events-auto mb-2.5 w-full max-h-[74dvh] overflow-y-auto rounded-3xl border p-3.5 space-y-3.5 shadow-2xl ${
+ className={`bge-bottom-menu-sheet pointer-events-auto mb-2.5 w-full max-h-[74dvh] overflow-y-auto overscroll-contain touch-pan-y rounded-3xl border p-3.5 space-y-3.5 shadow-2xl ${
  darkMode
- ? 'bg-slate-900/85 border-white/15 text-slate-100 shadow-black/75'
- : 'bg-white/88 border-slate-200/90 text-slate-800 shadow-slate-900/20'
+ ? 'bg-slate-900/88 border-white/15 text-slate-100 shadow-black/75'
+ : 'bg-white/92 border-slate-200/90 text-slate-800 shadow-slate-900/20'
  }`}
  >
  {renderMenuBody(() => {
@@ -8087,6 +8116,7 @@ export default function App() {
  </button>
  </div>
  </nav>
+ </>
  )}
 
  {templateToast && (

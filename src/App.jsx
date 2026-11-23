@@ -638,6 +638,14 @@ function buildTemplatesForMajor(majorId) {
 
 const APP_RELEASES = [
   {
+    version: 'v2.5.2',
+    date: '2026. 11. 23.',
+    changes: [
+      'A lebegő (floating) gyűjtő gomb és a főoldali „+” gomb kikerült a slide-animált nézetkonténeren kívülre, így valódi, stabil viewport-rögzített (fixed) pozícióban, közvetlenül az alsó navigációs sáv felett helyezkedik el elcsúszás nélkül',
+      'Az alsó navigációs sáv gombjai mentesülnek a globális gombnyomás-skálázástól (active:scale), így a nézetek közötti váltás teljesen stabil és sima marad'
+    ]
+  },
+  {
     version: 'v2.5.1',
     date: '2026. 11. 23.',
     changes: [
@@ -7788,13 +7796,13 @@ export default function App() {
  backdrop-filter: blur(4px);
  }
  }
- .bge-fluid-app button,
+ .bge-fluid-app button:not([data-nav-pill="true"]),
  .bge-fluid-app [role="button"],
  .bge-fluid-app a[href] {
  transition: transform 220ms cubic-bezier(0.34, 1.38, 0.64, 1), background-color 240ms cubic-bezier(0.22, 1, 0.36, 1), border-color 240ms cubic-bezier(0.22, 1, 0.36, 1), color 200ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 260ms cubic-bezier(0.22, 1, 0.36, 1), opacity 220ms cubic-bezier(0.22, 1, 0.36, 1);
  will-change: transform;
  }
- .bge-fluid-app button:active:not(:disabled),
+ .bge-fluid-app button:not([data-nav-pill="true"]):active:not(:disabled),
  .bge-fluid-app [role="button"]:active:not([aria-disabled="true"]),
  .bge-fluid-app a[href]:active {
  transform: scale(0.955);
@@ -7999,6 +8007,7 @@ export default function App() {
  setIsBottomMenuOpen(false);
  navigateWithSlide('home');
  }}
+ data-nav-pill="true"
  aria-current={activeView === 'home' && !isBottomMenuOpen ? 'page' : undefined}
  className={`relative z-10 min-w-0 py-2 px-2 rounded-full flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 text-[11px] sm:text-xs font-extrabold touch-manipulation select-none transition-colors duration-200 cursor-pointer ${
  activeView === 'home' && !isBottomMenuOpen
@@ -8018,6 +8027,7 @@ export default function App() {
  setIsBottomMenuOpen(false);
  navigateWithSlide('semester', currentTargetSemester);
  }}
+ data-nav-pill="true"
  aria-current={activeView === 'semester' && !isBottomMenuOpen ? 'page' : undefined}
  title={`Jelenlegi félév megnyitása (${formatSemesterLabel(currentTargetSemester)})`}
  className={`relative z-10 min-w-0 py-2 px-2 rounded-full flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 text-[11px] sm:text-xs font-extrabold touch-manipulation select-none transition-colors duration-200 cursor-pointer ${
@@ -8043,6 +8053,7 @@ export default function App() {
  return !prev;
  });
  }}
+ data-nav-pill="true"
  aria-expanded={isBottomMenuOpen}
  className={`relative z-10 min-w-0 py-2 px-2 rounded-full flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 text-[11px] sm:text-xs font-extrabold touch-manipulation select-none transition-colors duration-200 cursor-pointer ${
  isBottomMenuOpen
@@ -8862,75 +8873,6 @@ export default function App() {
  {appFooter}
  </main>
 
- <div data-home-plus-menu="true" className="fixed bottom-[86px] right-4 sm:bottom-[92px] sm:right-7 z-30 flex flex-col items-end gap-3">
- {isHomePlusMenuOpen && (
- <div className={`w-72 sm:w-80 rounded-2xl border-2 p-2.5 shadow-2xl space-y-2 transition-all ${
- darkMode
- ? 'bg-slate-900 border-amber-400/60 text-slate-100'
- : 'bg-white border-amber-400 text-slate-900'
- }`}>
- <button
- type="button"
- onClick={handleOpenPastSemestersWizard}
- className={`w-full p-3 rounded-xl border text-left flex items-start gap-3 transition cursor-pointer ${
- darkMode
- ? 'bg-emerald-950/35 hover:bg-emerald-900/45 border-emerald-500/45'
- : 'bg-emerald-50/90 hover:bg-emerald-100/80 border-emerald-300'
- }`}
- >
- <div className="w-9 h-9 rounded-xl bg-emerald-500 text-white flex items-center justify-center shrink-0 mt-0.5">
- <FastForward className="w-4 h-4" />
- </div>
- <div className="min-w-0">
- <p className={`text-xs sm:text-sm font-extrabold leading-tight ${textStrong}`}>
- Múltbéli félévek feltöltése
- </p>
- <p className={`text-[11px] mt-1 leading-snug ${textMuted}`}>
- Neptun Excel importtal vagy kézi beírással a korábbi félévek jegyeihez
- </p>
- </div>
- </button>
-
- <button
- type="button"
- onClick={() => {
- setIsHomePlusMenuOpen(false);
- setNewSemesterStartYear(String(new Date().getFullYear()));
- setNewSemesterSeason('osz');
- setIsSemesterModalOpen(true);
- }}
- className={`w-full p-3 rounded-xl border text-left flex items-start gap-3 transition cursor-pointer ${
- darkMode
- ? 'bg-slate-800/80 hover:bg-slate-800 border-slate-700'
- : 'bg-slate-50 hover:bg-amber-50/80 border-slate-200'
- }`}
- >
- <div className="w-9 h-9 rounded-xl bg-amber-400 text-slate-950 flex items-center justify-center shrink-0 mt-0.5">
- <FolderPlus className="w-4 h-4" />
- </div>
- <div className="min-w-0">
- <p className={`text-xs sm:text-sm font-extrabold leading-tight ${textStrong}`}>
- Új félév létrehozása
- </p>
- <p className={`text-[11px] mt-1 leading-snug ${textMuted}`}>
- Egyetlen új szemeszter felvétele évszám és Ősz / Tavasz alapján
- </p>
- </div>
- </button>
- </div>
- )}
-
- <button
- type="button"
- onClick={() => setIsHomePlusMenuOpen(prev => !prev)}
- aria-expanded={isHomePlusMenuOpen}
- title="Félév hozzáadása vagy múltbéli félévek feltöltése"
- aria-label="Félév hozzáadása vagy múltbéli félévek feltöltése"
- className="w-[60px] h-[60px] sm:w-16 sm:h-16 rounded-full bg-amber-400 hover:bg-amber-300 text-slate-950 shadow-[0_0_26px_rgba(251,191,36,0.75)] hover:shadow-[0_0_34px_rgba(251,191,36,0.95)] flex items-center justify-center transition transform hover:scale-105 active:scale-95 cursor-pointer"
- >
- <Plus className={`w-8 h-8 stroke-[2.75] transition-transform duration-200 ${isHomePlusMenuOpen ? 'rotate-45' : ''}`} />
- </button>
- </div>
  </div>
  ) : (
  <div
@@ -9951,7 +9893,82 @@ export default function App() {
  {appFooter}
  </main>
 
- <div data-collector-menu="true" className="fixed bottom-[86px] right-4 sm:bottom-[92px] sm:right-7 z-30 flex flex-col items-end gap-3">
+ </div>
+ )}
+
+ {/* FIX POZÍCIÓJÚ LEBEGŐ GYŰJTŐ GOMBOK AZ ALSÓ NAVIGÁCIÓS SÁV FELETT */}
+ {activeView === 'home' ? (
+ <div data-home-plus-menu="true" className="fixed bottom-[82px] right-4 sm:bottom-[86px] sm:right-7 z-30 flex flex-col items-end gap-3">
+ {isHomePlusMenuOpen && (
+ <div className={`w-72 sm:w-80 rounded-2xl border-2 p-2.5 shadow-2xl space-y-2 transition-all ${
+ darkMode
+ ? 'bg-slate-900 border-amber-400/60 text-slate-100'
+ : 'bg-white border-amber-400 text-slate-900'
+ }`}>
+ <button
+ type="button"
+ onClick={handleOpenPastSemestersWizard}
+ className={`w-full p-3 rounded-xl border text-left flex items-start gap-3 transition cursor-pointer ${
+ darkMode
+ ? 'bg-emerald-950/35 hover:bg-emerald-900/45 border-emerald-500/45'
+ : 'bg-emerald-50/90 hover:bg-emerald-100/80 border-emerald-300'
+ }`}
+ >
+ <div className="w-9 h-9 rounded-xl bg-emerald-500 text-white flex items-center justify-center shrink-0 mt-0.5">
+ <FastForward className="w-4 h-4" />
+ </div>
+ <div className="min-w-0">
+ <p className={`text-xs sm:text-sm font-extrabold leading-tight ${textStrong}`}>
+ Múltbéli félévek feltöltése
+ </p>
+ <p className={`text-[11px] mt-1 leading-snug ${textMuted}`}>
+ Neptun Excel importtal vagy kézi beírással a korábbi félévek jegyeihez
+ </p>
+ </div>
+ </button>
+
+ <button
+ type="button"
+ onClick={() => {
+ setIsHomePlusMenuOpen(false);
+ setNewSemesterStartYear(String(new Date().getFullYear()));
+ setNewSemesterSeason('osz');
+ setIsSemesterModalOpen(true);
+ }}
+ className={`w-full p-3 rounded-xl border text-left flex items-start gap-3 transition cursor-pointer ${
+ darkMode
+ ? 'bg-slate-800/80 hover:bg-slate-800 border-slate-700'
+ : 'bg-slate-50 hover:bg-amber-50/80 border-slate-200'
+ }`}
+ >
+ <div className="w-9 h-9 rounded-xl bg-amber-400 text-slate-950 flex items-center justify-center shrink-0 mt-0.5">
+ <FolderPlus className="w-4 h-4" />
+ </div>
+ <div className="min-w-0">
+ <p className={`text-xs sm:text-sm font-extrabold leading-tight ${textStrong}`}>
+ Új félév létrehozása
+ </p>
+ <p className={`text-[11px] mt-1 leading-snug ${textMuted}`}>
+ Egyetlen új szemeszter felvétele évszám és Ősz / Tavasz alapján
+ </p>
+ </div>
+ </button>
+ </div>
+ )}
+
+ <button
+ type="button"
+ onClick={() => setIsHomePlusMenuOpen(prev => !prev)}
+ aria-expanded={isHomePlusMenuOpen}
+ title="Félév hozzáadása vagy múltbéli félévek feltöltése"
+ aria-label="Félév hozzáadása vagy múltbéli félévek feltöltése"
+ className="w-[60px] h-[60px] sm:w-16 sm:h-16 rounded-full bg-amber-400 hover:bg-amber-300 text-slate-950 shadow-[0_0_26px_rgba(251,191,36,0.75)] hover:shadow-[0_0_34px_rgba(251,191,36,0.95)] flex items-center justify-center transition transform hover:scale-105 active:scale-95 cursor-pointer"
+ >
+ <Plus className={`w-8 h-8 stroke-[2.75] transition-transform duration-200 ${isHomePlusMenuOpen ? 'rotate-45' : ''}`} />
+ </button>
+ </div>
+ ) : (
+ <div data-collector-menu="true" className="fixed bottom-[82px] right-4 sm:bottom-[86px] sm:right-7 z-30 flex flex-col items-end gap-3">
  {(isCollectorMenuOpen || isCollectorClosing) && (() => {
  const selectedJokerForCapsule = pendingJokerInfo || activeJokerInfo;
  return (
@@ -10060,7 +10077,6 @@ export default function App() {
  </span>
  )}
  </button>
- </div>
  </div>
  )}
 

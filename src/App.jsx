@@ -641,14 +641,15 @@ const APP_RELEASES = [
  version: 'v2.4.0',
  date: '2026. 11. 23.',
  changes: [
- 'Jelenlét és ZH statisztika a féléves dashboardon: a lenyitható blokk kiegészült a 3., táblázatos ZH statisztika kártyával, amely tárgyanként és ZH-nként listázza az eredményeket és a teljes ZH-teljesítés százalékos arányát'
+ 'Lenyitható „Jelenlét és ZH statisztika” blokk a féléves dashboardon (alapértelmezettként becsukva a mobil helytakarékosság érdekében)',
+ '3., táblázatos ZH statisztika nézet tárgyankénti és ZH-nkénti pontokkal, valamint a teljes ZH-teljesítés %-os arányával'
  ]
  },
  {
  version: 'v2.3.1',
  date: '2026. 11. 23.',
  changes: [
- 'Lenyitható részletes jelenlét statisztika a féléves dashboardon: alapértelmezettként becsukva jelenik meg (helytakarékos mobilos nézet), és a lenyitó gombra kattintva tekinthető meg a részletes gyakorlat/előadás jelenléti bontás'
+ 'Lenyitható részletes jelenlét statisztika a féléves dashboardon alapértelmezetten becsukott állapotban'
  ]
  },
  {
@@ -8733,7 +8734,6 @@ export default function App() {
  </div>
  </section>
  )}
- </div>
  </div>
 
  <div className="flex flex-wrap items-center justify-between gap-2 mb-4">

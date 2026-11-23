@@ -6458,6 +6458,7 @@ export default function App() {
  }, [selectedSemester, semesters, subjects]);
 
  const currentAcademicStats = useMemo(() => {
+ try {
  const safeParseNumber = (raw) => {
  if (raw === null || raw === undefined || raw === '' || typeof raw === 'boolean') return NaN;
  if (typeof raw === 'number') return Number.isFinite(raw) ? raw : NaN;
@@ -6630,6 +6631,10 @@ export default function App() {
  worstZh,
  bestZh
  };
+ } catch (statsErr) {
+ console.error('Statisztika számítási hiba:', statsErr);
+ return null;
+ }
  }, [activeStatsSemesterCode, semesterSubjects, subjects, subjectStatsMap, isSim, simScores]);
 
  const handleReloadForUpdate = async () => {

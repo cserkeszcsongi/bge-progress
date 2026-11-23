@@ -638,6 +638,13 @@ function buildTemplatesForMajor(majorId) {
 
 const APP_RELEASES = [
  {
+ version: 'v2.4.0',
+ date: '2026. 11. 23.',
+ changes: [
+ 'Jelenlét és ZH statisztika a féléves dashboardon: a lenyitható blokk kiegészült a 3., táblázatos ZH statisztika kártyával, amely tárgyanként és ZH-nként listázza az eredményeket és a teljes ZH-teljesítés százalékos arányát'
+ ]
+ },
+ {
  version: 'v2.3.1',
  date: '2026. 11. 23.',
  changes: [
@@ -6485,6 +6492,86 @@ export default function App() {
  };
  }, [semesterSubjects, subjectStatsMap]);
 
+ const semesterZhSummary = useMemo(() => {
+ let totalEarned = 0;
+ let totalMax = 0;
+ let gradedZhCount = 0;
+ let totalZhCount = 0;
+ const rows = [];
+
+ semesterSubjects.forEach((subj) => {
+ if (!subj || subj.courseKind === 'exam' || subj.disablePointCalc) return;
+ const zhs = toArraySafe(subj.assessments).filter(a => a && a.category === 'ZH');
+ if (zhs.length === 0) return;
+
+ const items = zhs.map((zh, zIdx) => {
+ const eff = getEffectiveScore(zh);
+ const hasScore = eff !== null && eff !== undefined && eff !== '' && !isNaN(Number(eff));
+ const basePts = hasScore ? Number(eff) : 0;
+ const bonusPts = (zh.bonusPoints !== null && zh.bonusPoints !== undefined && zh.bonusPoints !== '' && !isNaN(Number(zh.bonusPoints)))
+ ? Number(zh.bonusPoints)
+ : 0;
+ const earned = hasScore ? +(basePts + bonusPts).toFixed(2) : null;
+ const maxPts = (zh.max !== null && zh.max !== undefined && zh.max !== '' && !isNaN(Number(zh.max)))
+ ? Number(zh.max)
+ : null;
+
+ totalZhCount += 1;
+ if (hasScore) {
+ gradedZhCount += 1;
+ totalEarned += earned;
+ }
+ if (maxPts !== null && maxPts > 0) {
+ totalMax += maxPts;
+ }
+
+ const pct = (hasScore && maxPts && maxPts > 0)
+ ? Math.min(100, Math.max(0, +((earned / maxPts) * 100).toFixed(1)))
+ : null;
+
+ return {
+ id: zh.id || `zh_${subj.id}_${zIdx}`,
+ title: zh.title || `${zIdx + 1}. ZH`,
+ hasScore,
+ earned,
+ maxPts,
+ pct
+ };
+ });
+
+ const subjEarned = items.reduce((acc, it) => acc + (it.hasScore ? it.earned : 0), 0);
+ const subjMax = items.reduce((acc, it) => acc + (it.maxPts && it.maxPts > 0 ? it.maxPts : 0), 0);
+ const subjGradedCount = items.filter(it => it.hasScore).length;
+ const subjPct = (subjMax > 0 && subjGradedCount > 0)
+ ? Math.min(100, Math.max(0, +((subjEarned / subjMax) * 100).toFixed(1)))
+ : null;
+
+ rows.push({
+ id: subj.id,
+ name: subj.name || 'Névtelen tárgy',
+ items,
+ subjEarned: +subjEarned.toFixed(2),
+ subjMax: +subjMax.toFixed(2),
+ subjGradedCount,
+ subjTotalCount: items.length,
+ subjPct
+ });
+ });
+
+ const overallPct = (totalMax > 0 && gradedZhCount > 0)
+ ? Math.min(100, Math.max(0, +((totalEarned / totalMax) * 100).toFixed(1)))
+ : null;
+
+ return {
+ rows,
+ totalEarned: +totalEarned.toFixed(2),
+ totalMax: +totalMax.toFixed(2),
+ gradedZhCount,
+ totalZhCount,
+ overallPct
+ };
+ }, [semesterSubjects, isSim, simScores]);
+
  const handleReloadForUpdate = async () => {
  if (isReloadingApp) return;
  setIsReloadingApp(true);
@@ -8318,7 +8405,7 @@ export default function App() {
  <div className="flex items-center gap-2.5 min-w-0 flex-wrap">
  <span className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-extrabold">
  <Calendar className="w-4 h-4 text-amber-500 shrink-0" />
- <span>Részletes jelenlét statisztika</span>
+ <span>Jelenlét és ZH statisztika</span>
  </span>
  {!isAttendanceDashboardExpanded && (
  <div className="flex items-center gap-1.5 flex-wrap text-[11px] font-bold">
@@ -8327,6 +8414,9 @@ export default function App() {
  </span>
  <span className={`px-2 py-0.5 rounded-full ${darkMode ? 'bg-sky-500/15 text-sky-300' : 'bg-sky-50 text-sky-800 border border-sky-200'}`}>
  Előad.: {semesterAttendanceSummary.lecturePct !== null ? `${semesterAttendanceSummary.lecturePct}%` : '—'} ({semesterAttendanceSummary.totalLecturePresent}/{semesterAttendanceSummary.totalLectureClasses})
+ </span>
+ <span className={`px-2 py-0.5 rounded-full ${darkMode ? 'bg-emerald-500/15 text-emerald-300' : 'bg-emerald-50 text-emerald-800 border border-emerald-200'}`}>
+ ZH: {semesterZhSummary.overallPct !== null ? `${formatHu(semesterZhSummary.overallPct, 1)}%` : '—'}
  </span>
  </div>
  )}
@@ -8338,7 +8428,7 @@ export default function App() {
  </button>
 
  {isAttendanceDashboardExpanded && (
- <section className="grid grid-cols-1 md:grid-cols-2 gap-2.5 sm:gap-4 mt-2.5 sm:mt-3">
+ <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2.5 sm:gap-4 mt-2.5 sm:mt-3">
  {/* MINI KÁRTYA 1: GYAKORLATOK JELENLÉTE */}
  <div className={`p-3.5 sm:p-4 rounded-xl border shadow-sm flex flex-col justify-between gap-2.5 ${bgCard}`}>
  <div className="space-y-2">
@@ -8536,8 +8626,114 @@ export default function App() {
  <p className={`text-[11px] italic ${textMuted}`}>Nincs előadás jelenléttel rendelkező tárgy.</p>
  )}
  </div>
+
+ {/* 3. TÁBLÁZATOS ZH STATISZTIKA */}
+ <div className={`p-3.5 sm:p-4 rounded-xl border shadow-sm flex flex-col justify-between gap-2.5 md:col-span-2 xl:col-span-1 ${bgCard}`}>
+ <div className="space-y-2">
+ <div className="flex items-start justify-between gap-2">
+ <div className="min-w-0">
+ <p className="text-[11px] sm:text-xs font-bold uppercase tracking-wide text-emerald-500">
+ ZH statisztika
+ </p>
+ <div className="flex items-baseline gap-2 mt-0.5 flex-wrap">
+ <span className={`text-xl sm:text-2xl font-extrabold ${textStrong}`}>
+ {semesterZhSummary.overallPct !== null ? `${formatHu(semesterZhSummary.overallPct, 1)}%` : '—'}
+ </span>
+ <span className={`text-[11px] sm:text-xs font-medium ${textMuted}`}>
+ {formatHu(semesterZhSummary.totalEarned)} / {semesterZhSummary.totalMax > 0 ? formatHu(semesterZhSummary.totalMax) : '—'} p
+ </span>
+ </div>
+ </div>
+ <div className="flex items-center gap-1.5 flex-wrap justify-end text-[10px] sm:text-[11px] font-bold shrink-0">
+ <span className={`px-2 py-0.5 rounded-full ${darkMode ? 'bg-emerald-500/20 text-emerald-300' : 'bg-emerald-100 text-emerald-700'}`}>
+ Teljes ZH arány: {semesterZhSummary.overallPct !== null ? `${formatHu(semesterZhSummary.overallPct, 1)}%` : '—'}
+ </span>
+ <span className={`px-2 py-0.5 rounded-full ${darkMode ? 'bg-slate-800 text-slate-300' : 'bg-slate-100 text-slate-600'}`}>
+ {semesterZhSummary.gradedZhCount}/{semesterZhSummary.totalZhCount} ZH
+ </span>
+ </div>
+ </div>
+
+ <div className={`w-full h-2 rounded-full overflow-hidden ${darkMode ? 'bg-slate-800' : 'bg-slate-200'}`}>
+ <div
+ className="h-full bg-emerald-500 transition-all duration-300"
+ style={{ width: `${semesterZhSummary.overallPct ?? 0}%` }}
+ />
+ </div>
+ </div>
+
+ {semesterZhSummary.rows.length > 0 ? (
+ <div className={`pt-2 border-t max-h-44 overflow-y-auto overflow-x-auto ${darkMode ? 'border-slate-800' : 'border-slate-100'}`}>
+ <table className="w-full text-left border-collapse text-[11px]">
+ <thead>
+ <tr className={`border-b text-[10px] uppercase ${darkMode ? 'border-slate-800 text-slate-400' : 'border-slate-200 text-slate-500'}`}>
+ <th className="py-1.5 pr-2 font-bold">Tárgy / ZH</th>
+ <th className="py-1.5 px-1.5 font-bold text-right">Pont</th>
+ <th className="py-1.5 pl-1.5 font-bold text-right">Arány</th>
+ </tr>
+ </thead>
+ <tbody className="divide-y divide-slate-800/20">
+ {semesterZhSummary.rows.map((sRow) => (
+ <React.Fragment key={`zh_grp_${sRow.id}`}>
+ <tr
+ onClick={() => {
+ setActiveSubjectId(sRow.id);
+ setDetailTab('points');
+ }}
+ title={`${sRow.name} — Részletek megnyitása`}
+ className={`cursor-pointer transition ${
+ darkMode ? 'bg-slate-800/45 hover:bg-slate-800/80' : 'bg-slate-50/90 hover:bg-amber-50/60'
+ }`}
+ >
+ <td className={`py-1.5 pr-2 font-extrabold truncate max-w-[140px] ${textStrong}`}>
+ {sRow.name}
+ </td>
+ <td className={`py-1.5 px-1.5 text-right font-bold whitespace-nowrap ${textStrong}`}>
+ {formatHu(sRow.subjEarned)}{sRow.subjMax > 0 ? `/${formatHu(sRow.subjMax)} p` : ' p'}
+ </td>
+ <td className="py-1.5 pl-1.5 text-right font-extrabold whitespace-nowrap text-emerald-500">
+ {sRow.subjPct !== null ? `${formatHu(sRow.subjPct, 1)}%` : '—'}
+ </td>
+ </tr>
+ {sRow.items.map((zhItem) => (
+ <tr
+ key={zhItem.id}
+ onClick={() => {
+ setActiveSubjectId(sRow.id);
+ setDetailTab('points');
+ }}
+ className={`cursor-pointer transition ${
+ darkMode ? 'hover:bg-slate-800/50' : 'hover:bg-slate-50'
+ }`}
+ >
+ <td className={`py-1 pl-3 pr-2 font-medium ${textMuted}`}>
+ {zhItem.title}
+ </td>
+ <td className={`py-1 px-1.5 text-right font-semibold whitespace-nowrap ${zhItem.hasScore ? textStrong : textMuted}`}>
+ {zhItem.hasScore
+ ? `${formatHu(zhItem.earned)}${zhItem.maxPts && zhItem.maxPts > 0 ? ` / ${formatHu(zhItem.maxPts)} p` : ' p'}`
+ : `—${zhItem.maxPts && zhItem.maxPts > 0 ? ` / ${formatHu(zhItem.maxPts)} p` : ''}`
+ }
+ </td>
+ <td className={`py-1 pl-1.5 text-right font-bold whitespace-nowrap ${
+ zhItem.pct !== null ? 'text-emerald-500' : textMuted
+ }`}>
+ {zhItem.pct !== null ? `${formatHu(zhItem.pct, 1)}%` : '—'}
+ </td>
+ </tr>
+ ))}
+ </React.Fragment>
+ ))}
+ </tbody>
+ </table>
+ </div>
+ ) : (
+ <p className={`text-[11px] italic ${textMuted}`}>Nincs rögzített ZH ebben a félévben.</p>
+ )}
+ </div>
  </section>
  )}
+ </div>
  </div>
 
  <div className="flex flex-wrap items-center justify-between gap-2 mb-4">

@@ -6450,7 +6450,14 @@ export default function App() {
  setIsAcademicStatsOpen(true);
  };
 
- const computeAcademicSemesterAnalytics = (semName) => {
+ const activeStatsSemesterCode = useMemo(() => {
+ if (selectedSemester) return selectedSemester;
+ if (Array.isArray(semesters) && semesters.length > 0) return semesters[0];
+ const firstSubj = toArraySafe(subjects)[0];
+ return firstSubj?.semester ? String(firstSubj.semester) : '';
+ }, [selectedSemester, semesters, subjects]);
+
+ const currentAcademicStats = useMemo(() => {
  const safeParseNumber = (raw) => {
  if (raw === null || raw === undefined || raw === '' || typeof raw === 'boolean') return NaN;
  if (typeof raw === 'number') return Number.isFinite(raw) ? raw : NaN;
@@ -6470,12 +6477,13 @@ export default function App() {
  return fallback;
  };
 
- const semLabelStr = safeStr(semName, '').trim();
+ const semLabelStr = safeStr(activeStatsSemesterCode, '').trim();
  if (!semLabelStr) return null;
 
  const targetCanonical = getCanonicalSemesterCode(semLabelStr);
- const allSubjs = toArraySafe(subjects);
- const semSubjs = allSubjs.filter((s) => {
+ const directSemSubjs = Array.isArray(semesterSubjects) && semesterSubjects.length > 0 && selectedSemester === semLabelStr
+ ? semesterSubjects
+ : toArraySafe(subjects).filter((s) => {
  if (!s || typeof s !== 'object') return false;
  const sSem = safeStr(s.semester, '').trim();
  if (!sSem) return false;
@@ -6494,31 +6502,35 @@ export default function App() {
  let zhTotalAchieved = 0;
  let zhTotalMax = 0;
 
- semSubjs.forEach((subj, sIdx) => {
+ directSemSubjs.forEach((subj, sIdx) => {
+ if (!subj || typeof subj !== 'object') return;
  try {
- let st = null;
- if (subj.id && subjectStatsMap && typeof subjectStatsMap === 'object' && subjectStatsMap[subj.id]) {
- st = subjectStatsMap[subj.id];
- } else {
- try {
- st = calcStats(subj);
- } catch {
- st = null;
- }
- }
+ const isExam = subj.courseKind === 'exam';
+ const rawPracticeSessions = toArraySafe(subj.attendanceSessions);
+ const rawLectureSessions = toArraySafe(subj.lectureAttendanceSessions);
 
- const fallbackSessions = toArraySafe(subj.attendanceSessions);
- const fallbackLectureSessions = toArraySafe(subj.lectureAttendanceSessions);
+ const pPres = rawPracticeSessions.filter(x => x && x.status === 'present').length;
+ const pAbs = rawPracticeSessions.filter(x => x && x.status === 'absent').length;
+ const configuredClasses = Number(subj.totalClasses);
+ const pTot = isExam
+ ? 0
+ : Math.max(
+ !isNaN(configuredClasses) && configuredClasses > 0 ? configuredClasses : 0,
+ rawPracticeSessions.length
+ );
 
- const pPres = st ? (Number(st.presentCount) || 0) : fallbackSessions.filter(x => x && x.status === 'present').length;
- const pAbs = st ? (Number(st.absentCount) || 0) : fallbackSessions.filter(x => x && x.status === 'absent').length;
- const pTot = st ? (Number(st.totalClasses) || 0) : (Number(subj.totalClasses ?? fallbackSessions.length) || 0);
+ const lPres = rawLectureSessions.filter(x => x && x.status === 'present').length;
+ const lAbs = rawLectureSessions.filter(x => x && x.status === 'absent').length;
+ const configuredLectures = Number(subj.totalLectures);
+ const lTot = isExam
+ ? 0
+ : Math.max(
+ !isNaN(configuredLectures) && configuredLectures > 0 ? configuredLectures : 0,
+ pTot,
+ rawLectureSessions.length
+ );
 
- const lPres = st ? (Number(st.lecturePresentCount) || 0) : fallbackLectureSessions.filter(x => x && x.status === 'present').length;
- const lAbs = st ? (Number(st.lectureAbsentCount) || 0) : fallbackLectureSessions.filter(x => x && x.status === 'absent').length;
- const lTot = st ? (Number(st.totalLectures) || 0) : pTot;
-
- if (subj.courseKind !== 'exam' && !subj.disablePointCalc) {
+ if (!isExam && (pTot > 0 || lTot > 0)) {
  totalPracticePresent += pPres;
  totalPracticeClasses += pTot;
  totalLecturePresent += lPres;
@@ -6540,19 +6552,18 @@ export default function App() {
  lectureTotal: lTot,
  lecturePct
  });
+ }
 
+ if (!isExam) {
  const zhs = toArraySafe(subj.assessments).filter(
  (a) => a && typeof a === 'object' && a.category === 'ZH'
  );
 
  zhs.forEach((zh, zIdx) => {
  totalZhSlots++;
- let eff;
- try {
- eff = getEffectiveScore(zh);
- } catch {
- eff = zh.achieved;
- }
+ const eff = (isSim && zh.id && simScores[zh.id] !== undefined && simScores[zh.id] !== '')
+ ? simScores[zh.id]
+ : zh.achieved;
  const parsedEff = safeParseNumber(eff);
  if (!isNaN(parsedEff)) {
  const parsedBonus = safeParseNumber(zh.bonusPoints);
@@ -6582,7 +6593,7 @@ export default function App() {
  });
  }
  } catch (subjErr) {
- console.warn('Tárgy statisztika kihagyva:', subjErr);
+ console.warn('Tárgy statisztika feldolgozási figyelmeztetés:', subjErr);
  }
  });
 
@@ -6605,7 +6616,7 @@ export default function App() {
 
  return {
  semName: semLabelStr,
- subjectCount: semSubjs.length,
+ subjectCount: directSemSubjs.length,
  subjectAttendanceRows,
  totalPracticePresent,
  totalPracticeClasses,
@@ -6622,7 +6633,7 @@ export default function App() {
  worstZh,
  bestZh
  };
- };
+ }, [activeStatsSemesterCode, semesterSubjects, subjects, selectedSemester, isSim, simScores]);
 
  const handleReloadForUpdate = async () => {
  if (isReloadingApp) return;
@@ -9010,7 +9021,7 @@ export default function App() {
  setIsCollectorMenuOpen(false);
  handleOpenAcademicStatsModal();
  }}
- disabled={semesterSubjects.length === 0}
+ disabled={semesters.length === 0 && subjects.length === 0}
  title="Tanulmányi statisztika: jelenlét-eloszlás, ZH-teljesítések, legjobb/legrosszabb ZH"
  className="w-full px-3.5 py-2.5 rounded-2xl text-xs sm:text-sm font-extrabold bg-indigo-600 hover:bg-indigo-500 disabled:opacity-45 disabled:cursor-not-allowed text-white shadow-md flex items-center justify-between gap-2.5 transition cursor-pointer"
  >
@@ -10166,14 +10177,9 @@ export default function App() {
  )}
 
  
- {/* TANULMÁNYI STATISZTIKA MODAL (KIZÁRÓLAG AZ ADOTT FÉLÉV ADATAI) */}
+ {/* TANULMÁNYI STATISZTIKA MODAL (DINAMIKUSAN FRISSÜLŐ, ADOTT FÉLÉV ADATAI) */}
  {isAcademicStatsOpen && (
  <SafeModalBoundary onClose={() => setIsAcademicStatsOpen(false)}>
- {(() => {
- const currentSemCode = selectedSemester || semesters[0] || (subjects[0]?.semester ?? '');
- const semStats = computeAcademicSemesterAnalytics(currentSemCode);
-
- return (
  <div
  data-top-modal="true"
  onClick={() => setIsAcademicStatsOpen(false)}
@@ -10189,11 +10195,18 @@ export default function App() {
  <AcademicStatsIcon className="w-5 h-5" />
  </div>
  <div className="min-w-0">
+ <div className="flex items-center gap-2 flex-wrap">
  <h2 className="font-extrabold text-sm sm:text-base leading-tight">
- Statisztika — {formatSemesterLabel(currentSemCode)}
+ Statisztika — {formatSemesterLabel(activeStatsSemesterCode)}
  </h2>
+ {isSim && (
+ <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-400 text-slate-950">
+ Szimulátor
+ </span>
+ )}
+ </div>
  <p className="text-[11px] text-indigo-300 truncate">
- Jelenlét-eloszlás, ZH-teljesítések, legjobb &amp; legrosszabb ZH ebben a félévben
+ Élő adatok: jelenlét-eloszlás, ZH-teljesítések, legjobb &amp; legrosszabb ZH
  </p>
  </div>
  </div>
@@ -10207,7 +10220,7 @@ export default function App() {
  </div>
 
  <div className="p-4 sm:p-6 overflow-y-auto overscroll-contain space-y-5 flex-1 min-h-0">
- {(!semStats || semStats.subjectCount === 0) ? (
+ {(!currentAcademicStats || currentAcademicStats.subjectCount === 0) ? (
  <p className={`text-sm text-center py-6 ${textMuted}`}>
  Nincs elérhető tantárgyi adat ebben a félévben.
  </p>
@@ -10220,12 +10233,12 @@ export default function App() {
  ZH teljesítések
  </span>
  <p className={`text-xl sm:text-2xl font-extrabold ${textStrong}`}>
- {semStats.completedZhCount} / {semStats.totalZhSlots}{' '}
+ {currentAcademicStats.completedZhCount} / {currentAcademicStats.totalZhSlots}{' '}
  <span className={`text-xs font-semibold ${textMuted}`}>rögzítve</span>
  </p>
  <p className="text-xs font-semibold text-emerald-500">
- Sikeres (≥50%): {semStats.passedZhCount} db
- {semStats.avgZhPct !== null && ` • Átlag: ${formatHu(semStats.avgZhPct)}%`}
+ Sikeres (≥50%): {currentAcademicStats.passedZhCount} db
+ {currentAcademicStats.avgZhPct !== null && ` • Átlag: ${formatHu(currentAcademicStats.avgZhPct)}%`}
  </p>
  </div>
 
@@ -10234,10 +10247,10 @@ export default function App() {
  Gyakorlati részvétel
  </span>
  <p className={`text-xl sm:text-2xl font-extrabold ${textStrong}`}>
- {semStats.practiceOverallPct !== null ? `${semStats.practiceOverallPct}%` : '—'}
+ {currentAcademicStats.practiceOverallPct !== null ? `${currentAcademicStats.practiceOverallPct}%` : '—'}
  </p>
  <p className={`text-xs ${textMuted}`}>
- Összesen: <strong className={textStrong}>{semStats.totalPracticePresent}</strong> / {semStats.totalPracticeClasses} alkalom
+ Összesen: <strong className={textStrong}>{currentAcademicStats.totalPracticePresent}</strong> / {currentAcademicStats.totalPracticeClasses} alkalom
  </p>
  </div>
 
@@ -10246,10 +10259,10 @@ export default function App() {
  Előadás részvétel
  </span>
  <p className={`text-xl sm:text-2xl font-extrabold ${textStrong}`}>
- {semStats.lectureOverallPct !== null ? `${semStats.lectureOverallPct}%` : '—'}
+ {currentAcademicStats.lectureOverallPct !== null ? `${currentAcademicStats.lectureOverallPct}%` : '—'}
  </p>
  <p className={`text-xs ${textMuted}`}>
- Összesen: <strong className={textStrong}>{semStats.totalLecturePresent}</strong> / {semStats.totalLectureClasses} alkalom
+ Összesen: <strong className={textStrong}>{currentAcademicStats.totalLecturePresent}</strong> / {currentAcademicStats.totalLectureClasses} alkalom
  </p>
  </div>
  </div>
@@ -10264,18 +10277,18 @@ export default function App() {
  <span className="text-[11px] font-extrabold uppercase tracking-wide text-rose-500 block">
  Legrosszabb ZH
  </span>
- {semStats.worstZh ? (
+ {currentAcademicStats.worstZh ? (
  <>
  <p className={`text-2xl font-extrabold ${textStrong}`}>
- {semStats.worstZh.pct !== null ? `${formatHu(semStats.worstZh.pct)}%` : `${formatHu(semStats.worstZh.achieved)} p`}
- {semStats.worstZh.max > 0 && (
+ {currentAcademicStats.worstZh.pct !== null ? `${formatHu(currentAcademicStats.worstZh.pct)}%` : `${formatHu(currentAcademicStats.worstZh.achieved)} p`}
+ {currentAcademicStats.worstZh.max > 0 && (
  <span className={`text-xs font-semibold ml-1.5 ${textMuted}`}>
- ({formatHu(semStats.worstZh.achieved)} / {formatHu(semStats.worstZh.max)} p)
+ ({formatHu(currentAcademicStats.worstZh.achieved)} / {formatHu(currentAcademicStats.worstZh.max)} p)
  </span>
  )}
  </p>
  <p className={`text-xs font-bold ${textStrong}`}>
- {semStats.worstZh.subjectName} — <span className="text-rose-500">{semStats.worstZh.zhTitle}</span>
+ {currentAcademicStats.worstZh.subjectName} — <span className="text-rose-500">{currentAcademicStats.worstZh.zhTitle}</span>
  </p>
  </>
  ) : (
@@ -10291,18 +10304,18 @@ export default function App() {
  <span className="text-[11px] font-extrabold uppercase tracking-wide text-emerald-500 block">
  Legjobb ZH
  </span>
- {semStats.bestZh ? (
+ {currentAcademicStats.bestZh ? (
  <>
  <p className={`text-2xl font-extrabold ${textStrong}`}>
- {semStats.bestZh.pct !== null ? `${formatHu(semStats.bestZh.pct)}%` : `${formatHu(semStats.bestZh.achieved)} p`}
- {semStats.bestZh.max > 0 && (
+ {currentAcademicStats.bestZh.pct !== null ? `${formatHu(currentAcademicStats.bestZh.pct)}%` : `${formatHu(currentAcademicStats.bestZh.achieved)} p`}
+ {currentAcademicStats.bestZh.max > 0 && (
  <span className={`text-xs font-semibold ml-1.5 ${textMuted}`}>
- ({formatHu(semStats.bestZh.achieved)} / {formatHu(semStats.bestZh.max)} p)
+ ({formatHu(currentAcademicStats.bestZh.achieved)} / {formatHu(currentAcademicStats.bestZh.max)} p)
  </span>
  )}
  </p>
  <p className={`text-xs font-bold ${textStrong}`}>
- {semStats.bestZh.subjectName} — <span className="text-emerald-500">{semStats.bestZh.zhTitle}</span>
+ {currentAcademicStats.bestZh.subjectName} — <span className="text-emerald-500">{currentAcademicStats.bestZh.zhTitle}</span>
  </p>
  </>
  ) : (
@@ -10319,7 +10332,7 @@ export default function App() {
  Tárgyankénti jelenlét eloszlása (Gyakorlatok &amp; Előadások)
  </h3>
  <p className={`text-[11px] ${textMuted}`}>
- {formatSemesterLabel(semStats.semName)} tantárgyai szerint
+ {formatSemesterLabel(currentAcademicStats.semName)} tantárgyai szerint
  </p>
  </div>
  <div className="flex items-center gap-3 text-[11px] font-bold">
@@ -10332,13 +10345,13 @@ export default function App() {
  </div>
  </div>
 
- {semStats.subjectAttendanceRows.length === 0 ? (
+ {currentAcademicStats.subjectAttendanceRows.length === 0 ? (
  <p className={`text-xs italic py-3 text-center ${textMuted}`}>
  Ebben a félévben nincs jelenléti bontással rendelkező tárgy.
  </p>
  ) : (
  <div className="space-y-2.5">
- {semStats.subjectAttendanceRows.map(row => (
+ {currentAcademicStats.subjectAttendanceRows.map(row => (
  <div
  key={row.id}
  className={`p-3 rounded-xl border space-y-2 ${bgCard}`}
@@ -10402,7 +10415,7 @@ export default function App() {
  darkMode ? 'border-slate-800 bg-slate-900/70' : 'border-slate-200 bg-slate-50'
  }`}>
  <span className={`text-[11px] ${textMuted}`}>
- {formatSemesterLabel(currentSemCode)} összesített mutatói
+ {formatSemesterLabel(activeStatsSemesterCode)} élő összesített mutatói
  </span>
  <button
  type="button"
@@ -10414,8 +10427,6 @@ export default function App() {
  </div>
  </div>
  </div>
- );
- })()}
  </SafeModalBoundary>
  )}
 

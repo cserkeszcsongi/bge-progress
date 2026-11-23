@@ -638,6 +638,15 @@ function buildTemplatesForMajor(majorId) {
 
 const APP_RELEASES = [
   {
+    version: 'v2.6.0',
+    date: '2026. 11. 23.',
+    changes: [
+      'Teljes alkalmazásszintű Frosted Glass megjelenés: minden kártya, gomb, grafika, fejléc, modális ablak és háttérréteg áttetsző, finoman elmosott üveghatást kapott világos és sötét módban egyaránt',
+      'Minden állapotváltozás és becsukás animálva: sima ki- és beanimáció a Menü becsukásakor, a tantárgy részletes nézetéből és bármely felugró ablakból való kilépéskor, a lenyitható szekcióknál, a fülváltásoknál és minden lépkedésnél',
+      'Új 3 másodperces betöltőképernyő: a forgó kör helyett az alkalmazás logója szürkén jelenik meg, és hullámos „fill-up” effektussal töltődik fel színesre'
+    ]
+  },
+  {
     version: 'v2.5.5',
     date: '2026. 11. 23.',
     changes: [
@@ -2634,6 +2643,219 @@ function MaintenanceRepairIllustration({ darkMode }) {
  );
 }
 
+
+function AnimatedPresence({
+ show,
+ duration = 240,
+ variant = 'modal',
+ className = '',
+ children
+}) {
+ const [shouldRender, setShouldRender] = useState(Boolean(show));
+ const [stage, setStage] = useState(show ? 'enter' : 'exit');
+ const lastChildrenRef = useRef(null);
+
+ if (show && children) {
+ lastChildrenRef.current = children;
+ }
+
+ useEffect(() => {
+ if (show) {
+ setShouldRender(true);
+ setStage('enter');
+ return;
+ }
+ if (!shouldRender) return;
+ setStage('exit');
+ const timer = setTimeout(() => {
+ setShouldRender(false);
+ }, duration);
+ return () => clearTimeout(timer);
+ }, [show, duration, shouldRender]);
+
+ const content = show ? children : lastChildrenRef.current;
+ if (!shouldRender || !content) return null;
+
+ const isContentsVariant = variant === 'modal' || variant === 'backdrop' || variant === 'toast';
+ const stateClass = `bge-presence-${variant}-${stage}`;
+
+ return (
+ <div
+ className={`${isContentsVariant ? 'contents ' : ''}${stateClass} ${className}`.trim()}
+ aria-hidden={stage === 'exit' ? 'true' : undefined}
+ >
+ {content}
+ </div>
+ );
+}
+
+function WavyLogoSplashScreen({ darkMode, isExiting }) {
+ const frontWaveRef = useRef(null);
+ const backWaveRef = useRef(null);
+ const [percent, setPercent] = useState(0);
+
+ useEffect(() => {
+ const DURATION_MS = 3000;
+ const startTime = performance.now();
+ let rafId = 0;
+
+ const buildWavePath = (baseY, amplitude, phase, frequency) => {
+ const steps = 28;
+ let d = `M 0 ${baseY.toFixed(4)}`;
+ for (let i = 1; i <= steps; i++) {
+ const x = i / steps;
+ const y = baseY + Math.sin(x * Math.PI * 2 * frequency + phase) * amplitude;
+ d += ` L ${x.toFixed(4)} ${y.toFixed(4)}`;
+ }
+ d += ' L 1 1.25 L 0 1.25 Z';
+ return d;
+ };
+
+ const tick = (now) => {
+ const elapsed = now - startTime;
+ const rawProgress = Math.min(1, elapsed / DURATION_MS);
+ const eased =
+ rawProgress < 0.5
+ ? 2 * rawProgress * rawProgress
+ : 1 - Math.pow(-2 * rawProgress + 2, 2) / 2;
+
+ const baseY = 1.06 - eased * 1.16;
+ const taper = rawProgress >= 0.95 ? Math.max(0, (1 - rawProgress) / 0.05) : 1;
+ const ampFront = 0.036 * taper;
+ const ampBack = 0.048 * taper;
+ const phase = elapsed * 0.0048;
+
+ if (frontWaveRef.current) {
+ frontWaveRef.current.setAttribute(
+ 'd',
+ buildWavePath(baseY, ampFront, phase, 1.35)
+ );
+ }
+ if (backWaveRef.current) {
+ backWaveRef.current.setAttribute(
+ 'd',
+ buildWavePath(baseY - 0.015 * taper, ampBack, -phase * 0.82 + 1.6, 1.15)
+ );
+ }
+
+ setPercent(Math.round(eased * 100));
+
+ if (rawProgress < 1 || !isExiting) {
+ rafId = requestAnimationFrame(tick);
+ }
+ };
+
+ rafId = requestAnimationFrame(tick);
+ return () => cancelAnimationFrame(rafId);
+ }, [isExiting]);
+
+ return (
+ <div
+ className={`fixed inset-0 z-[100] flex flex-col items-center justify-center p-6 overflow-hidden transition-all duration-500 ${
+ darkMode
+ ? 'bg-slate-950 text-slate-100'
+ : 'bg-slate-100 text-slate-900'
+ } ${isExiting ? 'opacity-0 scale-105 blur-md pointer-events-none' : 'opacity-100 scale-100'}`}
+ >
+ <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
+ <div className={`absolute -top-24 -left-24 w-80 h-80 rounded-full blur-3xl ${darkMode ? 'bg-amber-400/20' : 'bg-amber-300/40'}`} />
+ <div className={`absolute -bottom-24 -right-24 w-96 h-96 rounded-full blur-3xl ${darkMode ? 'bg-sky-500/20' : 'bg-sky-300/40'}`} />
+ <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-72 h-72 rounded-full blur-3xl ${darkMode ? 'bg-emerald-500/12' : 'bg-emerald-300/30'}`} />
+ </div>
+
+ <svg width="0" height="0" className="absolute" aria-hidden="true">
+ <defs>
+ <clipPath id="bgeSplashWaveFront" clipPathUnits="objectBoundingBox">
+ <path ref={frontWaveRef} d="M 0 1.06 L 1 1.06 L 1 1.25 L 0 1.25 Z" />
+ </clipPath>
+ <clipPath id="bgeSplashWaveBack" clipPathUnits="objectBoundingBox">
+ <path ref={backWaveRef} d="M 0 1.06 L 1 1.06 L 1 1.25 L 0 1.25 Z" />
+ </clipPath>
+ </defs>
+ </svg>
+
+ <div
+ className={`relative z-10 w-full max-w-xs rounded-3xl border p-8 text-center shadow-2xl backdrop-blur-2xl ${
+ darkMode
+ ? 'bg-slate-900/55 border-white/15 shadow-black/60'
+ : 'bg-white/60 border-white/80 shadow-slate-900/15'
+ }`}
+ style={{
+ boxShadow: darkMode
+ ? 'inset 0 1px 0 rgba(255,255,255,0.16), 0 24px 60px rgba(0,0,0,0.55)'
+ : 'inset 0 1px 0 rgba(255,255,255,0.85), 0 24px 60px rgba(15,23,42,0.12)'
+ }}
+ >
+ <div className="relative w-36 h-36 sm:w-44 sm:h-44 mx-auto mb-5 select-none">
+ <img
+ src="/logo.png"
+ onError={(e) => {
+ e.currentTarget.onerror = null;
+ e.currentTarget.src = 'https://tudasterkep.uni-bge.hu/images/logo.png';
+ }}
+ alt="BGE Progress betöltés"
+ className="w-full h-full object-contain"
+ style={{
+ filter: darkMode
+ ? 'grayscale(100%) brightness(1.15) contrast(0.85)'
+ : 'grayscale(100%) brightness(0.95) contrast(0.85)',
+ opacity: darkMode ? 0.24 : 0.28
+ }}
+ />
+
+ <img
+ src="/logo.png"
+ onError={(e) => {
+ e.currentTarget.onerror = null;
+ e.currentTarget.src = 'https://tudasterkep.uni-bge.hu/images/logo.png';
+ }}
+ alt=""
+ aria-hidden="true"
+ className="absolute inset-0 w-full h-full object-contain opacity-45"
+ style={{
+ clipPath: 'url(#bgeSplashWaveBack)',
+ WebkitClipPath: 'url(#bgeSplashWaveBack)'
+ }}
+ />
+
+ <img
+ src="/logo.png"
+ onError={(e) => {
+ e.currentTarget.onerror = null;
+ e.currentTarget.src = 'https://tudasterkep.uni-bge.hu/images/logo.png';
+ }}
+ alt=""
+ aria-hidden="true"
+ className="absolute inset-0 w-full h-full object-contain drop-shadow-[0_6px_18px_rgba(251,191,36,0.3)]"
+ style={{
+ clipPath: 'url(#bgeSplashWaveFront)',
+ WebkitClipPath: 'url(#bgeSplashWaveFront)'
+ }}
+ />
+ </div>
+
+ <h1 className={`text-lg font-extrabold tracking-tight ${darkMode ? 'text-white' : 'text-slate-900'}`}>
+ BGE Progress
+ </h1>
+ <p className={`text-xs font-semibold mt-1 ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+ Betöltés... {percent}%
+ </p>
+
+ <div
+ className={`mt-4 h-2 w-full rounded-full overflow-hidden border backdrop-blur-md ${
+ darkMode ? 'bg-slate-800/60 border-white/10' : 'bg-white/60 border-slate-300/60'
+ }`}
+ >
+ <div
+ className="h-full rounded-full bg-gradient-to-r from-amber-400 via-amber-300 to-emerald-400 transition-[width] duration-75"
+ style={{ width: `${percent}%` }}
+ />
+ </div>
+ </div>
+ </div>
+ );
+}
+
 export default function App() {
  const [darkMode, setDarkMode] = useState(() => localStorage.getItem('bge_theme') === 'dark');
  const [monochrome, setMonochrome] = useState(() => localStorage.getItem('bge_palette') === 'monochrome');
@@ -2684,6 +2906,13 @@ export default function App() {
 
  const [user, setUser] = useState(null);
  const [authLoading, setAuthLoading] = useState(true);
+ const [splashMinDone, setSplashMinDone] = useState(false);
+ const [splashHidden, setSplashHidden] = useState(false);
+
+ useEffect(() => {
+ const timer = setTimeout(() => setSplashMinDone(true), 3000);
+ return () => clearTimeout(timer);
+ }, []);
  const [userDataLoaded, setUserDataLoaded] = useState(false);
  const [hasServerGazdinfoPref, setHasServerGazdinfoPref] = useState(false);
  const [hasAcceptedGdpr, setHasAcceptedGdpr] = useState(false);
@@ -6899,21 +7128,31 @@ export default function App() {
  window.location.reload();
  };
 
- const bgPage = darkMode ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-800';
- const bgCard = darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200';
- const bgSubCard = darkMode ? 'bg-slate-800/70 border-slate-700/70' : 'bg-slate-50 border-slate-100';
+ const isAppReady = !authLoading && maintenanceLoaded && splashMinDone;
+
+ useEffect(() => {
+ if (!isAppReady) return;
+ const exitTimer = setTimeout(() => setSplashHidden(true), 460);
+ return () => clearTimeout(exitTimer);
+ }, [isAppReady]);
+
+ const bgPage = darkMode
+ ? 'bg-slate-950 text-slate-100 bge-glass-dark'
+ : 'bg-slate-100 text-slate-800 bge-glass-light';
+ const bgCard = darkMode
+ ? 'bg-slate-900/58 border-white/15 backdrop-blur-xl shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_12px_32px_rgba(0,0,0,0.38)]'
+ : 'bg-white/62 border-white/80 backdrop-blur-xl shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_10px_28px_rgba(15,23,42,0.08)]';
+ const bgSubCard = darkMode
+ ? 'bg-slate-800/48 border-white/12 backdrop-blur-md shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]'
+ : 'bg-white/52 border-white/75 backdrop-blur-md shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]';
  const textMuted = darkMode ? 'text-slate-400' : 'text-slate-500';
  const textStrong = darkMode ? 'text-white' : 'text-slate-900';
  const inputStyle = darkMode
- ? 'bg-slate-800 border-slate-700 text-white placeholder-slate-500 focus:border-amber-400 text-base sm:text-sm'
- : 'bg-white border-slate-300 text-slate-900 placeholder-slate-400 focus:border-amber-400 text-base sm:text-sm';
+ ? 'bg-slate-900/55 border-white/15 text-white placeholder-slate-400 backdrop-blur-md focus:border-amber-400 text-base sm:text-sm'
+ : 'bg-white/65 border-slate-300/75 text-slate-900 placeholder-slate-400 backdrop-blur-md focus:border-amber-400 text-base sm:text-sm';
 
- if (authLoading || !maintenanceLoaded) {
- return (
- <div className={`min-h-screen flex items-center justify-center ${bgPage}`}>
- <div className="w-8 h-8 border-4 border-amber-400 border-t-transparent rounded-full animate-spin" />
- </div>
- );
+ if (!splashHidden) {
+ return <WavyLogoSplashScreen darkMode={darkMode} isExiting={isAppReady} />;
  }
 
  if (isMaintenanceMode && !isAdmin) {
@@ -7658,6 +7897,7 @@ export default function App() {
  <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-150 ${isMenuOpen ? 'rotate-180' : ''}`} />
  </button>
 
+ <AnimatedPresence show={Boolean(isMenuOpen)} variant="dropdown" duration={190}>
  {isMenuOpen && (
  <div className={`absolute right-0 mt-2 w-72 sm:w-80 max-h-[85dvh] overflow-y-auto rounded-2xl border shadow-2xl p-3.5 space-y-3.5 z-50 ${
  darkMode
@@ -7667,6 +7907,7 @@ export default function App() {
  {renderMenuBody(() => setIsMenuOpen(false))}
  </div>
  )}
+ </AnimatedPresence>
  </div>
  );
  };
@@ -7779,7 +8020,7 @@ export default function App() {
  isNewVersionAvailable && Date.now() - updateBannerDismissedAt > 60 * 1000;
 
  return (
- <div className={`bge-fluid-app min-h-screen pb-32 sm:pb-28 transition-colors duration-300 ${bgPage}`}>
+ <div className={`bge-fluid-app relative z-0 min-h-screen pb-32 sm:pb-28 transition-colors duration-300 ${bgPage}`}>
  <style>{`
  html, body {
  overflow-x: clip;
@@ -7979,6 +8220,143 @@ export default function App() {
  backdrop-filter: blur(24px) saturate(180%);
  -webkit-backdrop-filter: blur(24px) saturate(180%);
  }
+ /* === TELJES APPLIKÁCIÓS FROSTED GLASS RENDSZER === */
+ .bge-fluid-app header,
+ .bge-fluid-app footer,
+ .bge-fluid-app section > div,
+ .bge-fluid-app .rounded-2xl,
+ .bge-fluid-app .rounded-3xl {
+ backdrop-filter: blur(18px) saturate(165%);
+ -webkit-backdrop-filter: blur(18px) saturate(165%);
+ }
+ .bge-fluid-app header {
+ background-color: rgba(15, 23, 42, 0.72) !important;
+ border-color: rgba(255, 255, 255, 0.14) !important;
+ }
+ .bge-fluid-app button,
+ .bge-fluid-app a[href] {
+ backdrop-filter: blur(14px) saturate(160%);
+ -webkit-backdrop-filter: blur(14px) saturate(160%);
+ box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.24);
+ }
+ .bge-fluid-app svg,
+ .bge-fluid-app canvas {
+ filter: drop-shadow(0 4px 12px rgba(15, 23, 42, 0.12));
+ }
+ .bge-fluid-app .rounded-full.overflow-hidden,
+ .bge-fluid-app .rounded-full.overflow-visible {
+ backdrop-filter: blur(10px) saturate(150%);
+ -webkit-backdrop-filter: blur(10px) saturate(150%);
+ box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.14);
+ }
+
+ /* === NYITÁS, BECSUKÁS ÉS ÁLLAPOTVÁLTÁS ANIMÁCIÓK === */
+ @keyframes bgeModalBackdropIn {
+ from { opacity: 0; backdrop-filter: blur(0px); }
+ to { opacity: 1; backdrop-filter: blur(10px); }
+ }
+ @keyframes bgeModalBackdropOut {
+ from { opacity: 1; backdrop-filter: blur(10px); }
+ to { opacity: 0; backdrop-filter: blur(0px); }
+ }
+ @keyframes bgeModalCardIn {
+ from { opacity: 0; transform: translate3d(0, 18px, 0) scale(0.95); filter: blur(6px); }
+ to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); filter: blur(0px); }
+ }
+ @keyframes bgeModalCardOut {
+ from { opacity: 1; transform: translate3d(0, 0, 0) scale(1); filter: blur(0px); }
+ to { opacity: 0; transform: translate3d(0, 16px, 0) scale(0.94); filter: blur(8px); }
+ }
+ @keyframes bgeSheetOut {
+ from { opacity: 1; transform: translate3d(0, 0, 0) scale(1); filter: blur(0px); }
+ to { opacity: 0; transform: translate3d(0, 22px, 0) scale(0.95); filter: blur(10px); }
+ }
+ @keyframes bgeDropdownIn {
+ from { opacity: 0; transform: translate3d(0, -8px, 0) scale(0.95); filter: blur(6px); }
+ to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); filter: blur(0px); }
+ }
+ @keyframes bgeDropdownOut {
+ from { opacity: 1; transform: translate3d(0, 0, 0) scale(1); filter: blur(0px); }
+ to { opacity: 0; transform: translate3d(0, -8px, 0) scale(0.95); filter: blur(6px); }
+ }
+ @keyframes bgeCollapseOut {
+ from { opacity: 1; transform: translate3d(0, 0, 0) scaleY(1); filter: blur(0px); }
+ to { opacity: 0; transform: translate3d(0, -10px, 0) scaleY(0.96); filter: blur(4px); }
+ }
+ @keyframes bgeToastIn {
+ from { opacity: 0; transform: translate3d(0, 14px, 0) scale(0.95); filter: blur(6px); }
+ to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); filter: blur(0px); }
+ }
+ @keyframes bgeToastOut {
+ from { opacity: 1; transform: translate3d(0, 0, 0) scale(1); filter: blur(0px); }
+ to { opacity: 0; transform: translate3d(0, 14px, 0) scale(0.95); filter: blur(6px); }
+ }
+ @keyframes bgeStepMorph {
+ from { opacity: 0; transform: translate3d(12px, 0, 0) scale(0.985); filter: blur(4px); }
+ to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); filter: blur(0px); }
+ }
+
+ .bge-presence-modal-enter > .fixed.inset-0 {
+ animation: bgeModalBackdropIn 240ms cubic-bezier(0.22, 1, 0.36, 1) both;
+ }
+ .bge-presence-modal-enter > .fixed.inset-0 > div {
+ animation: bgeModalCardIn 300ms cubic-bezier(0.34, 1.24, 0.64, 1) both;
+ }
+ .bge-presence-modal-exit > .fixed.inset-0 {
+ animation: bgeModalBackdropOut 230ms cubic-bezier(0.32, 0.72, 0, 1) forwards !important;
+ pointer-events: none !important;
+ }
+ .bge-presence-modal-exit > .fixed.inset-0 > div {
+ animation: bgeModalCardOut 230ms cubic-bezier(0.32, 0.72, 0, 1) forwards !important;
+ pointer-events: none !important;
+ }
+
+ .bge-presence-backdrop-enter > .fixed.inset-0 {
+ animation: bgeModalBackdropIn 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+ }
+ .bge-presence-backdrop-exit > .fixed.inset-0 {
+ animation: bgeModalBackdropOut 220ms cubic-bezier(0.32, 0.72, 0, 1) forwards !important;
+ pointer-events: none !important;
+ }
+
+ .bge-presence-sheet-enter {
+ animation: bgeBottomSheetSlideUp 280ms cubic-bezier(0.34, 1.32, 0.64, 1) both;
+ }
+ .bge-presence-sheet-exit {
+ animation: bgeSheetOut 220ms cubic-bezier(0.32, 0.72, 0, 1) forwards !important;
+ pointer-events: none !important;
+ }
+
+ .bge-presence-dropdown-enter {
+ animation: bgeDropdownIn 220ms cubic-bezier(0.34, 1.28, 0.64, 1) both;
+ }
+ .bge-presence-dropdown-exit {
+ animation: bgeDropdownOut 185ms cubic-bezier(0.32, 0.72, 0, 1) forwards !important;
+ pointer-events: none !important;
+ }
+
+ .bge-presence-collapse-enter {
+ animation: bgeCollapseReveal 280ms cubic-bezier(0.34, 1.25, 0.64, 1) both;
+ transform-origin: top center;
+ }
+ .bge-presence-collapse-exit {
+ animation: bgeCollapseOut 210ms cubic-bezier(0.32, 0.72, 0, 1) forwards !important;
+ transform-origin: top center;
+ pointer-events: none !important;
+ }
+
+ .bge-presence-toast-enter > * {
+ animation: bgeToastIn 260ms cubic-bezier(0.34, 1.28, 0.64, 1) both;
+ }
+ .bge-presence-toast-exit > * {
+ animation: bgeToastOut 210ms cubic-bezier(0.32, 0.72, 0, 1) forwards !important;
+ pointer-events: none !important;
+ }
+
+ .bge-step-enter {
+ animation: bgeStepMorph 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
+ }
+
  @media (prefers-reduced-motion: reduce) {
  .bge-fluid-app *,
  .bge-fluid-app *::before,
@@ -7990,6 +8368,13 @@ export default function App() {
  }
  `}</style>
 
+ {/* AMBIENT FROSTED GLASS HÁTTÉRRÉTEG */}
+ <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden" aria-hidden="true">
+ <div className={`absolute -top-28 -left-24 w-96 h-96 rounded-full blur-3xl transition-colors duration-500 ${darkMode ? 'bg-amber-400/15' : 'bg-amber-300/35'}`} />
+ <div className={`absolute top-1/3 -right-24 w-[26rem] h-[26rem] rounded-full blur-3xl transition-colors duration-500 ${darkMode ? 'bg-sky-500/15' : 'bg-sky-300/35'}`} />
+ <div className={`absolute -bottom-28 left-1/4 w-96 h-96 rounded-full blur-3xl transition-colors duration-500 ${darkMode ? 'bg-emerald-500/12' : 'bg-emerald-300/28'}`} />
+ </div>
+
  <input
  ref={neptunExcelInputRef}
  type="file"
@@ -7998,6 +8383,7 @@ export default function App() {
  className="hidden"
  />
 
+ <AnimatedPresence show={Boolean(showUpdateBanner)} variant="toast" duration={220}>
  {showUpdateBanner && (
  <div className="fixed top-3 left-3 right-3 sm:left-1/2 sm:-translate-x-1/2 sm:max-w-lg z-[70] rounded-2xl border-2 border-amber-400 bg-slate-900/95 text-white backdrop-blur-md shadow-2xl px-4 py-3 flex items-center justify-between gap-3">
  <div className="flex items-start sm:items-center gap-2.5 min-w-0">
@@ -8034,10 +8420,12 @@ export default function App() {
  </div>
  </div>
  )}
+ </AnimatedPresence>
 
  {/* ALSÓ FROSTED GLASS NAVIGÁCIÓS KAPSZULA (FŐOLDAL • JELENLEGI FÉLÉV • MENÜ) */}
  {!isAnyModalOpen && (
  <>
+ <AnimatedPresence show={Boolean(isBottomMenuOpen)} variant="backdrop" duration={220}>
  {isBottomMenuOpen && (
  <div
  aria-hidden="true"
@@ -8050,12 +8438,14 @@ export default function App() {
  }`}
  />
  )}
+ </AnimatedPresence>
 
  <nav
  data-bottom-nav-root="true"
  aria-label="Alsó navigációs sáv"
  className="fixed bottom-3 left-3 right-3 max-w-[calc(100vw-24px)] sm:left-1/2 sm:right-auto sm:-translate-x-1/2 sm:w-full sm:max-w-md z-40 pointer-events-none"
  >
+ <AnimatedPresence show={Boolean(isBottomMenuOpen)} variant="sheet" duration={220}>
  {isBottomMenuOpen && (
  <div
  className={`bge-bottom-menu-sheet pointer-events-auto mb-2.5 w-full max-h-[74dvh] overflow-y-auto overscroll-contain touch-pan-y rounded-3xl border p-3.5 space-y-3.5 shadow-2xl ${
@@ -8070,6 +8460,7 @@ export default function App() {
  })}
  </div>
  )}
+ </AnimatedPresence>
 
  <div
  className={`bge-bottom-nav-capsule pointer-events-auto relative w-full rounded-full border p-1.5 shadow-2xl grid grid-cols-3 items-stretch gap-1 ${
@@ -8151,14 +8542,17 @@ export default function App() {
  </>
  )}
 
+ <AnimatedPresence show={Boolean(templateToast)} variant="toast" duration={220}>
  {templateToast && (
  <div className="fixed bottom-24 left-4 right-4 sm:left-auto sm:right-6 sm:bottom-24 z-[60] bg-emerald-600 text-white px-4 py-3 rounded-xl shadow-2xl flex items-center gap-2 text-xs sm:text-sm font-semibold">
  <Check className="w-4 h-4 shrink-0" />
  <span>{templateToast}</span>
  </div>
  )}
+ </AnimatedPresence>
 
  {/* KICSI FELUGRÓ MINI EMLÉKEZTETŐ ABLAK MOBILRA */}
+ <AnimatedPresence show={Boolean(canShowMobileInstall && isInstallMiniPopupVisible && !isAnyModalOpen)} variant="toast" duration={220}>
  {canShowMobileInstall && isInstallMiniPopupVisible && !isAnyModalOpen && (
  <div
  className={`fixed bottom-[154px] left-3 right-24 sm:bottom-28 sm:left-5 sm:right-auto sm:max-w-xs z-40 rounded-2xl border-2 border-amber-400 p-3 shadow-2xl backdrop-blur-md transition-all ${
@@ -8215,8 +8609,10 @@ export default function App() {
  </div>
  </div>
  )}
+ </AnimatedPresence>
 
  {/* MOBIL PARANCSIKON TELEPÍTÉSI ÚTMUTATÓ MODAL */}
+ <AnimatedPresence show={Boolean(isInstallGuideOpen)} variant="modal" duration={240}>
  {isInstallGuideOpen && (
  <div
  data-top-modal="true"
@@ -8313,6 +8709,7 @@ export default function App() {
  </div>
  </div>
  )}
+ </AnimatedPresence>
 
  {activeView === 'home' ? (
  <div
@@ -9098,6 +9495,7 @@ export default function App() {
  </span>
  </button>
 
+ <AnimatedPresence show={Boolean(isAttendanceDashboardExpanded)} variant="collapse" duration={220}>
  {isAttendanceDashboardExpanded && (
  <section className="bge-fluid-reveal grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2.5 sm:gap-4 mt-2.5 sm:mt-3">
  {/* MINI KÁRTYA 1: GYAKORLATOK JELENLÉTE */}
@@ -9404,6 +9802,7 @@ export default function App() {
  </div>
  </section>
  )}
+ </AnimatedPresence>
  </div>
 
  <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
@@ -9430,6 +9829,7 @@ export default function App() {
  <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-150 ${isSortMenuOpen ? 'rotate-180' : ''}`} />
  </button>
 
+ <AnimatedPresence show={Boolean(isSortMenuOpen)} variant="dropdown" duration={190}>
  {isSortMenuOpen && (
  <div className={`absolute right-0 mt-2 w-64 rounded-2xl border shadow-2xl p-2 space-y-1 z-40 ${
  darkMode
@@ -9483,12 +9883,13 @@ export default function App() {
  </button>
  </div>
  )}
+ </AnimatedPresence>
  </div>
  </div>
  </>
  )}
 
- <section className={`grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 ${simpleView ? 'gap-2.5 sm:gap-3' : 'gap-3.5 sm:gap-4'}`}>
+ <section key={`cards-${simpleView ? 'simple' : 'detail'}-${sortMode}`} className={`bge-step-enter grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 ${simpleView ? 'gap-2.5 sm:gap-3' : 'gap-3.5 sm:gap-4'}`}>
  {semesterSubjects.map(subj => {
  const st = subjectStatsMap[subj.id] || calcStats(subj);
  const hasJokerInSubject = (subj.assessments || []).some(a => a.isJokerRewritten);
@@ -9970,6 +10371,7 @@ export default function App() {
  {/* FIX POZÍCIÓJÚ LEBEGŐ GYŰJTŐ GOMBOK AZ ALSÓ NAVIGÁCIÓS SÁV FELETT */}
  {activeView === 'home' ? (
  <div data-home-plus-menu="true" className="fixed bottom-[82px] right-4 sm:bottom-[86px] sm:right-7 z-30 flex flex-col items-end gap-3">
+ <AnimatedPresence show={Boolean(isHomePlusMenuOpen)} variant="dropdown" duration={190}>
  {isHomePlusMenuOpen && (
  <div className={`w-72 sm:w-80 rounded-2xl border-2 p-2.5 shadow-2xl space-y-2 transition-all ${
  darkMode
@@ -10026,6 +10428,7 @@ export default function App() {
  </button>
  </div>
  )}
+ </AnimatedPresence>
 
  <button
  type="button"
@@ -10152,6 +10555,7 @@ export default function App() {
  )}
 
  {/* MÚLTBÉLI FÉLÉVEK FELTÖLTÉSE VARÁZSLÓ MODAL */}
+ <AnimatedPresence show={Boolean(isPastSemestersWizardOpen)} variant="modal" duration={240}>
  {isPastSemestersWizardOpen && (() => {
  const totalPastSteps = wizardPastSemesters.length;
  const activePastSem = wizardStepIndex >= 1 ? wizardPastSemesters[wizardStepIndex - 1] : null;
@@ -10284,7 +10688,7 @@ export default function App() {
  </div>
  )}
 
- <div className="p-4 sm:p-6 overflow-y-auto overscroll-contain space-y-4 flex-1 min-h-0">
+ <div key={`wizard-step-${wizardStepIndex}`} className="bge-step-enter p-4 sm:p-6 overflow-y-auto overscroll-contain space-y-4 flex-1 min-h-0">
  {wizardStepIndex === 0 ? (
  <>
  <div className={`p-3.5 sm:p-4 rounded-xl border space-y-1.5 ${
@@ -10609,8 +11013,10 @@ export default function App() {
  </div>
  );
  })()}
+ </AnimatedPresence>
 
  {/* NEPTUN EXCEL EXPORT ÚTMUTATÓ & FELTÖLTŐ PÁRBESZÉDABLAK */}
+ <AnimatedPresence show={Boolean(excelImportTargetSemCode)} variant="modal" duration={240}>
  {excelImportTargetSemCode && (() => {
  const targetSemObj = wizardPastSemesters.find(s => s.code === excelImportTargetSemCode);
  const targetSemLabel = targetSemObj ? targetSemObj.fullLabel : excelImportTargetSemCode;
@@ -10735,7 +11141,9 @@ export default function App() {
  </div>
  );
  })()}
+ </AnimatedPresence>
  {/* APP STATISZTIKA MODAL */}
+ <AnimatedPresence show={Boolean(isStatsModalOpen)} variant="modal" duration={240}>
  {isStatsModalOpen && (() => {
  const sortedMajorsWithCounts = BGE_MAJORS.map(m => ({
  id: m.id,
@@ -10807,6 +11215,7 @@ export default function App() {
  </button>
  </div>
 
+ <AnimatedPresence show={Boolean(isStatsMajorsExpanded)} variant="collapse" duration={220}>
  {isStatsMajorsExpanded && (
  <div className={`pt-2 space-y-2 border-t ${darkMode ? 'border-slate-700/70' : 'border-slate-200/80'}`}>
  <div className="flex items-center justify-between gap-2 px-0.5">
@@ -10899,6 +11308,7 @@ export default function App() {
  )}
  </div>
  )}
+ </AnimatedPresence>
  </div>
 
  {/* 2. JELENLEG AKTÍV (ÉLŐ MUNKAMENET) */}
@@ -10942,8 +11352,10 @@ export default function App() {
  </div>
  );
  })()}
+ </AnimatedPresence>
 
  {/* ÁTLAGSZÁMOLÓ MODAL */}
+ <AnimatedPresence show={Boolean(isAvgCalcOpen)} variant="modal" duration={240}>
  {isAvgCalcOpen && (
  <div
  data-top-modal="true"
@@ -11191,11 +11603,13 @@ export default function App() {
  </div>
  </div>
  )}
+ </AnimatedPresence>
 
  
 
 
  {/* EGYÉNI TÁRGYRENDEZŐ MODAL */}
+ <AnimatedPresence show={Boolean(isCustomSortModalOpen)} variant="modal" duration={240}>
  {isCustomSortModalOpen && (
  <div
  data-top-modal="true"
@@ -11341,8 +11755,10 @@ export default function App() {
  </div>
  </div>
  )}
+ </AnimatedPresence>
 
  {/* ADATVÉDELMI TÁJÉKOZTATÓ (GDPR) — KÖTELEZŐ EGYSZERI ELFOGADÁS / MEGTEKINTÉS */}
+ <AnimatedPresence show={Boolean(mustAcceptGdpr || isGdprModalOpen)} variant="modal" duration={240}>
  {(mustAcceptGdpr || isGdprModalOpen) && (
  <div
  data-top-modal="true"
@@ -11524,9 +11940,11 @@ export default function App() {
  </div>
  </div>
  )}
+ </AnimatedPresence>
 
 
  {/* SZAK KIVÁLASZTÁSA / MÓDOSÍTÁSA — KÖTELEZŐ BELÉPÉS UTÁN, KÉSŐBB MÓDOSÍTHATÓ A MENÜBEN */}
+ <AnimatedPresence show={Boolean(mustSelectMajor || isMajorSelectModalOpen)} variant="modal" duration={240}>
  {(mustSelectMajor || isMajorSelectModalOpen) && (
  <div
  data-top-modal="true"
@@ -11631,8 +12049,10 @@ export default function App() {
  </div>
  </div>
  )}
+ </AnimatedPresence>
 
  {/* ÚJ FELHASZNÁLÓ: „GAZDINFÓS VAGY?” FELUGRÓ ABLAK */}
+ <AnimatedPresence show={Boolean(isGazdinfoOnboardingOpen)} variant="modal" duration={240}>
  {isGazdinfoOnboardingOpen && (
  <div
  data-top-modal="true"
@@ -11693,8 +12113,10 @@ export default function App() {
  </div>
  </div>
  )}
+ </AnimatedPresence>
 
  {/* KÉPZÉSI KREDITSZÁMOK (KÖTELEZŐ & SZAB. VÁLASZTOTT) SZERKESZTÉSE */}
+ <AnimatedPresence show={Boolean(isDegreeCreditsModalOpen)} variant="modal" duration={240}>
  {isDegreeCreditsModalOpen && (() => {
  const draftMand = parseInt(String(mandatoryCreditsInput).trim(), 10);
  const draftElec = parseInt(String(electiveCreditsInput).trim(), 10);
@@ -11852,8 +12274,10 @@ export default function App() {
  </div>
  );
  })()}
+ </AnimatedPresence>
 
  {/* ÁTSOROLÁSI SÚLYOZOTT ÁTLAG KÜSZÖB BEÁLLÍTÁSA */}
+ <AnimatedPresence show={Boolean(isThresholdModalOpen)} variant="modal" duration={240}>
  {isThresholdModalOpen && (
  <div
  data-top-modal="true"
@@ -11956,8 +12380,10 @@ export default function App() {
  </div>
  </div>
  )}
+ </AnimatedPresence>
 
  {/* KÖSZÖNTŐ ABLAK */}
+ <AnimatedPresence show={Boolean(isWelcomeOpen)} variant="modal" duration={240}>
  {isWelcomeOpen && (
  <div
  data-top-modal="true"
@@ -12064,8 +12490,10 @@ export default function App() {
  </div>
  </div>
  )}
+ </AnimatedPresence>
 
  {/* VISSZAJELZÉS MODAL */}
+ <AnimatedPresence show={Boolean(isFeedbackOpen)} variant="modal" duration={240}>
  {isFeedbackOpen && (() => {
  const { gmailWebUrl } = buildFeedbackMailLinks();
  return (
@@ -12203,8 +12631,10 @@ export default function App() {
  </div>
  );
  })()}
+ </AnimatedPresence>
 
  {/* BEMUTATÓ MODAL */}
+ <AnimatedPresence show={Boolean(isTutorialOpen)} variant="modal" duration={240}>
  {isTutorialOpen && (
  <div
  data-top-modal="true"
@@ -12265,7 +12695,7 @@ export default function App() {
  />
  </div>
 
- <div className="p-4 sm:p-6 overflow-y-auto overscroll-contain space-y-4 sm:space-y-5 flex-1 min-h-0">
+ <div key={`tutorial-slide-${tutorialStep}`} className="bge-step-enter p-4 sm:p-6 overflow-y-auto overscroll-contain space-y-4 sm:space-y-5 flex-1 min-h-0">
  <div className={`p-3 sm:p-4 rounded-2xl border ${
  darkMode
  ? 'bg-gradient-to-br from-slate-800/90 to-slate-900 border-slate-700/80'
@@ -12359,8 +12789,10 @@ export default function App() {
  </div>
  </div>
  )}
+ </AnimatedPresence>
 
  {/* VERZIÓKÖVETÉS MODAL */}
+ <AnimatedPresence show={Boolean(isChangelogOpen)} variant="modal" duration={240}>
  {isChangelogOpen && (
  <div
  data-top-modal="true"
@@ -12404,7 +12836,7 @@ export default function App() {
  </div>
  </div>
 
- <div className="p-4 sm:p-6 overflow-y-auto overscroll-contain space-y-4 sm:space-y-5 flex-1 min-h-0">
+ <div key={`joker-step-${jokerModalStep}`} className="bge-step-enter p-4 sm:p-6 overflow-y-auto overscroll-contain space-y-4 sm:space-y-5 flex-1 min-h-0">
  {isAdmin && isAddingRelease && (
  <form
  onSubmit={handleSaveNewRelease}
@@ -12545,8 +12977,10 @@ export default function App() {
  </div>
  </div>
  )}
+ </AnimatedPresence>
 
  {/* JOKER ZH MODAL */}
+ <AnimatedPresence show={Boolean(isJokerModalOpen)} variant="modal" duration={240}>
  {isJokerModalOpen && (
  <div
  data-top-modal="true"
@@ -12928,8 +13362,10 @@ export default function App() {
  </div>
  </div>
  )}
+ </AnimatedPresence>
 
  {/* FÉLÉV TÖRLÉSE MODAL */}
+ <AnimatedPresence show={Boolean(semesterToDelete)} variant="modal" duration={240}>
  {semesterToDelete && (
  <div
  data-top-modal="true"
@@ -13002,8 +13438,10 @@ export default function App() {
  </div>
  </div>
  )}
+ </AnimatedPresence>
 
  {/* TANTÁRGY RÉSZLETEK MODAL */}
+ <AnimatedPresence show={Boolean(activeSubject)} variant="modal" duration={240}>
  {activeSubject && (() => {
  const st = subjectStatsMap[activeSubject.id] || calcStats(activeSubject);
  const zhItems = (activeSubject.assessments || []).filter(a => a.category === 'ZH');
@@ -13345,7 +13783,11 @@ export default function App() {
  <div
  ref={detailModalBodyRef}
  style={{ overflowAnchor: 'none' }}
- className="p-4 sm:p-6 overflow-y-auto overscroll-contain space-y-5 sm:space-y-6 flex-1 min-h-0"
+ className="p-4 sm:p-6 overflow-y-auto overscroll-contain flex-1 min-h-0"
+ >
+ <div
+ key={`detail-${activeSubject?.id || 'none'}-${detailTab}-${attendanceSubTab}`}
+ className="bge-step-enter space-y-5 sm:space-y-6"
  >
  {st.disablePointCalc ? (
  <div className="space-y-4">
@@ -14302,13 +14744,17 @@ export default function App() {
  {activeSubject.isFailed ? 'Bukott jelölés visszavonása' : 'Megbuktam☹️'}
  </button>
  </div>
+ 
+ </div>
  </div>
  </div>
  </div>
  );
  })()}
+ </AnimatedPresence>
 
  {/* EGYÉB GYŰJTŐ LÉTREHOZÁSA / SZERKESZTÉSE MODAL */}
+ <AnimatedPresence show={Boolean(bucketModal)} variant="modal" duration={240}>
  {bucketModal && (
  <div
  data-top-modal="true"
@@ -14359,8 +14805,10 @@ export default function App() {
  </div>
  </div>
  )}
+ </AnimatedPresence>
 
  {/* TÉTEL (ZH / PLUSZPONT / EGYÉB / VIZSGA) HOZZÁADÁSA ÉS SZERKESZTÉSE MODAL */}
+ <AnimatedPresence show={Boolean(itemModal)} variant="modal" duration={240}>
  {itemModal && (
  <div
  data-top-modal="true"
@@ -14518,8 +14966,10 @@ export default function App() {
  </div>
  </div>
  )}
+ </AnimatedPresence>
 
  {/* ÚJ FÉLÉV LÉTREHOZÁSA MODAL */}
+ <AnimatedPresence show={Boolean(isSemesterModalOpen)} variant="modal" duration={240}>
  {isSemesterModalOpen && (
  <div
  data-top-modal="true"
@@ -14625,8 +15075,10 @@ export default function App() {
  </div>
  </div>
  )}
+ </AnimatedPresence>
 
  {/* FÉLÉV ÉVÉNEK / IDŐSZAKÁNAK MÓDOSÍTÁSA MODAL */}
+ <AnimatedPresence show={Boolean(editingSemesterOldName)} variant="modal" duration={240}>
  {editingSemesterOldName && (
  <div
  data-top-modal="true"
@@ -14749,8 +15201,10 @@ export default function App() {
  </div>
  </div>
  )}
+ </AnimatedPresence>
 
  {/* TANTÁRGY LÉTREHOZÁSA (SZAKVÁLASZTÓ + SABLONOK / KÉZI) ÉS BEÁLLÍTÁSAI MODAL */}
+ <AnimatedPresence show={Boolean(isSubjectModalOpen && editingSubject)} variant="modal" duration={240}>
  {isSubjectModalOpen && editingSubject && (
  <div
  data-top-modal="true"
@@ -15497,8 +15951,10 @@ export default function App() {
  </div>
  </div>
  )}
+ </AnimatedPresence>
 
  {/* FALIÚJSÁG — KÖZÉRDEKŰ INFORMÁCIÓK ABLAK */}
+ <AnimatedPresence show={Boolean(isNoticeboardOpen)} variant="modal" duration={240}>
  {isNoticeboardOpen && (
  <div
  data-top-modal={!activeNoticePopup ? 'true' : undefined}
@@ -15762,8 +16218,10 @@ export default function App() {
  </div>
  </div>
  )}
+ </AnimatedPresence>
 
  {/* KÖZÉRDEKŰ INFORMÁCIÓ — NAGY FELUGRÓ POP-UP BELÉPÉSKOR */}
+ <AnimatedPresence show={Boolean(activeNoticePopup)} variant="modal" duration={240}>
  {activeNoticePopup && (
  <div
  data-top-modal="true"
@@ -15832,6 +16290,7 @@ export default function App() {
  </div>
  </div>
  )}
+ </AnimatedPresence>
  </div>
  );
 }

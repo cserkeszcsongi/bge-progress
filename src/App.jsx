@@ -2689,15 +2689,35 @@ function AnimatedPresence({
  );
 }
 
-function WavyLogoSplashScreen({ darkMode, isExiting }) {
+function WavyLogoSplashScreen({ darkMode, targetProgress = 0.2, isDataReady = false, onComplete }) {
  const frontWaveRef = useRef(null);
  const backWaveRef = useRef(null);
  const [percent, setPercent] = useState(0);
+ const [isExiting, setIsExiting] = useState(false);
+
+ const targetRef = useRef(targetProgress);
+ const readyRef = useRef(isDataReady);
+ const onCompleteRef = useRef(onComplete);
+ const exitTriggeredRef = useRef(false);
 
  useEffect(() => {
- const DURATION_MS = 3000;
+ targetRef.current = targetProgress;
+ }, [targetProgress]);
+
+ useEffect(() => {
+ readyRef.current = isDataReady;
+ }, [isDataReady]);
+
+ useEffect(() => {
+ onCompleteRef.current = onComplete;
+ }, [onComplete]);
+
+ useEffect(() => {
  const startTime = performance.now();
+ let lastTime = startTime;
+ let currentProgress = 0;
  let rafId = 0;
+ let exitTimerId = null;
 
  const buildWavePath = (baseY, amplitude, phase, frequency) => {
  const steps = 28;
@@ -2712,18 +2732,28 @@ function WavyLogoSplashScreen({ darkMode, isExiting }) {
  };
 
  const tick = (now) => {
+ const dt = Math.min(0.05, Math.max(0.001, (now - lastTime) / 1000));
+ lastTime = now;
  const elapsed = now - startTime;
- const rawProgress = Math.min(1, elapsed / DURATION_MS);
- const eased =
- rawProgress < 0.5
- ? 2 * rawProgress * rawProgress
- : 1 - Math.pow(-2 * rawProgress + 2, 2) / 2;
 
- const baseY = 1.06 - eased * 1.16;
- const taper = rawProgress >= 0.95 ? Math.max(0, (1 - rawProgress) / 0.05) : 1;
+ if (readyRef.current) {
+ const remaining = 1 - currentProgress;
+ const step = Math.max(1.85, remaining * 6.5) * dt;
+ currentProgress = Math.min(1, currentProgress + step);
+ } else {
+ const creep = 0.88 * (1 - Math.exp(-elapsed / 1400));
+ const desired = Math.min(0.9, Math.max(targetRef.current, creep));
+ const diff = desired - currentProgress;
+ if (diff > 0) {
+ currentProgress = Math.min(desired, currentProgress + Math.max(0.28, diff * 4.2) * dt);
+ }
+ }
+
+ const baseY = 1.06 - currentProgress * 1.16;
+ const taper = currentProgress >= 0.94 ? Math.max(0, (1 - currentProgress) / 0.06) : 1;
  const ampFront = 0.036 * taper;
  const ampBack = 0.048 * taper;
- const phase = elapsed * 0.0048;
+ const phase = elapsed * 0.0052;
 
  if (frontWaveRef.current) {
  frontWaveRef.current.setAttribute(
@@ -2738,20 +2768,33 @@ function WavyLogoSplashScreen({ darkMode, isExiting }) {
  );
  }
 
- setPercent(Math.round(eased * 100));
+ setPercent(Math.round(currentProgress * 100));
 
- if (rawProgress < 1 || !isExiting) {
- rafId = requestAnimationFrame(tick);
+ if (readyRef.current && currentProgress >= 0.999) {
+ if (!exitTriggeredRef.current) {
+ exitTriggeredRef.current = true;
+ setPercent(100);
+ setIsExiting(true);
+ exitTimerId = setTimeout(() => {
+ if (onCompleteRef.current) onCompleteRef.current();
+ }, 380);
  }
+ return;
+ }
+
+ rafId = requestAnimationFrame(tick);
  };
 
  rafId = requestAnimationFrame(tick);
- return () => cancelAnimationFrame(rafId);
- }, [isExiting]);
+ return () => {
+ cancelAnimationFrame(rafId);
+ if (exitTimerId) clearTimeout(exitTimerId);
+ };
+ }, []);
 
  return (
  <div
- className={`fixed inset-0 z-[100] flex flex-col items-center justify-center p-6 overflow-hidden transition-all duration-500 ${
+ className={`fixed inset-0 z-[100] flex flex-col items-center justify-center p-6 overflow-hidden transition-all duration-400 ${
  darkMode
  ? 'bg-slate-950 text-slate-100'
  : 'bg-slate-100 text-slate-900'
@@ -2906,13 +2949,7 @@ export default function App() {
 
  const [user, setUser] = useState(null);
  const [authLoading, setAuthLoading] = useState(true);
- const [splashMinDone, setSplashMinDone] = useState(false);
  const [splashHidden, setSplashHidden] = useState(false);
-
- useEffect(() => {
- const timer = setTimeout(() => setSplashMinDone(true), 3000);
- return () => clearTimeout(timer);
- }, []);
  const [userDataLoaded, setUserDataLoaded] = useState(false);
  const [hasServerGazdinfoPref, setHasServerGazdinfoPref] = useState(false);
  const [hasAcceptedGdpr, setHasAcceptedGdpr] = useState(false);
@@ -5043,7 +5080,7 @@ export default function App() {
  hasLectures: false,
  totalLectures: 0,
  lectureAttendanceSessions: [],
- manualGrade: isFailedGrade ? '' : String(gradeNum),
+ manualGrade: String(gradeNum),
  customBuckets: [],
  assessments: []
  };
@@ -5496,9 +5533,15 @@ export default function App() {
  const handleToggleSubjectFailed = async (subj) => {
  if (!user || !subj) return;
  const nextFailed = !subj.isFailed;
- await updateDoc(doc(db, 'users', user.uid, 'subjects', subj.id), {
- isFailed: nextFailed
- });
+ const updateData = { isFailed: nextFailed };
+ if (subj.disablePointCalc) {
+ if (nextFailed) {
+ updateData.manualGrade = '1';
+ } else if (String(subj.manualGrade || '') === '1') {
+ updateData.manualGrade = '';
+ }
+ }
+ await updateDoc(doc(db, 'users', user.uid, 'subjects', subj.id), updateData);
  showToast(
  nextFailed
  ? `„${subj.name}” megjelölve bukott tárgyként (nem számít az átlagba).`
@@ -5706,11 +5749,13 @@ export default function App() {
  ((isExamCourse && hasExamScore && examScoreNum < 59.5) ||
  (needsAutoExam && hasAutoExamScore && autoExamScoreNum < 59.5));
 
+ const isManualGradeOne = hasManualGrade && parseInt(effectiveManualGrade, 10) === 1;
  const isFailed =
  ((!isSim && Boolean(subj.isFailed)) && !passedByExam) ||
+ isManualGradeOne ||
  autoFailedByNoSignature ||
  autoFailedByExam;
- const isGradeOnlyCard = !isFailed && (disablePointCalc || hasManualGrade);
+ const isGradeOnlyCard = disablePointCalc || (!isFailed && hasManualGrade) || (isFailed && isManualGradeOne);
 
  let progressLabel = null;
  let progressStage = 'pending';
@@ -5784,7 +5829,7 @@ export default function App() {
  totalLectures, lecturePresentCount, lectureAbsentCount,
  minAttAlairas, minAttMegajanlott,
  attendanceAlairasPossible, attendanceAlairasMet,
- alairasTeljesul: isGradeOnlyCard ? true : alairasTeljesul,
+ alairasTeljesul: isFailed ? false : (isGradeOnlyCard ? true : alairasTeljesul),
  alairasHianyzik,
  megajanlottMin: effectiveOfferMin,
  megajanlottMinZH,
@@ -6575,7 +6620,9 @@ export default function App() {
  courseKind: isExam ? 'exam' : 'regular',
  courseType: editingSubject.courseType || 'mandatory',
  disablePointCalc,
- isFailed: Boolean(editingSubject.isFailed),
+ isFailed: disablePointCalc
+ ? (editingSubject.manualGrade === '1' ? true : (editingSubject.manualGrade && editingSubject.manualGrade !== '1' ? false : Boolean(editingSubject.isFailed)))
+ : Boolean(editingSubject.isFailed),
  name: editingSubject.name.trim(),
  credits: Number(editingSubject.credits) || 0,
  alairasMin: isExam ? 0 : (Number(editingSubject.alairasMin) || 0),
@@ -7175,13 +7222,18 @@ export default function App() {
  window.location.reload();
  };
 
- const isAppReady = !authLoading && maintenanceLoaded && splashMinDone;
-
- useEffect(() => {
- if (!isAppReady) return;
- const exitTimer = setTimeout(() => setSplashHidden(true), 460);
- return () => clearTimeout(exitTimer);
- }, [isAppReady]);
+ const isDataReady = !authLoading && maintenanceLoaded && (
+ (isMaintenanceMode && !isAdmin) || !user || userDataLoaded
+ );
+ const loadingTargetProgress = isDataReady
+ ? 1
+ : Math.min(
+ 0.9,
+ 0.15 +
+ (maintenanceLoaded ? 0.25 : 0) +
+ (!authLoading ? 0.35 : 0) +
+ (user && userDataLoaded ? 0.25 : 0)
+ );
 
  const bgPage = darkMode
  ? 'bg-slate-950 text-slate-100 bge-glass-dark'
@@ -7199,7 +7251,14 @@ export default function App() {
  : 'bg-white/65 border-slate-300/75 text-slate-900 placeholder-slate-400 backdrop-blur-md focus:border-amber-400 text-base sm:text-sm';
 
  if (!splashHidden) {
- return <WavyLogoSplashScreen darkMode={darkMode} isExiting={isAppReady} />;
+ return (
+ <WavyLogoSplashScreen
+ darkMode={darkMode}
+ targetProgress={loadingTargetProgress}
+ isDataReady={isDataReady}
+ onComplete={() => setSplashHidden(true)}
+ />
+ );
  }
 
  if (isMaintenanceMode && !isAdmin) {
@@ -8238,12 +8297,10 @@ export default function App() {
  }
  }
  .bge-view-slide-left {
- animation: bgeSlideFromRight 300ms cubic-bezier(0.22, 1, 0.36, 1) both;
- will-change: transform, opacity;
+ animation: bgeSlideFromRight 300ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
  }
  .bge-view-slide-right {
- animation: bgeSlideFromLeft 300ms cubic-bezier(0.22, 1, 0.36, 1) both;
- will-change: transform, opacity;
+ animation: bgeSlideFromLeft 300ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
  }
  .bge-view-slide-left section,
  .bge-view-slide-left article,
@@ -8281,9 +8338,13 @@ export default function App() {
  backdrop-filter: none !important;
  -webkit-backdrop-filter: none !important;
  }
- .bge-fluid-app header {
- background-color: rgba(15, 23, 42, 0.72) !important;
- border-color: rgba(255, 255, 255, 0.14) !important;
+ .bge-fluid-app header,
+ .bge-fluid-app header.bge-dashboard-header {
+ background-color: rgba(15, 23, 42, 0.78) !important;
+ backdrop-filter: blur(28px) saturate(185%) !important;
+ -webkit-backdrop-filter: blur(28px) saturate(185%) !important;
+ border-bottom: 1px solid rgba(255, 255, 255, 0.16) !important;
+ box-shadow: 0 8px 28px rgba(2, 6, 23, 0.26), inset 0 -1px 0 rgba(255, 255, 255, 0.08) !important;
  }
  .bge-fluid-app button:not([data-no-glass="true"]),
  .bge-fluid-app a[href]:not([data-no-glass="true"]) {
@@ -9414,7 +9475,7 @@ export default function App() {
  key={`view-semester-${selectedSemester}`}
  className={viewSlideDir === 'left' ? 'bge-view-slide-left' : viewSlideDir === 'right' ? 'bge-view-slide-right' : ''}
  >
- <header className="bg-slate-900 text-white sticky top-0 z-30 shadow-md border-b border-slate-800">
+ <header className="bge-dashboard-header bg-slate-900/78 text-white sticky top-0 z-30 shadow-md border-b border-white/15 backdrop-blur-2xl">
  <div className="max-w-7xl mx-auto px-3 sm:px-4 py-2.5 flex items-center justify-between gap-2">
  <button
  type="button"
@@ -10004,7 +10065,8 @@ export default function App() {
  5: 'bg-emerald-500 text-white shadow-emerald-500/30',
  4: 'bg-lime-400 text-slate-950 shadow-lime-400/30',
  3: 'bg-amber-400 text-slate-950 shadow-amber-400/30',
- 2: 'bg-orange-500 text-white shadow-orange-500/30'
+ 2: 'bg-orange-500 text-white shadow-orange-500/30',
+ 1: 'bg-rose-600 text-white shadow-rose-600/35'
  };
 
  const ms = st.nextOfferedMilestone;
@@ -10074,7 +10136,9 @@ export default function App() {
  {showLargeBadge ? (
  <div
  className={`-mt-3.5 sm:-mt-4 -mr-1 px-3.5 sm:px-4 pt-3.5 sm:pt-4 pb-2.5 rounded-b-2xl shadow-md flex flex-col items-center justify-center shrink-0 select-none ${
- st.projectedGrade
+ st.isFailed
+ ? gradeColors[1]
+ : st.projectedGrade
  ? gradeColors[st.projectedGrade] || 'bg-emerald-500 text-white'
  : darkMode
  ? 'bg-slate-800 text-slate-400 border-x border-b border-slate-700'
@@ -10082,10 +10146,10 @@ export default function App() {
  }`}
  >
  <span className="text-[8px] font-extrabold uppercase tracking-wider opacity-85 leading-none mb-1">
- {st.isSimulatedGrade ? 'Szim.' : (st.isExamCourse || st.needsAutoExam ? 'Vizsgajegy' : (st.hasManualGrade ? 'Jegy' : 'Megajánlott'))}
+ {st.isFailed ? 'Megbuktam' : (st.isSimulatedGrade ? 'Szim.' : (st.isExamCourse || st.needsAutoExam ? 'Vizsgajegy' : (st.hasManualGrade ? 'Jegy' : 'Megajánlott')))}
  </span>
  <span className="text-2xl sm:text-3xl font-black leading-none tracking-tight">
- {st.projectedGrade ?? '—'}
+ {st.isFailed ? '1' : (st.projectedGrade ?? '—')}
  </span>
  </div>
  ) : (
@@ -10186,7 +10250,9 @@ export default function App() {
  {showLargeBadge ? (
  <div
  className={`-mt-4 sm:-mt-5 -mr-1 px-4 sm:px-5 pt-4 sm:pt-5 pb-3 rounded-b-2xl shadow-lg flex flex-col items-center justify-center shrink-0 select-none ${
- st.projectedGrade
+ st.isFailed
+ ? gradeColors[1]
+ : st.projectedGrade
  ? gradeColors[st.projectedGrade] || 'bg-emerald-500 text-white'
  : darkMode
  ? 'bg-slate-800 text-slate-400 border-x border-b border-slate-700'
@@ -10194,10 +10260,10 @@ export default function App() {
  }`}
  >
  <span className="text-[9px] font-extrabold uppercase tracking-wider opacity-85 leading-none mb-1">
- {st.isSimulatedGrade ? 'Szim. jegy' : (st.isExamCourse || st.needsAutoExam ? 'Vizsgajegy' : (st.hasManualGrade ? 'Jegy' : 'Megajánlott'))}
+ {st.isFailed ? 'Megbuktam' : (st.isSimulatedGrade ? 'Szim. jegy' : (st.isExamCourse || st.needsAutoExam ? 'Vizsgajegy' : (st.hasManualGrade ? 'Jegy' : 'Megajánlott')))}
  </span>
  <span className="text-3xl sm:text-4xl font-black leading-none tracking-tight">
- {st.projectedGrade ?? '—'}
+ {st.isFailed ? '1' : (st.projectedGrade ?? '—')}
  </span>
  </div>
  ) : (
@@ -10388,8 +10454,12 @@ export default function App() {
  <div className={`pt-3 mt-2 border-t flex items-center justify-between gap-2 ${darkMode ? 'border-slate-800' : 'border-slate-100'}`}>
  <div className="text-xs">
  {st.isGradeOnlyCard ? (
- <span className={`text-xs font-medium ${textMuted}`}>
- {st.disablePointCalc ? 'Intenzív heti kurzus (nincs jelenlét)' : 'Kézzel rögzített jegy'}
+ <span className={`text-xs font-medium ${st.isFailed ? 'text-rose-500 font-semibold' : textMuted}`}>
+ {st.isFailed
+ ? 'Megbuktam☹️ • Pontszámítás kikapcsolva'
+ : st.disablePointCalc
+ ? 'Pontszámítás kikapcsolva'
+ : 'Kézzel rögzített jegy'}
  </span>
  ) : st.isExamCourse ? (
  <span className={`px-2.5 py-1 rounded-lg font-medium ${
@@ -13872,9 +13942,14 @@ export default function App() {
  </p>
 
  {st.isFailed ? (
- <p className="text-2xl sm:text-3xl font-extrabold text-rose-500">
+ <div>
+ <span className="text-4xl sm:text-5xl font-black text-rose-500">
+ 1
+ </span>
+ <p className="text-sm sm:text-base font-extrabold text-rose-500 mt-1">
  Megbuktam☹️
  </p>
+ </div>
  ) : st.projectedGrade ? (
  <div>
  <span className="text-4xl sm:text-5xl font-black text-emerald-500">
@@ -15712,16 +15787,16 @@ export default function App() {
  <div className="flex items-center justify-between gap-3">
  <div className="min-w-0">
  <p className={`text-xs sm:text-sm font-extrabold ${textStrong}`}>
- Intenzív heti kurzus?
+ Pontszámítás
  </p>
  <p className={`text-[11px] mt-0.5 ${textMuted}`}>
- Ha intenzív heti kurzust veszel fel, kapcsold be ezt az opciót: nem lesz pontszámítás, sem gyakorlati, sem előadás jelenlét — csak írd be a jegyedet.
+ Ha be van kapcsolva, pontszámítás (ZH-k, pluszpontok, jelenlét) történik. Ha ki van kapcsolva, nincs pontszámítás, csak meg kell adnod egy jegyet (pl. intenzív heti kurzus vagy importált tárgy esetén).
  </p>
  </div>
  <button
  type="button"
  role="switch"
- aria-checked={Boolean(editingSubject.disablePointCalc)}
+ aria-checked={!editingSubject.disablePointCalc}
  onClick={() =>
  setEditingSubject(prev => ({
  ...prev,
@@ -15729,7 +15804,7 @@ export default function App() {
  }))
  }
  className={`w-12 h-7 rounded-full transition-colors p-0.5 cursor-pointer shrink-0 ${
- editingSubject.disablePointCalc
+ !editingSubject.disablePointCalc
  ? 'bg-emerald-500'
  : darkMode
  ? 'bg-slate-700'
@@ -15738,7 +15813,7 @@ export default function App() {
  >
  <span
  className={`block w-6 h-6 rounded-full bg-white shadow-sm transform transition-transform ${
- editingSubject.disablePointCalc ? 'translate-x-5' : 'translate-x-0'
+ !editingSubject.disablePointCalc ? 'translate-x-5' : 'translate-x-0'
  }`}
  />
  </button>
@@ -15749,25 +15824,33 @@ export default function App() {
  darkMode ? 'border-slate-700/80' : 'border-slate-200'
  }`}>
  <label className={`block text-xs font-bold ${textStrong}`}>
- Megajánlott / végleges jegy kiválasztása
+ Végleges jegy kiválasztása
  </label>
- <div className="grid grid-cols-5 gap-2">
+ <div className="grid grid-cols-6 gap-1.5 sm:gap-2">
  {[
  { val: '', label: 'Nincs' },
+ { val: '1', label: '1' },
  { val: '2', label: '2' },
  { val: '3', label: '3' },
  { val: '4', label: '4' },
  { val: '5', label: '5' }
  ].map(opt => {
- const isSelected = (editingSubject.manualGrade || '') === opt.val;
+ const effectiveVal = editingSubject.isFailed && !(editingSubject.manualGrade || '') ? '1' : (editingSubject.manualGrade || '');
+ const isSelected = effectiveVal === opt.val;
  return (
  <button
  key={opt.val || 'none'}
  type="button"
- onClick={() => setEditingSubject({ ...editingSubject, manualGrade: opt.val })}
- className={`py-2.5 px-2 rounded-xl text-xs sm:text-sm font-extrabold border transition cursor-pointer ${
+ onClick={() => setEditingSubject({
+ ...editingSubject,
+ manualGrade: opt.val,
+ isFailed: opt.val === '1'
+ })}
+ className={`py-2.5 px-1.5 sm:px-2 rounded-xl text-xs sm:text-sm font-extrabold border transition cursor-pointer ${
  isSelected
- ? 'bg-emerald-500 text-white border-emerald-500 shadow-sm'
+ ? opt.val === '1'
+ ? 'bg-rose-600 text-white border-rose-600 shadow-sm'
+ : 'bg-emerald-500 text-white border-emerald-500 shadow-sm'
  : darkMode
  ? 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
  : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200'

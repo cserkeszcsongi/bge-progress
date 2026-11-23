@@ -638,6 +638,13 @@ function buildTemplatesForMajor(majorId) {
 
 const APP_RELEASES = [
   {
+    version: 'v2.4.5',
+    date: '2026. 11. 23.',
+    changes: [
+      'Dinamikus, napszakhoz igazodó személyes köszönés a főoldalon a belépést követően (pl. Jó reggelt / Szia / Szép estét, [Becenév]!), amely a profilban beállított beceneveden szólít'
+    ]
+  },
+  {
     version: 'v2.4.4',
     date: '2026. 11. 23.',
     changes: [
@@ -3432,6 +3439,40 @@ export default function App() {
  );
 
  const isUserGazdinfo = Boolean(userMajorObj?.isGazdinfo || userMajorId === 'gazdasaginformatikus');
+
+ const dynamicGreeting = useMemo(() => {
+ const hour = new Date().getHours();
+ const fallbackName = (user?.displayName || '').trim().split(/\s+/)[0] || '';
+ const preferredName = (userNickname || fallbackName).trim();
+
+ let timeGreeting = 'Szia';
+ let emoji = '👋';
+ if (hour >= 5 && hour < 10) {
+ timeGreeting = 'Jó reggelt';
+ emoji = '☀️';
+ } else if (hour >= 10 && hour < 18) {
+ timeGreeting = 'Szia';
+ emoji = '👋';
+ } else if (hour >= 18 && hour < 22) {
+ timeGreeting = 'Szép estét';
+ emoji = '🌆';
+ } else {
+ timeGreeting = 'Jó éjt / Kitartást';
+ emoji = '🌙';
+ }
+
+ const headline = preferredName ? `${timeGreeting}, ${preferredName}!` : `${timeGreeting}!`;
+ const subline = userNickname
+ ? 'Örülök, hogy újra itt vagy! Nézzük, hogyan állnak a féléveid.'
+ : 'Tipp: A jobb felső Menü → Hallgatói profil alatt saját becenevet is beállíthatsz magadnak!';
+
+ return {
+ headline,
+ subline,
+ emoji,
+ hasNickname: Boolean(userNickname)
+ };
+ }, [userNickname, user?.displayName]);
 
  const visibleNoticeboardItems = useMemo(() => {
  return (noticeboardItems || []).filter(notice => {
@@ -7995,6 +8036,46 @@ export default function App() {
  )}
 
  <main className="max-w-6xl mx-auto px-3 sm:px-4 pt-4">
+ <div className={`mb-5 sm:mb-6 rounded-2xl border px-4 py-3 sm:px-5 sm:py-3.5 flex items-center justify-between gap-3 shadow-xs transition-all ${
+ darkMode
+ ? 'bg-gradient-to-r from-slate-900 via-slate-900 to-amber-950/25 border-amber-400/35 text-slate-100'
+ : 'bg-gradient-to-r from-white via-amber-50/50 to-amber-100/55 border-amber-300/80 text-slate-900'
+ }`}>
+ <div className="flex items-center gap-3 min-w-0">
+ <span
+ className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center text-lg sm:text-xl shrink-0 border ${
+ darkMode
+ ? 'bg-amber-400/15 border-amber-400/35'
+ : 'bg-amber-400/20 border-amber-400/40'
+ }`}
+ aria-hidden="true"
+ >
+ {dynamicGreeting.emoji}
+ </span>
+ <div className="min-w-0">
+ <p className={`text-sm sm:text-base font-extrabold tracking-tight truncate ${textStrong}`}>
+ {dynamicGreeting.headline}
+ </p>
+ <p className={`text-[11px] sm:text-xs leading-snug mt-0.5 ${textMuted}`}>
+ {dynamicGreeting.subline}
+ </p>
+ </div>
+ </div>
+ {!dynamicGreeting.hasNickname && (
+ <button
+ type="button"
+ onClick={() => {
+ setNicknameDraft('');
+ setIsEditingNickname(true);
+ setIsMenuOpen(true);
+ }}
+ className="px-2.5 py-1.5 rounded-xl text-[11px] font-extrabold bg-amber-400 hover:bg-amber-300 text-slate-950 shrink-0 transition cursor-pointer"
+ >
+ Becenév
+ </button>
+ )}
+ </div>
+
  <div className="flex flex-col items-center text-center mb-8 sm:mb-10">
  <img
  src="/logo.png"

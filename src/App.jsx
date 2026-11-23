@@ -1161,10 +1161,10 @@ const TUTORIAL_SLIDES = [
  'A féléves dashboard jobb alsó sarkában található „Gyűjtő” gomb egyetlen érintésre előhívja az összes tervező- és elemzőeszközt.',
  steps: [
  'Gyűjtő menügomb (jobb alsó sarok): megnyomásával előugrik a lebegő eszköztár az Új tantárgy (+), az Átlagszámoló, a JOKER ZH és az új Statisztika gombbal.',
- 'Statisztika (táblázatos/kördiagramos elemző): mutatja a tárgyankénti jelenléti eloszlást (gyakorlatokon és előadásokon), a ZH-teljesítéseket, valamint a félév legrosszabb és legjobb ZH-ját — mindezt összevetve a korábbi vagy későbbi félévekkel.',
+ 'Statisztika: áttekinthetően mutatja az adott félév tárgyankénti jelenléti eloszlását (gyakorlatokon és előadásokon), a ZH-teljesítéseket, valamint a félév legrosszabb és legjobb ZH-ját.',
  'JOKER ZH és Átlagszámoló: a lebegő sávból azonnal kijelölheted az újraírandó ZH-t, vagy 1–5-ös jegygombokkal élőben szimulálhatod a súlyozott átlagot és a KKI-t.'
  ],
- tip: 'A Statisztika ablak tetején bármelyik két félévedet kiválaszthatod, így egyből látod a fejlődésedet ZH-k és óralátogatás terén is.'
+ tip: 'A Statisztika ablak mindig az éppen megnyitott féléved jelenléti és ZH-mutatóit összesíti egyetlen átlátható nézetben.'
  },
  {
  id: 'failed_attendance_pwa',
@@ -2894,8 +2894,6 @@ export default function App() {
 
  const [isCollectorMenuOpen, setIsCollectorMenuOpen] = useState(false);
  const [isAcademicStatsOpen, setIsAcademicStatsOpen] = useState(false);
- const [statsPrimarySemester, setStatsPrimarySemester] = useState('');
- const [statsCompareSemester, setStatsCompareSemester] = useState('');
 
  const [activeSubjectId, setActiveSubjectId] = useState(null);
  const [detailTab, setDetailTab] = useState('points');
@@ -6449,18 +6447,6 @@ export default function App() {
  };
 
  const handleOpenAcademicStatsModal = () => {
- const safeSemesters = Array.isArray(semesters) ? semesters : [];
- const safeSubjects = toArraySafe(subjects);
- const fallbackPrimary = safeSemesters[0] || (safeSubjects[0]?.semester ? String(safeSubjects[0].semester) : '');
- const primary = (selectedSemester && safeSemesters.includes(selectedSemester))
- ? selectedSemester
- : fallbackPrimary;
- const otherSemesters = safeSemesters.filter(
- s => getCanonicalSemesterCode(String(s)) !== getCanonicalSemesterCode(String(primary))
- );
- const defaultCompare = otherSemesters.length > 0 ? otherSemesters[otherSemesters.length - 1] : '';
- setStatsPrimarySemester(primary);
- setStatsCompareSemester(defaultCompare);
  setIsAcademicStatsOpen(true);
  };
 
@@ -8277,7 +8263,7 @@ export default function App() {
  isCurrentSemester(selectedSemester) ? 'border-amber-400 font-bold' : 'border-slate-700'
  }`}
  >
- {(semesters.length > 0 ? semesters : (effectivePrimarySem ? [effectivePrimarySem] : [])).map(sem => (
+ {semesters.map(sem => (
  <option key={sem} value={sem}>
  {formatSemesterLabel(sem)}{isCurrentSemester(sem) ? ' • Aktuális' : ''}
  </option>
@@ -8993,7 +8979,7 @@ export default function App() {
  setIsCollectorMenuOpen(false);
  handleOpenAcademicStatsModal();
  }}
- disabled={semesters.length === 0 && subjects.length === 0}
+ disabled={semesterSubjects.length === 0}
  title="Tanulmányi statisztika: jelenlét-eloszlás, ZH-teljesítések, legjobb/legrosszabb ZH"
  className="w-full px-3.5 py-2.5 rounded-2xl text-xs sm:text-sm font-extrabold bg-indigo-600 hover:bg-indigo-500 disabled:opacity-45 disabled:cursor-not-allowed text-white shadow-md flex items-center justify-between gap-2.5 transition cursor-pointer"
  >
@@ -10149,39 +10135,12 @@ export default function App() {
  )}
 
  
- {/* TANULMÁNYI STATISZTIKA MODAL (JELENLÉT ELOSZLÁS, ZH TELJESÍTÉSEK, LEGJOBB/LEGROSSZABB ZH, FÉLÉV ÖSSZEHASONLÍTÁS) */}
+ {/* TANULMÁNYI STATISZTIKA MODAL (KIZÁRÓLAG AZ ADOTT FÉLÉV ADATAI) */}
  {isAcademicStatsOpen && (
  <SafeModalBoundary onClose={() => setIsAcademicStatsOpen(false)}>
  {(() => {
- const effectivePrimarySem = statsPrimarySemester || selectedSemester || semesters[0] || (subjects[0]?.semester ?? '');
- const primaryStats = computeAcademicSemesterAnalytics(effectivePrimarySem);
- const compareStats = (statsCompareSemester && getCanonicalSemesterCode(statsCompareSemester) !== getCanonicalSemesterCode(effectivePrimarySem))
- ? computeAcademicSemesterAnalytics(statsCompareSemester)
- : null;
-
- const renderDeltaBadge = (currVal, prevVal, unit = '%', higherIsBetter = true) => {
- if (currVal === null || currVal === undefined || prevVal === null || prevVal === undefined) return null;
- const diff = +(currVal - prevVal).toFixed(1);
- if (diff === 0) {
- return (
- <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
- darkMode ? 'bg-slate-800 text-slate-300' : 'bg-slate-200 text-slate-700'
- }`}>
- 0{unit} (azonos)
- </span>
- );
- }
- const isPositiveOutcome = higherIsBetter ? diff > 0 : diff < 0;
- return (
- <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
- isPositiveOutcome
- ? darkMode ? 'bg-emerald-500/20 text-emerald-300' : 'bg-emerald-100 text-emerald-800'
- : darkMode ? 'bg-rose-500/20 text-rose-300' : 'bg-rose-100 text-rose-800'
- }`}>
- {diff > 0 ? `+${formatHu(diff)}${unit}` : `${formatHu(diff)}${unit}`}
- </span>
- );
- };
+ const currentSemCode = selectedSemester || semesters[0] || (subjects[0]?.semester ?? '');
+ const semStats = computeAcademicSemesterAnalytics(currentSemCode);
 
  return (
  <div
@@ -10199,9 +10158,11 @@ export default function App() {
  <AcademicStatsIcon className="w-5 h-5" />
  </div>
  <div className="min-w-0">
- <h2 className="font-extrabold text-sm sm:text-base leading-tight">Tanulmányi statisztika</h2>
+ <h2 className="font-extrabold text-sm sm:text-base leading-tight">
+ Statisztika — {formatSemesterLabel(currentSemCode)}
+ </h2>
  <p className="text-[11px] text-indigo-300 truncate">
- Jelenlét-eloszlás, ZH-teljesítések, legjobb & legrosszabb ZH • Félévek összehasonlítása
+ Jelenlét-eloszlás, ZH-teljesítések, legjobb &amp; legrosszabb ZH ebben a félévben
  </p>
  </div>
  </div>
@@ -10214,124 +10175,51 @@ export default function App() {
  </button>
  </div>
 
- {/* FÉLÉV ÉS ÖSSZEHASONLÍTÓ FÉLÉV VÁLASZTÓ */}
- <div className={`px-4 sm:px-6 py-3 border-b shrink-0 ${
- darkMode ? 'bg-slate-900/90 border-slate-800' : 'bg-indigo-50/70 border-slate-200'
- }`}>
- <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
- <div>
- <label className={`block text-[10px] font-extrabold uppercase tracking-wider mb-1 ${textMuted}`}>
- Vizsgált félév
- </label>
- <select
- value={effectivePrimarySem}
- onChange={(e) => {
- const nextPrimary = e.target.value;
- setStatsPrimarySemester(nextPrimary);
- if (statsCompareSemester === nextPrimary) {
- setStatsCompareSemester('');
- }
- }}
- className={`w-full border rounded-xl px-3 py-2 text-xs sm:text-sm font-bold focus:outline-none ${inputStyle}`}
- >
- {semesters.map(sem => (
- <option key={sem} value={sem}>
- {formatSemesterLabel(sem)}{isCurrentSemester(sem) ? ' • Aktuális' : ''}
- </option>
- ))}
- </select>
- </div>
-
- <div>
- <label className={`block text-[10px] font-extrabold uppercase tracking-wider mb-1 ${textMuted}`}>
- Összehasonlítás ezzel a félévvel (opcionális)
- </label>
- <select
- value={statsCompareSemester}
- onChange={(e) => setStatsCompareSemester(e.target.value)}
- className={`w-full border rounded-xl px-3 py-2 text-xs sm:text-sm font-bold focus:outline-none ${inputStyle}`}
- >
- <option value="">Nincs összehasonlítás (csak ez a félév)</option>
- {semesters
- .filter(sem => sem !== effectivePrimarySem)
- .map(sem => (
- <option key={sem} value={sem}>
- {formatSemesterLabel(sem)}{isCurrentSemester(sem) ? ' • Aktuális' : ''}
- </option>
- ))}
- </select>
- </div>
- </div>
- </div>
-
  <div className="p-4 sm:p-6 overflow-y-auto overscroll-contain space-y-5 flex-1 min-h-0">
- {!primaryStats ? (
- <p className={`text-sm text-center py-6 ${textMuted}`}>Nincs elérhető féléves adat.</p>
+ {!semStats ? (
+ <p className={`text-sm text-center py-6 ${textMuted}`}>
+ Nincs elérhető adat ebben a félévben.
+ </p>
  ) : (
  <>
  {/* 1. ZH TELJESÍTÉSEK & ÖSSZESÍTETT JELENLÉT */}
  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
  <div className={`p-3.5 rounded-2xl border space-y-1.5 ${bgSubCard}`}>
- <div className="flex items-center justify-between gap-1">
- <span className={`text-[11px] font-extrabold uppercase ${textMuted}`}>ZH teljesítések</span>
- {compareStats && renderDeltaBadge(primaryStats.avgZhPct, compareStats.avgZhPct, '%')}
- </div>
+ <span className={`text-[11px] font-extrabold uppercase block ${textMuted}`}>
+ ZH teljesítések
+ </span>
  <p className={`text-xl sm:text-2xl font-extrabold ${textStrong}`}>
- {primaryStats.completedZhCount} / {primaryStats.totalZhSlots}{' '}
+ {semStats.completedZhCount} / {semStats.totalZhSlots}{' '}
  <span className={`text-xs font-semibold ${textMuted}`}>rögzítve</span>
  </p>
  <p className="text-xs font-semibold text-emerald-500">
- Sikeres (≥50%): {primaryStats.passedZhCount} db
- {primaryStats.avgZhPct !== null && ` • Átlag: ${formatHu(primaryStats.avgZhPct)}%`}
+ Sikeres (≥50%): {semStats.passedZhCount} db
+ {semStats.avgZhPct !== null && ` • Átlag: ${formatHu(semStats.avgZhPct)}%`}
  </p>
- {compareStats && (
- <p className={`text-[11px] pt-1 border-t ${darkMode ? 'border-slate-700/80' : 'border-slate-200'} ${textMuted}`}>
- {formatSemesterLabel(compareStats.semName)}: {compareStats.completedZhCount}/{compareStats.totalZhSlots} ZH
- {compareStats.avgZhPct !== null ? ` (${formatHu(compareStats.avgZhPct)}%)` : ''}
- </p>
- )}
  </div>
 
  <div className={`p-3.5 rounded-2xl border space-y-1.5 ${bgSubCard}`}>
- <div className="flex items-center justify-between gap-1">
- <span className={`text-[11px] font-extrabold uppercase ${textMuted}`}>Gyakorlati részvétel</span>
- {compareStats && renderDeltaBadge(primaryStats.practiceOverallPct, compareStats.practiceOverallPct, '%')}
- </div>
+ <span className={`text-[11px] font-extrabold uppercase block ${textMuted}`}>
+ Gyakorlati részvétel
+ </span>
  <p className={`text-xl sm:text-2xl font-extrabold ${textStrong}`}>
- {primaryStats.practiceOverallPct !== null ? `${primaryStats.practiceOverallPct}%` : '—'}
+ {semStats.practiceOverallPct !== null ? `${semStats.practiceOverallPct}%` : '—'}
  </p>
  <p className={`text-xs ${textMuted}`}>
- Összesen: <strong className={textStrong}>{primaryStats.totalPracticePresent}</strong> / {primaryStats.totalPracticeClasses} alkalom
+ Összesen: <strong className={textStrong}>{semStats.totalPracticePresent}</strong> / {semStats.totalPracticeClasses} alkalom
  </p>
- {compareStats && (
- <p className={`text-[11px] pt-1 border-t ${darkMode ? 'border-slate-700/80' : 'border-slate-200'} ${textMuted}`}>
- {formatSemesterLabel(compareStats.semName)}:{' '}
- {compareStats.practiceOverallPct !== null
- ? `${compareStats.practiceOverallPct}% (${compareStats.totalPracticePresent}/${compareStats.totalPracticeClasses})`
- : 'nincs adat'}
- </p>
- )}
  </div>
 
  <div className={`p-3.5 rounded-2xl border space-y-1.5 ${bgSubCard}`}>
- <div className="flex items-center justify-between gap-1">
- <span className={`text-[11px] font-extrabold uppercase ${textMuted}`}>Előadás részvétel</span>
- {compareStats && renderDeltaBadge(primaryStats.lectureOverallPct, compareStats.lectureOverallPct, '%')}
- </div>
+ <span className={`text-[11px] font-extrabold uppercase block ${textMuted}`}>
+ Előadás részvétel
+ </span>
  <p className={`text-xl sm:text-2xl font-extrabold ${textStrong}`}>
- {primaryStats.lectureOverallPct !== null ? `${primaryStats.lectureOverallPct}%` : '—'}
+ {semStats.lectureOverallPct !== null ? `${semStats.lectureOverallPct}%` : '—'}
  </p>
  <p className={`text-xs ${textMuted}`}>
- Összesen: <strong className={textStrong}>{primaryStats.totalLecturePresent}</strong> / {primaryStats.totalLectureClasses} alkalom
+ Összesen: <strong className={textStrong}>{semStats.totalLecturePresent}</strong> / {semStats.totalLectureClasses} alkalom
  </p>
- {compareStats && (
- <p className={`text-[11px] pt-1 border-t ${darkMode ? 'border-slate-700/80' : 'border-slate-200'} ${textMuted}`}>
- {formatSemesterLabel(compareStats.semName)}:{' '}
- {compareStats.lectureOverallPct !== null
- ? `${compareStats.lectureOverallPct}% (${compareStats.totalLecturePresent}/${compareStats.totalLectureClasses})`
- : 'nincs adat'}
- </p>
- )}
  </div>
  </div>
 
@@ -10342,42 +10230,25 @@ export default function App() {
  ? 'bg-rose-950/25 border-rose-500/45'
  : 'bg-rose-50/80 border-rose-300'
  }`}>
- <div className="flex items-center justify-between gap-2">
- <span className="text-[11px] font-extrabold uppercase tracking-wide text-rose-500">
+ <span className="text-[11px] font-extrabold uppercase tracking-wide text-rose-500 block">
  Legrosszabb ZH
  </span>
- {compareStats && primaryStats.worstZh?.pct != null && compareStats.worstZh?.pct != null &&
- renderDeltaBadge(primaryStats.worstZh.pct, compareStats.worstZh.pct, '%')}
- </div>
- {primaryStats.worstZh ? (
+ {semStats.worstZh ? (
  <>
  <p className={`text-2xl font-extrabold ${textStrong}`}>
- {primaryStats.worstZh.pct !== null ? `${formatHu(primaryStats.worstZh.pct)}%` : `${formatHu(primaryStats.worstZh.achieved)} p`}
- {primaryStats.worstZh.max > 0 && (
+ {semStats.worstZh.pct !== null ? `${formatHu(semStats.worstZh.pct)}%` : `${formatHu(semStats.worstZh.achieved)} p`}
+ {semStats.worstZh.max > 0 && (
  <span className={`text-xs font-semibold ml-1.5 ${textMuted}`}>
- ({formatHu(primaryStats.worstZh.achieved)} / {formatHu(primaryStats.worstZh.max)} p)
+ ({formatHu(semStats.worstZh.achieved)} / {formatHu(semStats.worstZh.max)} p)
  </span>
  )}
  </p>
  <p className={`text-xs font-bold ${textStrong}`}>
- {primaryStats.worstZh.subjectName} — <span className="text-rose-500">{primaryStats.worstZh.zhTitle}</span>
+ {semStats.worstZh.subjectName} — <span className="text-rose-500">{semStats.worstZh.zhTitle}</span>
  </p>
  </>
  ) : (
  <p className={`text-xs italic ${textMuted}`}>Még nincs rögzített ZH eredmény ebben a félévben.</p>
- )}
- {compareStats && (
- <div className={`pt-2 border-t text-[11px] ${darkMode ? 'border-rose-500/25 text-slate-300' : 'border-rose-200 text-slate-700'}`}>
- <span className="font-semibold">{formatSemesterLabel(compareStats.semName)}: </span>
- {compareStats.worstZh ? (
- <strong>
- {compareStats.worstZh.pct !== null ? `${formatHu(compareStats.worstZh.pct)}%` : `${formatHu(compareStats.worstZh.achieved)} p`}{' '}
- ({compareStats.worstZh.subjectName} – {compareStats.worstZh.zhTitle})
- </strong>
- ) : (
- <span>nincs rögzített ZH</span>
- )}
- </div>
  )}
  </div>
 
@@ -10386,42 +10257,25 @@ export default function App() {
  ? 'bg-emerald-950/25 border-emerald-500/45'
  : 'bg-emerald-50/80 border-emerald-300'
  }`}>
- <div className="flex items-center justify-between gap-2">
- <span className="text-[11px] font-extrabold uppercase tracking-wide text-emerald-500">
+ <span className="text-[11px] font-extrabold uppercase tracking-wide text-emerald-500 block">
  Legjobb ZH
  </span>
- {compareStats && primaryStats.bestZh?.pct != null && compareStats.bestZh?.pct != null &&
- renderDeltaBadge(primaryStats.bestZh.pct, compareStats.bestZh.pct, '%')}
- </div>
- {primaryStats.bestZh ? (
+ {semStats.bestZh ? (
  <>
  <p className={`text-2xl font-extrabold ${textStrong}`}>
- {primaryStats.bestZh.pct !== null ? `${formatHu(primaryStats.bestZh.pct)}%` : `${formatHu(primaryStats.bestZh.achieved)} p`}
- {primaryStats.bestZh.max > 0 && (
+ {semStats.bestZh.pct !== null ? `${formatHu(semStats.bestZh.pct)}%` : `${formatHu(semStats.bestZh.achieved)} p`}
+ {semStats.bestZh.max > 0 && (
  <span className={`text-xs font-semibold ml-1.5 ${textMuted}`}>
- ({formatHu(primaryStats.bestZh.achieved)} / {formatHu(primaryStats.bestZh.max)} p)
+ ({formatHu(semStats.bestZh.achieved)} / {formatHu(semStats.bestZh.max)} p)
  </span>
  )}
  </p>
  <p className={`text-xs font-bold ${textStrong}`}>
- {primaryStats.bestZh.subjectName} — <span className="text-emerald-500">{primaryStats.bestZh.zhTitle}</span>
+ {semStats.bestZh.subjectName} — <span className="text-emerald-500">{semStats.bestZh.zhTitle}</span>
  </p>
  </>
  ) : (
  <p className={`text-xs italic ${textMuted}`}>Még nincs rögzített ZH eredmény ebben a félévben.</p>
- )}
- {compareStats && (
- <div className={`pt-2 border-t text-[11px] ${darkMode ? 'border-emerald-500/25 text-slate-300' : 'border-emerald-200 text-slate-700'}`}>
- <span className="font-semibold">{formatSemesterLabel(compareStats.semName)}: </span>
- {compareStats.bestZh ? (
- <strong>
- {compareStats.bestZh.pct !== null ? `${formatHu(compareStats.bestZh.pct)}%` : `${formatHu(compareStats.bestZh.achieved)} p`}{' '}
- ({compareStats.bestZh.subjectName} – {compareStats.bestZh.zhTitle})
- </strong>
- ) : (
- <span>nincs rögzített ZH</span>
- )}
- </div>
  )}
  </div>
  </div>
@@ -10431,10 +10285,10 @@ export default function App() {
  <div className="flex flex-wrap items-center justify-between gap-2">
  <div>
  <h3 className={`text-sm font-extrabold ${textStrong}`}>
- Tárgyankénti jelenlét eloszlása (Gyakorlatok & Előadások)
+ Tárgyankénti jelenlét eloszlása (Gyakorlatok &amp; Előadások)
  </h3>
  <p className={`text-[11px] ${textMuted}`}>
- {formatSemesterLabel(primaryStats.semName)} tantárgyai szerint
+ {formatSemesterLabel(semStats.semName)} tantárgyai szerint
  </p>
  </div>
  <div className="flex items-center gap-3 text-[11px] font-bold">
@@ -10447,13 +10301,13 @@ export default function App() {
  </div>
  </div>
 
- {primaryStats.subjectAttendanceRows.length === 0 ? (
+ {semStats.subjectAttendanceRows.length === 0 ? (
  <p className={`text-xs italic py-3 text-center ${textMuted}`}>
  Ebben a félévben nincs jelenléti bontással rendelkező tárgy.
  </p>
  ) : (
  <div className="space-y-2.5">
- {primaryStats.subjectAttendanceRows.map(row => (
+ {semStats.subjectAttendanceRows.map(row => (
  <div
  key={row.id}
  className={`p-3 rounded-xl border space-y-2 ${bgCard}`}
@@ -10517,7 +10371,7 @@ export default function App() {
  darkMode ? 'border-slate-800 bg-slate-900/70' : 'border-slate-200 bg-slate-50'
  }`}>
  <span className={`text-[11px] ${textMuted}`}>
- Tipp: Válassz ki egy másik félévet is a fenti összehasonlító mezőben!
+ {formatSemesterLabel(currentSemCode)} összesített mutatói
  </span>
  <button
  type="button"

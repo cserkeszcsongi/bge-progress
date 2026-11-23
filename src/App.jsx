@@ -13,7 +13,8 @@ import {
  Menu, Palette, ChevronDown, SlidersHorizontal, RefreshCw, Lightbulb, CheckCircle2,
  LayoutList, ArrowUpDown, GripVertical, ArrowUp, ArrowDown, Calculator,
  BarChart3, Users, FastForward, FileSpreadsheet, HelpCircle, Upload,
- Download, Smartphone, Share, ShieldCheck, Lock, Database, Bell, Wrench
+ Download, Smartphone, Share, ShieldCheck, Lock, Database, Bell, Wrench,
+ PieChart, TrendingUp, Grid
 } from 'lucide-react';
 import { auth, googleProvider, db } from './firebase';
 
@@ -44,7 +45,7 @@ const NOTICEBOARD_CACHE_KEY = 'bge_noticeboard_cache_v1';
 const NOTICEBOARD_CACHE_TTL_MS = 10 * 60 * 1000;
 const SEEN_NOTICES_STORAGE_KEY = 'bge_seen_notice_ids_v1';
 const UPDATE_CHECK_THROTTLE_MS = 30 * 1000;
-const GDPR_POLICY_VERSION = 'v2.2.4';
+const GDPR_POLICY_VERSION = 'v2.3.0';
 
 const BGE_MAJORS = [
  { id: 'emberi_eroforrasok', label: 'Emberi erőforrások', isGazdinfo: false },
@@ -624,6 +625,8 @@ function buildTemplatesForMajor(majorId) {
  minAttendanceAlairas,
  minAttendanceMegajanlott,
  attendanceSessions: [],
+ totalLectures: cred > 0 ? 12 : 0,
+ lectureAttendanceSessions: [],
  customBuckets: [],
  assessments
  });
@@ -634,6 +637,16 @@ function buildTemplatesForMajor(majorId) {
 }
 
 const APP_RELEASES = [
+ {
+ version: 'v2.3.0',
+ date: '2026. 11. 23.',
+ changes: [
+ 'Előadás jelenlét adminisztráció minden tárgynál: a Jelenlét fülön külön-külön felületen követhető a gyakorlati jelenlét és az előadásokon való részvétel (az előadásoknál nincs kötelező minimum, így nem veszélyezteti az aláírást)',
+ 'Új lebegő „Gyűjtő” menügomb a féléves dashboard jobb alsó sarkában: megnyitásakor előugrik a Statisztika, a JOKER ZH, az Átlagszámoló és az Új tantárgy (+) gomb',
+ 'Új Tanulmányi Statisztika ablak (saját ikonnal, az App statisztikától elkülönítve): tárgyankénti előadás/gyakorlat jelenlét-eloszlás, ZH-teljesítések áttekintése, legrosszabb és legjobb ZH kiemelése, valamint közvetlen összehasonlítás bármely másik félévvel',
+ 'Frissített Adatvédelmi tájékoztató (GDPR v2.3.0) és 9 lépéses interaktív Bemutató az új funkciókkal'
+ ]
+ },
  {
  version: 'v2.2.4',
  date: '2026. 11. 20.',
@@ -1142,31 +1155,31 @@ const TUTORIAL_SLIDES = [
  },
  {
  id: 'joker_simulator',
- shortLabel: '7. Joker & Szim.',
- badge: '7 / 9 • JOKER ZH, Szimulátor & Átlagszámoló',
- title: 'ZH-javítás Jokerrel, Szimulátor mód és Átlagszámoló',
+ shortLabel: '7. Gyűjtő & Stat.',
+ badge: '7 / 9 • Gyűjtő menü, Statisztika, Joker & Átlagszámoló',
+ title: 'Lebegő Gyűjtő menü, Tanulmányi Statisztika, Joker ZH és Átlagszámoló',
  description:
- 'Három különleges tervezőeszköz segít a félév végi hajrában, hogy pontosan lásd a lehetőségeidet.',
+ 'A féléves dashboard jobb alsó sarkában található „Gyűjtő” gomb egyetlen érintésre előhívja az összes tervező- és elemzőeszközt.',
  steps: [
- 'JOKER ZH (lila lebegő gomb): válassz ki egy tárgyat és egy ZH-t, írd be az újraírt pontszámot — az app megőrzi az eredeti eredményt is.',
- 'Szimulátor mód (Menü -> Szimulátor mód): bekapcsolás után tét nélkül megadhatsz tervezett pontszámokat a ZH-khoz, vagy a tárgyak Beállításaiban közvetlenül kiválaszthatsz egy végleges jegyet is; a felső sárga sáv „Visszaállítás” gombja mindent visszaállít és kikapcsolja a módot.',
- 'Átlagszámoló (cián lebegő gomb a + felett): egy külön menüben a félév tárgyaihoz színes 1–5-ös jegygombokkal élőben számolhatod a súlyozott átlagot és a KKI-t.'
+ 'Gyűjtő menügomb (jobb alsó sarok): megnyomásával előugrik a lebegő eszköztár az Új tantárgy (+), az Átlagszámoló, a JOKER ZH és az új Statisztika gombbal.',
+ 'Statisztika (táblázatos/kördiagramos elemző): mutatja a tárgyankénti jelenléti eloszlást (gyakorlatokon és előadásokon), a ZH-teljesítéseket, valamint a félév legrosszabb és legjobb ZH-ját — mindezt összevetve a korábbi vagy későbbi félévekkel.',
+ 'JOKER ZH és Átlagszámoló: a lebegő sávból azonnal kijelölheted az újraírandó ZH-t, vagy 1–5-ös jegygombokkal élőben szimulálhatod a súlyozott átlagot és a KKI-t.'
  ],
- tip: 'Vizsgaidőszak előtt a Szimulátor móddal és az Átlagszámolóval másodpercek alatt kiszámolhatod, milyen jegyek kellenek az ösztöndíjas szinthez.'
+ tip: 'A Statisztika ablak tetején bármelyik két félévedet kiválaszthatod, így egyből látod a fejlődésedet ZH-k és óralátogatás terén is.'
  },
  {
  id: 'failed_attendance_pwa',
  shortLabel: '8. Jelenlét',
- badge: '8 / 9 • Gyakorlati jelenlét & „Megbuktam☹️”',
- title: 'Órai jelenlétek követése és bukott tárgy kezelése',
+ badge: '8 / 9 • Gyakorlati & Előadás jelenlét, „Megbuktam☹️”',
+ title: 'Gyakorlati és előadás jelenlétek külön követése',
  description:
- 'A tantárgy részletei ablak második fülén a gyakorlati órákat vezetheted, az ablak alján pedig a nem sikerült tárgyakat jelölheted.',
+ 'A tantárgy részletei ablak „Jelenlét” fülén külön-külön felületen adminisztrálhatod a gyakorlatokat és az előadásokat is.',
  steps: [
- 'A „Jelenlét” fülön minden alkalomnál rögzítheted a dátumot, és egyetlen gombnyomással beállíthatod, hogy Jelen voltál vagy Hiányoztál.',
- 'Ha a hiányzásaid száma meghaladja a megengedettet, a kártyán piros figyelmeztetés jelenik meg, és a rendszer jelzi, hogy az aláírás veszélybe került.',
+ 'A „Jelenlét” fülön válthatsz a Gyakorlatok és az Előadások külön felülete között: minden alkalomnál rögzítheted a dátumot, és egy gombnyomással jelölheted a Jelenlétet vagy Hiányzást.',
+ 'Gyakorlatoknál a rendszer figyeli az aláíráshoz és megajánlott jegyhez szükséges minimumot, míg az előadásoknál nincs kötelező minimum (nem veszélyezteti az aláírást).',
  'Ha egy tárgyból nem sikerült a vizsga vagy az aláírás, nyomd meg az ablak alján a „Megbuktam☹️” gombot: a kártya halvány piros lesz, és nem rontja a súlyozott átlagodat.'
  ],
- tip: 'A „Megbuktam☹️” gomb újra megnyomásával a jelölés bármikor visszavonható.'
+ tip: 'Az előadások alkalomszámát bármikor beállíthatod a tantárgy Beállítások ablakában (alapértelmezetten 12 alkalom).'
  },
  {
  id: 'menu_pwa',
@@ -1705,28 +1718,28 @@ function TutorialSlidePreview({ slideId, darkMode }) {
  return (
  <div className={`rounded-2xl border p-3.5 sm:p-4 shadow-md space-y-3 ${cardBg}`}>
  <div className="flex flex-wrap items-center gap-2">
+ <span className="px-3 py-1 rounded-full text-xs font-extrabold bg-amber-400 text-slate-950 inline-flex items-center gap-1.5 shadow-md">
+ <Grid className="w-3.5 h-3.5" /> Gyűjtő
+ </span>
+ <span className="px-3 py-1 rounded-full text-xs font-bold bg-indigo-600 text-white inline-flex items-center gap-1.5 shadow-md">
+ <PieChart className="w-3.5 h-3.5" /> Statisztika
+ </span>
  <span className="px-3 py-1 rounded-full text-xs font-bold bg-violet-600 text-white inline-flex items-center gap-1.5 shadow-md">
  <JokerIcon className="w-3.5 h-3.5" /> JOKER ZH
  </span>
  <span className="px-3 py-1 rounded-full text-xs font-bold bg-cyan-500 text-slate-950 inline-flex items-center gap-1.5 shadow-md">
  <Calculator className="w-3.5 h-3.5" /> Átlagszámoló
  </span>
- <span className="px-3 py-1 rounded-lg text-xs font-bold bg-amber-400 text-slate-950 inline-flex items-center gap-1.5">
- <FlaskConical className="w-3.5 h-3.5" /> Szimulátor: BE
- </span>
  </div>
- <div className={`p-3 rounded-xl border space-y-2 ${
- darkMode ? 'border-amber-400/50 bg-amber-400/10' : 'border-amber-300 bg-amber-50/70'
- }`}>
- <div className="flex items-center justify-between">
- <span className={`text-xs font-bold ${strong}`}>Szimulált jegy (Beállítások)</span>
- <span className="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-emerald-500 text-white">
- Jegy: 5 (Szimulált)
- </span>
+ <div className="grid grid-cols-2 gap-2">
+ <div className={`p-2.5 rounded-xl border ${subBg}`}>
+ <span className="text-[10px] font-bold text-emerald-500 uppercase block">Legjobb ZH</span>
+ <strong className={`text-xs font-extrabold ${strong}`}>93,3% (28 / 30 p)</strong>
  </div>
- <p className={`text-[11px] ${muted}`}>
- A felső sárga sáv „Visszaállítás” gombja minden szimulált pontot és jegyet töröl, és kikapcsolja a szimulátor módot.
- </p>
+ <div className={`p-2.5 rounded-xl border ${subBg}`}>
+ <span className="text-[10px] font-bold text-rose-500 uppercase block">Legrosszabb ZH</span>
+ <strong className={`text-xs font-extrabold ${strong}`}>53,3% (16 / 30 p)</strong>
+ </div>
  </div>
  </div>
  );
@@ -1735,21 +1748,18 @@ function TutorialSlidePreview({ slideId, darkMode }) {
  if (slideId === 'failed_attendance_pwa') {
  return (
  <div className={`rounded-2xl border p-3.5 sm:p-4 shadow-md space-y-2.5 ${cardBg}`}>
- <div className={`p-2.5 rounded-xl border flex items-center justify-between gap-2 ${
- darkMode ? 'bg-rose-950/35 border-rose-500/50' : 'bg-rose-50 border-rose-300'
- }`}>
- <div>
- <span className="text-[10px] font-bold text-rose-500">5 kredit • Nem számít az átlagba</span>
- <p className={`text-xs font-bold ${strong}`}>Analízis I.</p>
+ <div className="grid grid-cols-2 gap-1.5">
+ <div className="py-1.5 px-2.5 rounded-lg text-xs font-extrabold bg-amber-400 text-slate-950 text-center">
+ Gyakorlatok (9 / 12)
  </div>
- <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-500/20 text-rose-500 border border-rose-500/40">
- Megbuktam☹️
- </span>
+ <div className="py-1.5 px-2.5 rounded-lg text-xs font-extrabold bg-sky-500/20 text-sky-400 border border-sky-500/40 text-center">
+ Előadások (10 / 12)
+ </div>
  </div>
  <div className={`p-2.5 rounded-xl border flex flex-wrap items-center justify-between gap-2 ${subBg}`}>
  <div>
- <span className={`text-xs font-bold ${strong}`}>Gyakorlati jelenlét</span>
- <span className={`text-[11px] ml-2 ${muted}`}>Jelen: 9 / 12</span>
+ <span className={`text-xs font-bold ${strong}`}>Előadás jelenlét</span>
+ <span className={`text-[11px] ml-2 text-sky-500 font-semibold`}>Nincs kötelező minimum</span>
  </div>
  <div className="flex items-center gap-1.5">
  <span className="px-2.5 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1 bg-emerald-500 text-white">
@@ -2814,15 +2824,41 @@ export default function App() {
  const [isAvgCalcOpen, setIsAvgCalcOpen] = useState(false);
  const [avgCalcGrades, setAvgCalcGrades] = useState({});
 
+ const [isCollectorMenuOpen, setIsCollectorMenuOpen] = useState(false);
+ const [isAcademicStatsOpen, setIsAcademicStatsOpen] = useState(false);
+ const [statsPrimarySemester, setStatsPrimarySemester] = useState('');
+ const [statsCompareSemester, setStatsCompareSemester] = useState('');
+
  const [activeSubjectId, setActiveSubjectId] = useState(null);
  const [detailTab, setDetailTab] = useState('points');
+ const [attendanceSubTab, setAttendanceSubTab] = useState('practice');
  const detailModalBodyRef = useRef(null);
 
  useEffect(() => {
  if (detailModalBodyRef.current) {
  detailModalBodyRef.current.scrollTop = 0;
  }
- }, [detailTab, activeSubjectId]);
+ }, [detailTab, attendanceSubTab, activeSubjectId]);
+
+ useEffect(() => {
+ if (!isCollectorMenuOpen) return;
+ const handleOutsideCollectorClick = (event) => {
+ if (
+ event.target &&
+ typeof event.target.closest === 'function' &&
+ event.target.closest('[data-collector-menu="true"]')
+ ) {
+ return;
+ }
+ setIsCollectorMenuOpen(false);
+ };
+ document.addEventListener('mousedown', handleOutsideCollectorClick);
+ document.addEventListener('touchstart', handleOutsideCollectorClick);
+ return () => {
+ document.removeEventListener('mousedown', handleOutsideCollectorClick);
+ document.removeEventListener('touchstart', handleOutsideCollectorClick);
+ };
+ }, [isCollectorMenuOpen]);
  const [editingSubject, setEditingSubject] = useState(null);
  const [isSubjectModalOpen, setIsSubjectModalOpen] = useState(false);
  const [selectedSubjectMajorId, setSelectedSubjectMajorId] = useState(null);
@@ -3978,6 +4014,14 @@ export default function App() {
  status: null
  }));
 
+ const totalLectures = Math.max(0, Number(tpl.totalLectures ?? 12) || 0);
+ const newLectureSessions = Array.from({ length: totalLectures }, (_, lIdx) => ({
+ id: `lec_${lIdx + 1}_${now + idx}_${rand()}`,
+ index: lIdx + 1,
+ date: tpl.lectureAttendanceSessions?.[lIdx]?.date || '',
+ status: null
+ }));
+
  const payload = {
  id: newSubjId,
  semester: currentSem,
@@ -3996,6 +4040,8 @@ export default function App() {
  minAttendanceAlairas: Number(tpl.minAttendanceAlairas) || 0,
  minAttendanceMegajanlott: Number(tpl.minAttendanceMegajanlott) || 0,
  attendanceSessions: newSessions,
+ totalLectures,
+ lectureAttendanceSessions: newLectureSessions,
  manualGrade: '',
  customBuckets: newBuckets,
  assessments: newAssessments
@@ -4674,6 +4720,14 @@ export default function App() {
  status: null
  }));
 
+ const totalLectures = Math.max(0, Number(subj.totalLectures ?? (subj.lectureAttendanceSessions || []).length) || 0);
+ const sanitizedLectureSessions = Array.from({ length: totalLectures }, (_, idx) => ({
+ id: `lec_${idx + 1}`,
+ index: idx + 1,
+ date: subj.lectureAttendanceSessions?.[idx]?.date || '',
+ status: null
+ }));
+
  const rawSem = subj.semester || '';
  const ord = semesterOrdinalMap[rawSem] ?? parseExplicitSemesterOrdinal(rawSem);
 
@@ -4694,6 +4748,8 @@ export default function App() {
  minAttendanceAlairas: Number(subj.minAttendanceAlairas) || 0,
  minAttendanceMegajanlott: Number(subj.minAttendanceMegajanlott) || 0,
  attendanceSessions: sanitizedSessions,
+ totalLectures,
+ lectureAttendanceSessions: sanitizedLectureSessions,
  customBuckets: sanitizedBuckets,
  assessments: sanitizedAssessments,
  updatedAt: new Date().toISOString()
@@ -4777,6 +4833,14 @@ export default function App() {
  status: null
  }));
 
+ const totalLectures = Math.max(0, Number(tpl.totalLectures ?? 12) || 0);
+ const newLectureSessions = Array.from({ length: totalLectures }, (_, idx) => ({
+ id: `lec_${idx + 1}_${now}_${rand()}`,
+ index: idx + 1,
+ date: tpl.lectureAttendanceSessions?.[idx]?.date || '',
+ status: null
+ }));
+
  const payload = {
  id: newSubjId,
  semester: targetSemester,
@@ -4795,6 +4859,8 @@ export default function App() {
  minAttendanceAlairas: Number(tpl.minAttendanceAlairas) || 0,
  minAttendanceMegajanlott: Number(tpl.minAttendanceMegajanlott) || 0,
  attendanceSessions: newSessions,
+ totalLectures,
+ lectureAttendanceSessions: newLectureSessions,
  manualGrade: '',
  customBuckets: newBuckets,
  assessments: newAssessments
@@ -4899,6 +4965,11 @@ export default function App() {
  const absentCount = sessions.filter(s => s.status === 'absent').length;
  const minAttAlairas = isExamCourse ? 0 : (Number(subj.minAttendanceAlairas) || 0);
  const minAttMegajanlott = isExamCourse ? 0 : (Number(subj.minAttendanceMegajanlott) || 0);
+
+ const lectureSessions = subj.lectureAttendanceSessions || [];
+ const totalLectures = isExamCourse ? 0 : (Number(subj.totalLectures ?? lectureSessions.length) || 0);
+ const lecturePresentCount = lectureSessions.filter(s => s.status === 'present').length;
+ const lectureAbsentCount = lectureSessions.filter(s => s.status === 'absent').length;
 
  const hasRecordedAttendance = sessions.some(s => s.status !== null);
  const maxAllowedAbsencesAlairas = totalClasses - minAttAlairas;
@@ -5095,6 +5166,7 @@ export default function App() {
  regularOsszMax,
  osszElert, osszMax,
  totalClasses, presentCount, absentCount,
+ totalLectures, lecturePresentCount, lectureAbsentCount,
  minAttAlairas, minAttMegajanlott,
  attendanceAlairasPossible, attendanceAlairasMet,
  alairasTeljesul: isGradeOnlyCard ? true : alairasTeljesul,
@@ -5614,6 +5686,8 @@ export default function App() {
  minAttendanceAlairas: '',
  minAttendanceMegajanlott: '',
  attendanceSessions: [],
+ totalLectures: '',
+ lectureAttendanceSessions: [],
  manualGrade: '',
  customBuckets: [],
  assessments: []
@@ -5640,7 +5714,8 @@ export default function App() {
  credits: rawCredits,
  totalClasses: 6,
  minAttendanceAlairas: 3,
- minAttendanceMegajanlott: 4
+ minAttendanceMegajanlott: 4,
+ totalLectures: 12
  };
  }
  if (trimmed !== '' && num === 6) {
@@ -5649,7 +5724,8 @@ export default function App() {
  credits: rawCredits,
  totalClasses: 12,
  minAttendanceAlairas: 6,
- minAttendanceMegajanlott: 9
+ minAttendanceMegajanlott: 9,
+ totalLectures: 12
  };
  }
  return {
@@ -5657,7 +5733,8 @@ export default function App() {
  credits: rawCredits,
  totalClasses: '',
  minAttendanceAlairas: '',
- minAttendanceMegajanlott: ''
+ minAttendanceMegajanlott: '',
+ totalLectures: ''
  };
  });
  };
@@ -5851,6 +5928,8 @@ export default function App() {
  const disablePointCalc = Boolean(editingSubject.disablePointCalc);
  const totalClasses = isExam ? 0 : Math.max(0, Number(editingSubject.totalClasses) || 0);
  const sessions = isExam ? [] : createDefaultSessions(totalClasses, editingSubject.attendanceSessions || []);
+ const totalLectures = isExam ? 0 : Math.max(0, Number(editingSubject.totalLectures) || 0);
+ const lectureSessions = isExam ? [] : createDefaultSessions(totalLectures, editingSubject.lectureAttendanceSessions || []);
  const targetSem = (editingSubject.semester || '').trim() || semesters[0] || getCurrentSemesterCode();
 
  let finalBuckets = editingSubject.customBuckets || [];
@@ -5891,6 +5970,8 @@ export default function App() {
  minAttendanceAlairas: isExam ? 0 : (Number(editingSubject.minAttendanceAlairas) || 0),
  minAttendanceMegajanlott: isExam ? 0 : (Number(editingSubject.minAttendanceMegajanlott) || 0),
  attendanceSessions: sessions,
+ totalLectures,
+ lectureAttendanceSessions: lectureSessions,
  manualGrade: editingSubject.manualGrade || '',
  customBuckets: finalBuckets,
  assessments: finalAssessments
@@ -5939,6 +6020,7 @@ export default function App() {
  semesterToDelete ||
  isCustomSortModalOpen ||
  isAvgCalcOpen ||
+ isAcademicStatsOpen ||
  isStatsModalOpen ||
  isInstallGuideOpen ||
  mustAcceptGdpr ||
@@ -5976,6 +6058,7 @@ export default function App() {
  if (isJokerModalOpen && !isSavingJoker) { setIsJokerModalOpen(false); return; }
  if (isCustomSortModalOpen) { setIsCustomSortModalOpen(false); return; }
  if (isAvgCalcOpen) { setIsAvgCalcOpen(false); return; }
+ if (isAcademicStatsOpen) { setIsAcademicStatsOpen(false); return; }
  if (isDegreeCreditsModalOpen) { setIsDegreeCreditsModalOpen(false); return; }
  if (isThresholdModalOpen) { setIsThresholdModalOpen(false); return; }
  if (isPastSemestersWizardOpen && !isSavingPastSemesters) { setIsPastSemestersWizardOpen(false); return; }
@@ -6033,6 +6116,11 @@ export default function App() {
  if (isAvgCalcOpen) {
  e.preventDefault();
  setIsAvgCalcOpen(false);
+ return;
+ }
+ if (isAcademicStatsOpen) {
+ e.preventDefault();
+ setIsAcademicStatsOpen(false);
  return;
  }
  if (activeNoticePopup) {
@@ -6276,6 +6364,141 @@ export default function App() {
  await updateDoc(doc(db, 'users', user.uid, 'subjects', activeSubject.id), {
  attendanceSessions: updated
  });
+ };
+
+ const handleUpdateLectureSession = async (sessionIdx, changes) => {
+ if (!activeSubject) return;
+ const baseLectureSessions = createDefaultSessions(
+ activeSubject.totalLectures ?? (activeSubject.lectureAttendanceSessions || []).length,
+ activeSubject.lectureAttendanceSessions || []
+ );
+ const updated = baseLectureSessions.map((s, idx) =>
+ idx === sessionIdx ? { ...s, ...changes } : s
+ );
+ await updateDoc(doc(db, 'users', user.uid, 'subjects', activeSubject.id), {
+ lectureAttendanceSessions: updated
+ });
+ };
+
+ const handleOpenAcademicStatsModal = () => {
+ const primary = selectedSemester || semesters[0] || '';
+ const otherSemesters = semesters.filter(s => s !== primary);
+ const defaultCompare = otherSemesters.length > 0 ? otherSemesters[otherSemesters.length - 1] : '';
+ setStatsPrimarySemester(primary);
+ setStatsCompareSemester(defaultCompare);
+ setIsAcademicStatsOpen(true);
+ };
+
+ const computeAcademicSemesterAnalytics = (semName) => {
+ if (!semName) return null;
+ const semSubjs = subjects.filter(s => s.semester === semName);
+ let totalPracticePresent = 0;
+ let totalPracticeClasses = 0;
+ let totalLecturePresent = 0;
+ let totalLectureClasses = 0;
+
+ const subjectAttendanceRows = [];
+ const scoredZhs = [];
+ let totalZhSlots = 0;
+ let passedZhCount = 0;
+ let zhTotalAchieved = 0;
+ let zhTotalMax = 0;
+
+ semSubjs.forEach(subj => {
+ const st = subjectStatsMap[subj.id] || calcStats(subj);
+ if (subj.courseKind !== 'exam' && !subj.disablePointCalc) {
+ totalPracticePresent += st.presentCount;
+ totalPracticeClasses += st.totalClasses;
+ totalLecturePresent += st.lecturePresentCount;
+ totalLectureClasses += st.totalLectures;
+
+ const pracPct = st.totalClasses > 0 ? Math.round((st.presentCount / st.totalClasses) * 100) : null;
+ const lecPct = st.totalLectures > 0 ? Math.round((st.lecturePresentCount / st.totalLectures) * 100) : null;
+
+ subjectAttendanceRows.push({
+ id: subj.id,
+ name: subj.name,
+ credits: subj.credits,
+ practicePresent: st.presentCount,
+ practiceAbsent: st.absentCount,
+ practiceTotal: st.totalClasses,
+ practicePct,
+ lecturePresent: st.lecturePresentCount,
+ lectureAbsent: st.lectureAbsentCount,
+ lectureTotal: st.totalLectures,
+ lecturePct
+ });
+
+ const zhs = (subj.assessments || []).filter(a => a.category === 'ZH');
+ zhs.forEach(zh => {
+ totalZhSlots++;
+ const eff = getEffectiveScore(zh);
+ const hasScore = eff !== null && eff !== undefined && eff !== '' && !isNaN(Number(eff));
+ if (hasScore) {
+ const bonusVal = (zh.bonusPoints !== null && zh.bonusPoints !== undefined && zh.bonusPoints !== '' && !isNaN(Number(zh.bonusPoints)))
+ ? Number(zh.bonusPoints)
+ : 0;
+ const achievedTotal = +(Number(eff) + bonusVal).toFixed(2);
+ const maxVal = (zh.max !== null && zh.max !== undefined && zh.max !== '' && Number(zh.max) > 0)
+ ? Number(zh.max)
+ : 0;
+ const pct = maxVal > 0 ? Number(((achievedTotal / maxVal) * 100).toFixed(1)) : null;
+
+ zhTotalAchieved += achievedTotal;
+ zhTotalMax += maxVal;
+ if (pct !== null && pct >= 50) {
+ passedZhCount++;
+ } else if (pct === null && achievedTotal > 0) {
+ passedZhCount++;
+ }
+
+ scoredZhs.push({
+ subjectId: subj.id,
+ subjectName: subj.name,
+ zhId: zh.id,
+ zhTitle: zh.title || 'ZH',
+ achieved: achievedTotal,
+ max: maxVal,
+ pct,
+ isJoker: Boolean(zh.isJokerRewritten)
+ });
+ }
+ });
+ }
+ });
+
+ const sortedByPerf = [...scoredZhs].sort((a, b) => {
+ const scoreA = a.pct !== null ? a.pct : a.achieved;
+ const scoreB = b.pct !== null ? b.pct : b.achieved;
+ if (scoreA !== scoreB) return scoreA - scoreB;
+ return a.achieved - b.achieved;
+ });
+
+ const worstZh = sortedByPerf.length > 0 ? sortedByPerf[0] : null;
+ const bestZh = sortedByPerf.length > 0 ? sortedByPerf[sortedByPerf.length - 1] : null;
+ const avgZhPct = zhTotalMax > 0 ? Number(((zhTotalAchieved / zhTotalMax) * 100).toFixed(1)) : null;
+ const practiceOverallPct = totalPracticeClasses > 0 ? Math.round((totalPracticePresent / totalPracticeClasses) * 100) : null;
+ const lectureOverallPct = totalLectureClasses > 0 ? Math.round((totalLecturePresent / totalLectureClasses) * 100) : null;
+
+ return {
+ semName,
+ subjectCount: semSubjs.length,
+ subjectAttendanceRows,
+ totalPracticePresent,
+ totalPracticeClasses,
+ practiceOverallPct,
+ totalLecturePresent,
+ totalLectureClasses,
+ lectureOverallPct,
+ totalZhSlots,
+ completedZhCount: scoredZhs.length,
+ passedZhCount,
+ zhTotalAchieved: +zhTotalAchieved.toFixed(2),
+ zhTotalMax: +zhTotalMax.toFixed(2),
+ avgZhPct,
+ worstZh,
+ bestZh
+ };
  };
 
  const handleReloadForUpdate = async () => {
@@ -8651,62 +8874,116 @@ export default function App() {
  {appFooter}
  </main>
 
- <div className="fixed bottom-5 right-5 sm:bottom-7 sm:right-7 z-30 flex flex-col items-end gap-3">
+ <div data-collector-menu="true" className="fixed bottom-5 right-5 sm:bottom-7 sm:right-7 z-30 flex flex-col items-end gap-3">
+ {isCollectorMenuOpen && (
+ <div className={`rounded-3xl border-2 p-2.5 sm:p-3 shadow-2xl backdrop-blur-md flex flex-col items-stretch gap-2 min-w-[215px] sm:min-w-[235px] transition-all ${
+ darkMode
+ ? 'bg-slate-900/95 border-amber-400/70 text-slate-100 shadow-black/70'
+ : 'bg-white/95 border-amber-400 text-slate-900 shadow-slate-900/20'
+ }`}>
  <button
  type="button"
- onClick={handleOpenJokerModal}
+ onClick={() => {
+ setIsCollectorMenuOpen(false);
+ handleOpenAcademicStatsModal();
+ }}
+ disabled={subjects.length === 0}
+ title="Tanulmányi statisztika: jelenlét-eloszlás, ZH-teljesítések, legjobb/legrosszabb ZH"
+ className="w-full px-3.5 py-2.5 rounded-2xl text-xs sm:text-sm font-extrabold bg-indigo-600 hover:bg-indigo-500 disabled:opacity-45 disabled:cursor-not-allowed text-white shadow-md flex items-center justify-between gap-2.5 transition cursor-pointer"
+ >
+ <span className="flex items-center gap-2">
+ <PieChart className="w-4 h-4 shrink-0" />
+ <span>Statisztika</span>
+ </span>
+ <TrendingUp className="w-3.5 h-3.5 opacity-80 shrink-0" />
+ </button>
+
+ <button
+ type="button"
+ onClick={() => {
+ setIsCollectorMenuOpen(false);
+ handleOpenJokerModal();
+ }}
  disabled={semesterSubjects.length === 0}
  title={
  pendingJokerInfo
- ? `Eredményre vár: ${pendingJokerInfo.subject.name} — ${pendingJokerInfo.assessment.title} (Kattints a pontszám megadásához!)`
+ ? `Eredményre vár: ${pendingJokerInfo.subject.name} — ${pendingJokerInfo.assessment.title}`
  : 'Tetszőleges tantárgy egyik ZH-jának javítása Joker ZH-val'
  }
- className={`px-3.5 py-2 rounded-full text-xs font-extrabold disabled:opacity-45 disabled:cursor-not-allowed text-white flex items-center gap-1.5 transition cursor-pointer ${
+ className={`w-full px-3.5 py-2.5 rounded-2xl text-xs sm:text-sm font-extrabold disabled:opacity-45 disabled:cursor-not-allowed text-white flex items-center justify-between gap-2 transition cursor-pointer ${
  pendingJokerInfo
- ? 'bg-gradient-to-r from-violet-600 via-fuchsia-600 to-amber-500 ring-2 ring-amber-300 shadow-[0_0_26px_rgba(251,191,36,0.88)] hover:shadow-[0_0_34px_rgba(251,191,36,1)]'
- : 'bg-violet-600 hover:bg-violet-500 shadow-[0_0_20px_rgba(124,58,237,0.75)] hover:shadow-[0_0_28px_rgba(124,58,237,0.95)]'
+ ? 'bg-gradient-to-r from-violet-600 via-fuchsia-600 to-amber-500 ring-2 ring-amber-300 shadow-md'
+ : 'bg-violet-600 hover:bg-violet-500 shadow-md'
  }`}
  >
+ <span className="flex items-center gap-2 min-w-0">
  <JokerIcon className="w-4 h-4 shrink-0" />
- {pendingJokerInfo ? (
- <span className="flex items-center gap-1.5 max-w-[205px] sm:max-w-[260px]">
- <span className="relative flex h-2.5 w-2.5 shrink-0">
- <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-200 opacity-85" />
- <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-300" />
- </span>
  <span className="truncate">
- JOKER: {pendingJokerInfo.subject.name} ({pendingJokerInfo.assessment.title})
+ {pendingJokerInfo ? `JOKER: ${pendingJokerInfo.assessment.title}` : 'JOKER ZH'}
  </span>
  </span>
- ) : (
- <>
- <span>JOKER ZH</span>
- {activeJokerInfo && (
- <span className="w-2 h-2 rounded-full bg-amber-300" title="Aktív Joker ZH ebben a félévben" />
- )}
- </>
+ {(pendingJokerInfo || activeJokerInfo) && (
+ <span className="w-2 h-2 rounded-full bg-amber-300 shrink-0" />
  )}
  </button>
 
  <button
  type="button"
- onClick={handleOpenAvgCalcModal}
+ onClick={() => {
+ setIsCollectorMenuOpen(false);
+ handleOpenAvgCalcModal();
+ }}
  disabled={semesterSubjects.length === 0}
  title="Átlagszámoló (1–5 skálás tervező a félév tárgyaival)"
- aria-label="Átlagszámoló"
- className="w-12 h-12 sm:w-[52px] sm:h-[52px] rounded-full bg-cyan-400 hover:bg-cyan-300 disabled:opacity-45 disabled:cursor-not-allowed text-slate-950 shadow-[0_0_22px_rgba(34,211,238,0.8)] hover:shadow-[0_0_30px_rgba(34,211,238,0.98)] flex items-center justify-center transition transform hover:scale-105 active:scale-95 cursor-pointer"
+ className="w-full px-3.5 py-2.5 rounded-2xl text-xs sm:text-sm font-extrabold bg-cyan-400 hover:bg-cyan-300 disabled:opacity-45 disabled:cursor-not-allowed text-slate-950 shadow-md flex items-center justify-between gap-2 transition cursor-pointer"
  >
- <Calculator className="w-6 h-6 stroke-[2.3]" />
+ <span className="flex items-center gap-2">
+ <Calculator className="w-4 h-4 shrink-0" />
+ <span>Átlagszámoló</span>
+ </span>
  </button>
 
  <button
  type="button"
- onClick={handleOpenCreateNewSubjectModal}
+ onClick={() => {
+ setIsCollectorMenuOpen(false);
+ handleOpenCreateNewSubjectModal();
+ }}
  title="Új tantárgy felvétele"
- aria-label="Új tantárgy felvétele"
- className="w-[60px] h-[60px] sm:w-16 sm:h-16 rounded-full bg-amber-400 hover:bg-amber-300 text-slate-950 shadow-[0_0_26px_rgba(251,191,36,0.75)] hover:shadow-[0_0_34px_rgba(251,191,36,0.95)] flex items-center justify-center transition transform hover:scale-105 active:scale-95 cursor-pointer"
+ className="w-full px-3.5 py-2.5 rounded-2xl text-xs sm:text-sm font-extrabold bg-amber-400 hover:bg-amber-300 text-slate-950 shadow-md flex items-center justify-between gap-2 transition cursor-pointer"
  >
- <Plus className="w-8 h-8 stroke-[2.75]" />
+ <span className="flex items-center gap-2">
+ <Plus className="w-4 h-4 stroke-[2.75] shrink-0" />
+ <span>Új tantárgy (+)</span>
+ </span>
+ </button>
+ </div>
+ )}
+
+ <button
+ type="button"
+ onClick={() => setIsCollectorMenuOpen(prev => !prev)}
+ aria-expanded={isCollectorMenuOpen}
+ title="Gyűjtő menü (Új tantárgy, Átlagszámoló, Joker ZH, Statisztika)"
+ aria-label="Gyűjtő menü"
+ className={`px-4 sm:px-5 h-14 sm:h-[60px] rounded-full font-extrabold text-xs sm:text-sm flex items-center justify-center gap-2 transition transform hover:scale-105 active:scale-95 cursor-pointer relative ${
+ isCollectorMenuOpen
+ ? 'bg-slate-900 text-amber-400 border-2 border-amber-400 shadow-[0_0_28px_rgba(251,191,36,0.75)]'
+ : 'bg-amber-400 hover:bg-amber-300 text-slate-950 shadow-[0_0_26px_rgba(251,191,36,0.75)] hover:shadow-[0_0_34px_rgba(251,191,36,0.95)]'
+ }`}
+ >
+ {isCollectorMenuOpen ? (
+ <X className="w-5 h-5 stroke-[2.75]" />
+ ) : (
+ <Grid className="w-5 h-5 stroke-[2.5]" />
+ )}
+ <span>Gyűjtő</span>
+ {!isCollectorMenuOpen && pendingJokerInfo && (
+ <span className="absolute -top-1 -right-1 flex h-3.5 w-3.5">
+ <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-violet-400 opacity-85" />
+ <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-violet-600 border-2 border-white" />
+ </span>
+ )}
  </button>
  </div>
  </>
@@ -9753,6 +10030,385 @@ export default function App() {
  </div>
  )}
 
+ 
+ {/* TANULMÁNYI STATISZTIKA MODAL (JELENLÉT ELOSZLÁS, ZH TELJESÍTÉSEK, LEGJOBB/LEGROSSZABB ZH, FÉLÉV ÖSSZEHASONLÍTÁS) */}
+ {isAcademicStatsOpen && (() => {
+ const primaryStats = computeAcademicSemesterAnalytics(statsPrimarySemester);
+ const compareStats = statsCompareSemester ? computeAcademicSemesterAnalytics(statsCompareSemester) : null;
+
+ const renderDeltaBadge = (currVal, prevVal, unit = '%', higherIsBetter = true) => {
+ if (currVal === null || currVal === undefined || prevVal === null || prevVal === undefined) return null;
+ const diff = +(currVal - prevVal).toFixed(1);
+ if (diff === 0) {
+ return (
+ <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+ darkMode ? 'bg-slate-800 text-slate-300' : 'bg-slate-200 text-slate-700'
+ }`}>
+ 0{unit} (azonos)
+ </span>
+ );
+ }
+ const isPositiveOutcome = higherIsBetter ? diff > 0 : diff < 0;
+ return (
+ <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+ isPositiveOutcome
+ ? darkMode ? 'bg-emerald-500/20 text-emerald-300' : 'bg-emerald-100 text-emerald-800'
+ : darkMode ? 'bg-rose-500/20 text-rose-300' : 'bg-rose-100 text-rose-800'
+ }`}>
+ {diff > 0 ? `+${formatHu(diff)}${unit}` : `${formatHu(diff)}${unit}`}
+ </span>
+ );
+ };
+
+ return (
+ <div
+ data-top-modal="true"
+ onClick={() => setIsAcademicStatsOpen(false)}
+ className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-2.5 sm:p-4 overscroll-none"
+ >
+ <div
+ onClick={(e) => e.stopPropagation()}
+ className={`rounded-2xl max-w-3xl w-full max-h-[93dvh] flex flex-col shadow-2xl overflow-hidden border-2 border-indigo-500/70 ${bgCard}`}
+ >
+ <div className="px-4 sm:px-6 py-3.5 sm:py-4 bg-slate-900 text-white flex justify-between items-center border-b border-slate-800 shrink-0">
+ <div className="flex items-center gap-2.5 min-w-0">
+ <div className="w-9 h-9 rounded-xl bg-indigo-500 text-white flex items-center justify-center shrink-0">
+ <PieChart className="w-5 h-5" />
+ </div>
+ <div className="min-w-0">
+ <h2 className="font-extrabold text-sm sm:text-base leading-tight">Tanulmányi statisztika</h2>
+ <p className="text-[11px] text-indigo-300 truncate">
+ Jelenlét-eloszlás, ZH-teljesítések, legjobb & legrosszabb ZH • Félévek összehasonlítása
+ </p>
+ </div>
+ </div>
+ <button
+ type="button"
+ onClick={() => setIsAcademicStatsOpen(false)}
+ className="text-slate-400 hover:text-white p-1.5 cursor-pointer shrink-0"
+ >
+ <X className="w-5 h-5" />
+ </button>
+ </div>
+
+ {/* FÉLÉV ÉS ÖSSZEHASONLÍTÓ FÉLÉV VÁLASZTÓ */}
+ <div className={`px-4 sm:px-6 py-3 border-b shrink-0 ${
+ darkMode ? 'bg-slate-900/90 border-slate-800' : 'bg-indigo-50/70 border-slate-200'
+ }`}>
+ <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+ <div>
+ <label className={`block text-[10px] font-extrabold uppercase tracking-wider mb-1 ${textMuted}`}>
+ Vizsgált félév
+ </label>
+ <select
+ value={statsPrimarySemester}
+ onChange={(e) => {
+ const nextPrimary = e.target.value;
+ setStatsPrimarySemester(nextPrimary);
+ if (statsCompareSemester === nextPrimary) {
+ setStatsCompareSemester('');
+ }
+ }}
+ className={`w-full border rounded-xl px-3 py-2 text-xs sm:text-sm font-bold focus:outline-none ${inputStyle}`}
+ >
+ {semesters.map(sem => (
+ <option key={sem} value={sem}>
+ {formatSemesterLabel(sem)}{isCurrentSemester(sem) ? ' • Aktuális' : ''}
+ </option>
+ ))}
+ </select>
+ </div>
+
+ <div>
+ <label className={`block text-[10px] font-extrabold uppercase tracking-wider mb-1 ${textMuted}`}>
+ Összehasonlítás ezzel a félévvel (opcionális)
+ </label>
+ <select
+ value={statsCompareSemester}
+ onChange={(e) => setStatsCompareSemester(e.target.value)}
+ className={`w-full border rounded-xl px-3 py-2 text-xs sm:text-sm font-bold focus:outline-none ${inputStyle}`}
+ >
+ <option value="">Nincs összehasonlítás (csak ez a félév)</option>
+ {semesters
+ .filter(sem => sem !== statsPrimarySemester)
+ .map(sem => (
+ <option key={sem} value={sem}>
+ {formatSemesterLabel(sem)}{isCurrentSemester(sem) ? ' • Aktuális' : ''}
+ </option>
+ ))}
+ </select>
+ </div>
+ </div>
+ </div>
+
+ <div className="p-4 sm:p-6 overflow-y-auto overscroll-contain space-y-5 flex-1 min-h-0">
+ {!primaryStats ? (
+ <p className={`text-sm text-center py-6 ${textMuted}`}>Nincs elérhető féléves adat.</p>
+ ) : (
+ <>
+ {/* 1. ZH TELJESÍTÉSEK & ÖSSZESÍTETT JELENLÉT */}
+ <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+ <div className={`p-3.5 rounded-2xl border space-y-1.5 ${bgSubCard}`}>
+ <div className="flex items-center justify-between gap-1">
+ <span className={`text-[11px] font-extrabold uppercase ${textMuted}`}>ZH teljesítések</span>
+ {compareStats && renderDeltaBadge(primaryStats.avgZhPct, compareStats.avgZhPct, '%')}
+ </div>
+ <p className={`text-xl sm:text-2xl font-extrabold ${textStrong}`}>
+ {primaryStats.completedZhCount} / {primaryStats.totalZhSlots}{' '}
+ <span className={`text-xs font-semibold ${textMuted}`}>rögzítve</span>
+ </p>
+ <p className="text-xs font-semibold text-emerald-500">
+ Sikeres (≥50%): {primaryStats.passedZhCount} db
+ {primaryStats.avgZhPct !== null && ` • Átlag: ${formatHu(primaryStats.avgZhPct)}%`}
+ </p>
+ {compareStats && (
+ <p className={`text-[11px] pt-1 border-t ${darkMode ? 'border-slate-700/80' : 'border-slate-200'} ${textMuted}`}>
+ {formatSemesterLabel(compareStats.semName)}: {compareStats.completedZhCount}/{compareStats.totalZhSlots} ZH
+ {compareStats.avgZhPct !== null ? ` (${formatHu(compareStats.avgZhPct)}%)` : ''}
+ </p>
+ )}
+ </div>
+
+ <div className={`p-3.5 rounded-2xl border space-y-1.5 ${bgSubCard}`}>
+ <div className="flex items-center justify-between gap-1">
+ <span className={`text-[11px] font-extrabold uppercase ${textMuted}`}>Gyakorlati részvétel</span>
+ {compareStats && renderDeltaBadge(primaryStats.practiceOverallPct, compareStats.practiceOverallPct, '%')}
+ </div>
+ <p className={`text-xl sm:text-2xl font-extrabold ${textStrong}`}>
+ {primaryStats.practiceOverallPct !== null ? `${primaryStats.practiceOverallPct}%` : '—'}
+ </p>
+ <p className={`text-xs ${textMuted}`}>
+ Összesen: <strong className={textStrong}>{primaryStats.totalPracticePresent}</strong> / {primaryStats.totalPracticeClasses} alkalom
+ </p>
+ {compareStats && (
+ <p className={`text-[11px] pt-1 border-t ${darkMode ? 'border-slate-700/80' : 'border-slate-200'} ${textMuted}`}>
+ {formatSemesterLabel(compareStats.semName)}:{' '}
+ {compareStats.practiceOverallPct !== null
+ ? `${compareStats.practiceOverallPct}% (${compareStats.totalPracticePresent}/${compareStats.totalPracticeClasses})`
+ : 'nincs adat'}
+ </p>
+ )}
+ </div>
+
+ <div className={`p-3.5 rounded-2xl border space-y-1.5 ${bgSubCard}`}>
+ <div className="flex items-center justify-between gap-1">
+ <span className={`text-[11px] font-extrabold uppercase ${textMuted}`}>Előadás részvétel</span>
+ {compareStats && renderDeltaBadge(primaryStats.lectureOverallPct, compareStats.lectureOverallPct, '%')}
+ </div>
+ <p className={`text-xl sm:text-2xl font-extrabold ${textStrong}`}>
+ {primaryStats.lectureOverallPct !== null ? `${primaryStats.lectureOverallPct}%` : '—'}
+ </p>
+ <p className={`text-xs ${textMuted}`}>
+ Összesen: <strong className={textStrong}>{primaryStats.totalLecturePresent}</strong> / {primaryStats.totalLectureClasses} alkalom
+ </p>
+ {compareStats && (
+ <p className={`text-[11px] pt-1 border-t ${darkMode ? 'border-slate-700/80' : 'border-slate-200'} ${textMuted}`}>
+ {formatSemesterLabel(compareStats.semName)}:{' '}
+ {compareStats.lectureOverallPct !== null
+ ? `${compareStats.lectureOverallPct}% (${compareStats.totalLecturePresent}/${compareStats.totalLectureClasses})`
+ : 'nincs adat'}
+ </p>
+ )}
+ </div>
+ </div>
+
+ {/* 2. LEGROSSZABB ZH ÉS LEGJOBB ZH */}
+ <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+ <div className={`p-4 rounded-2xl border-2 space-y-2 ${
+ darkMode
+ ? 'bg-rose-950/25 border-rose-500/45'
+ : 'bg-rose-50/80 border-rose-300'
+ }`}>
+ <div className="flex items-center justify-between gap-2">
+ <span className="text-[11px] font-extrabold uppercase tracking-wide text-rose-500">
+ Legrosszabb ZH
+ </span>
+ {compareStats && primaryStats.worstZh?.pct !== null && compareStats.worstZh?.pct !== null &&
+ renderDeltaBadge(primaryStats.worstZh.pct, compareStats.worstZh.pct, '%')}
+ </div>
+ {primaryStats.worstZh ? (
+ <>
+ <p className={`text-2xl font-extrabold ${textStrong}`}>
+ {primaryStats.worstZh.pct !== null ? `${formatHu(primaryStats.worstZh.pct)}%` : `${formatHu(primaryStats.worstZh.achieved)} p`}
+ {primaryStats.worstZh.max > 0 && (
+ <span className={`text-xs font-semibold ml-1.5 ${textMuted}`}>
+ ({formatHu(primaryStats.worstZh.achieved)} / {formatHu(primaryStats.worstZh.max)} p)
+ </span>
+ )}
+ </p>
+ <p className={`text-xs font-bold ${textStrong}`}>
+ {primaryStats.worstZh.subjectName} — <span className="text-rose-500">{primaryStats.worstZh.zhTitle}</span>
+ </p>
+ </>
+ ) : (
+ <p className={`text-xs italic ${textMuted}`}>Még nincs rögzített ZH eredmény ebben a félévben.</p>
+ )}
+ {compareStats && (
+ <div className={`pt-2 border-t text-[11px] ${darkMode ? 'border-rose-500/25 text-slate-300' : 'border-rose-200 text-slate-700'}`}>
+ <span className="font-semibold">{formatSemesterLabel(compareStats.semName)}: </span>
+ {compareStats.worstZh ? (
+ <strong>
+ {compareStats.worstZh.pct !== null ? `${formatHu(compareStats.worstZh.pct)}%` : `${formatHu(compareStats.worstZh.achieved)} p`}{' '}
+ ({compareStats.worstZh.subjectName} – {compareStats.worstZh.zhTitle})
+ </strong>
+ ) : (
+ <span>nincs rögzített ZH</span>
+ )}
+ </div>
+ )}
+ </div>
+
+ <div className={`p-4 rounded-2xl border-2 space-y-2 ${
+ darkMode
+ ? 'bg-emerald-950/25 border-emerald-500/45'
+ : 'bg-emerald-50/80 border-emerald-300'
+ }`}>
+ <div className="flex items-center justify-between gap-2">
+ <span className="text-[11px] font-extrabold uppercase tracking-wide text-emerald-500">
+ Legjobb ZH
+ </span>
+ {compareStats && primaryStats.bestZh?.pct !== null && compareStats.bestZh?.pct !== null &&
+ renderDeltaBadge(primaryStats.bestZh.pct, compareStats.bestZh.pct, '%')}
+ </div>
+ {primaryStats.bestZh ? (
+ <>
+ <p className={`text-2xl font-extrabold ${textStrong}`}>
+ {primaryStats.bestZh.pct !== null ? `${formatHu(primaryStats.bestZh.pct)}%` : `${formatHu(primaryStats.bestZh.achieved)} p`}
+ {primaryStats.bestZh.max > 0 && (
+ <span className={`text-xs font-semibold ml-1.5 ${textMuted}`}>
+ ({formatHu(primaryStats.bestZh.achieved)} / {formatHu(primaryStats.bestZh.max)} p)
+ </span>
+ )}
+ </p>
+ <p className={`text-xs font-bold ${textStrong}`}>
+ {primaryStats.bestZh.subjectName} — <span className="text-emerald-500">{primaryStats.bestZh.zhTitle}</span>
+ </p>
+ </>
+ ) : (
+ <p className={`text-xs italic ${textMuted}`}>Még nincs rögzített ZH eredmény ebben a félévben.</p>
+ )}
+ {compareStats && (
+ <div className={`pt-2 border-t text-[11px] ${darkMode ? 'border-emerald-500/25 text-slate-300' : 'border-emerald-200 text-slate-700'}`}>
+ <span className="font-semibold">{formatSemesterLabel(compareStats.semName)}: </span>
+ {compareStats.bestZh ? (
+ <strong>
+ {compareStats.bestZh.pct !== null ? `${formatHu(compareStats.bestZh.pct)}%` : `${formatHu(compareStats.bestZh.achieved)} p`}{' '}
+ ({compareStats.bestZh.subjectName} – {compareStats.bestZh.zhTitle})
+ </strong>
+ ) : (
+ <span>nincs rögzített ZH</span>
+ )}
+ </div>
+ )}
+ </div>
+ </div>
+
+ {/* 3. TÁRGYANKÉNTI JELENLÉT ELOSZLÁSA ELŐADÁSOKON / GYAKORLATOKON */}
+ <div className={`p-4 rounded-2xl border space-y-3 ${bgSubCard}`}>
+ <div className="flex flex-wrap items-center justify-between gap-2">
+ <div>
+ <h3 className={`text-sm font-extrabold ${textStrong}`}>
+ Tárgyankénti jelenlét eloszlása (Gyakorlatok & Előadások)
+ </h3>
+ <p className={`text-[11px] ${textMuted}`}>
+ {formatSemesterLabel(primaryStats.semName)} tantárgyai szerint
+ </p>
+ </div>
+ <div className="flex items-center gap-3 text-[11px] font-bold">
+ <span className="inline-flex items-center gap-1.5 text-amber-500">
+ <span className="w-2.5 h-2.5 rounded-full bg-amber-400" /> Gyakorlat
+ </span>
+ <span className="inline-flex items-center gap-1.5 text-sky-500">
+ <span className="w-2.5 h-2.5 rounded-full bg-sky-500" /> Előadás
+ </span>
+ </div>
+ </div>
+
+ {primaryStats.subjectAttendanceRows.length === 0 ? (
+ <p className={`text-xs italic py-3 text-center ${textMuted}`}>
+ Ebben a félévben nincs jelenléti bontással rendelkező tárgy.
+ </p>
+ ) : (
+ <div className="space-y-2.5">
+ {primaryStats.subjectAttendanceRows.map(row => (
+ <div
+ key={row.id}
+ className={`p-3 rounded-xl border space-y-2 ${bgCard}`}
+ >
+ <div className="flex items-center justify-between gap-2">
+ <p className={`text-xs sm:text-sm font-bold truncate ${textStrong}`}>
+ {row.name}
+ </p>
+ <span className="text-[11px] font-semibold text-amber-500 shrink-0">
+ {row.credits} kr.
+ </span>
+ </div>
+
+ <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+ {/* Gyakorlat eloszlás */}
+ <div className="space-y-1">
+ <div className="flex items-center justify-between text-[11px]">
+ <span className={`font-semibold ${textMuted}`}>Gyakorlatok</span>
+ <span className={`font-extrabold ${textStrong}`}>
+ {row.practiceTotal > 0
+ ? `${row.practicePresent} / ${row.practiceTotal} (${row.practicePct}%)`
+ : 'Nincs beállítva'}
+ </span>
+ </div>
+ <div className={`w-full h-2 rounded-full overflow-hidden ${darkMode ? 'bg-slate-800' : 'bg-slate-200'}`}>
+ <div
+ className="h-full bg-amber-400 rounded-full transition-all duration-300"
+ style={{ width: `${row.practicePct ?? 0}%` }}
+ />
+ </div>
+ </div>
+
+ {/* Előadás eloszlás */}
+ <div className="space-y-1">
+ <div className="flex items-center justify-between text-[11px]">
+ <span className={`font-semibold ${textMuted}`}>Előadások (nincs min.)</span>
+ <span className={`font-extrabold ${textStrong}`}>
+ {row.lectureTotal > 0
+ ? `${row.lecturePresent} / ${row.lectureTotal} (${row.lecturePct}%)`
+ : 'Nincs beállítva'}
+ </span>
+ </div>
+ <div className={`w-full h-2 rounded-full overflow-hidden ${darkMode ? 'bg-slate-800' : 'bg-slate-200'}`}>
+ <div
+ className="h-full bg-sky-500 rounded-full transition-all duration-300"
+ style={{ width: `${row.lecturePct ?? 0}%` }}
+ />
+ </div>
+ </div>
+ </div>
+ </div>
+ ))}
+ </div>
+ )}
+ </div>
+ </>
+ )}
+ </div>
+
+ <div className={`px-4 sm:px-6 py-3.5 border-t flex items-center justify-between gap-2 shrink-0 ${
+ darkMode ? 'border-slate-800 bg-slate-900/70' : 'border-slate-200 bg-slate-50'
+ }`}>
+ <span className={`text-[11px] ${textMuted}`}>
+ Tipp: Válassz ki egy másik félévet is a fenti összehasonlító mezőben!
+ </span>
+ <button
+ type="button"
+ onClick={() => setIsAcademicStatsOpen(false)}
+ className="px-5 py-2 text-xs sm:text-sm font-bold bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl cursor-pointer shrink-0"
+ >
+ Bezárás
+ </button>
+ </div>
+ </div>
+ </div>
+ );
+ })()}
+
  {/* EGYÉNI TÁRGYRENDEZŐ MODAL */}
  {isCustomSortModalOpen && (
  <div
@@ -9968,7 +10624,7 @@ export default function App() {
  <strong>Fiók- és profiladatok:</strong> Bejelentkezéskor a Google-fiókod alapvető azonosító adatait (e-mail cím, megjelenített név, egyedi felhasználói azonosító – UID), az utolsó aktivitás időpontját (online jelenlét), valamint az általad kötelezően kiválasztott <strong>BGE alapszakot</strong> tároljuk. <strong>A jelszavadhoz az alkalmazás nem fér hozzá és nem tárolja azt.</strong>
  </li>
  <li>
- <strong>Tanulmányi adatok:</strong> A rögzített féléveidet, tantárgyaidat (kreditek, besorolás, gyakorlati jelenlétek, ZH- és vizsgapontszámok, JOKER ZH-k, egyéni tárgyrend és küszöbértékek) a rendszer kizárólag a saját, UID-alapú elszigetelt adatbázis-területeden tárolja — más felhasználók nem férnek hozzá.
+ <strong>Tanulmányi adatok és személyes statisztika:</strong> A rögzített féléveidet, tantárgyaidat (kreditek, besorolás, gyakorlati és előadás jelenlétek, ZH- és vizsgapontszámok, JOKER ZH-k, egyéni tárgyrend és küszöbértékek), valamint az ezekből számolt személyes tanulmányi statisztikákat a rendszer kizárólag a saját, UID-alapú elszigetelt adatbázis-területeden tárolja és számolja — más felhasználók nem férnek hozzá.
  </li>
  <li>
  <strong>Helyi böngészőtárhely (<code>localStorage</code>):</strong> A gyorsabb betöltés és kényelmes használat érdekében a böngésződ helyi tárhelyében mentjük a megjelenítési beállításokat (sötét mód, monokróm paletta, egyszerű/részletes kártyanézet, rendezési mód), a tárgysablonok és faliújság-közlemények átmeneti gyorsítótárát, a függőben lévő JOKER ZH kijelölést, a PWA telepítési állapotot, valamint a karbantartási minijáték rekordpontszámát.
@@ -11570,6 +12226,10 @@ export default function App() {
  activeSubject.totalClasses ?? (activeSubject.attendanceSessions || []).length,
  activeSubject.attendanceSessions || []
  );
+ const lectureSessions = createDefaultSessions(
+ activeSubject.totalLectures ?? (activeSubject.lectureAttendanceSessions || []).length,
+ activeSubject.lectureAttendanceSessions || []
+ );
  const alreadyPublished = templates.some(t => t.id === activeSubject.id);
  const isElective = (activeSubject.courseType || 'mandatory') === 'elective';
 
@@ -11824,7 +12484,8 @@ export default function App() {
  customBuckets: activeSubject.customBuckets || [],
  totalClasses: activeSubject.totalClasses ?? (activeSubject.attendanceSessions || []).length,
  minAttendanceAlairas: activeSubject.minAttendanceAlairas ?? 0,
- minAttendanceMegajanlott: activeSubject.minAttendanceMegajanlott ?? 0
+ minAttendanceMegajanlott: activeSubject.minAttendanceMegajanlott ?? 0,
+ totalLectures: activeSubject.totalLectures ?? (activeSubject.lectureAttendanceSessions || []).length
  });
  setIsSubjectModalOpen(true);
  }}
@@ -11875,12 +12536,17 @@ export default function App() {
  >
  <span>Jelenlét</span>
  {st.totalClasses > 0 && (
- <span className={`text-xs px-2 py-0.5 rounded-full ${
+ <span title="Gyakorlati jelenlét" className={`text-xs px-2 py-0.5 rounded-full ${
  !st.attendanceAlairasPossible
  ? 'bg-rose-500/20 text-rose-400'
  : 'bg-emerald-500/20 text-emerald-500'
  }`}>
- {st.presentCount}/{st.totalClasses}
+ Gyak: {st.presentCount}/{st.totalClasses}
+ </span>
+ )}
+ {st.totalLectures > 0 && (
+ <span title="Előadás jelenlét" className="text-xs px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-400">
+ Ea: {st.lecturePresentCount}/{st.totalLectures}
  </span>
  )}
  </button>
@@ -11942,7 +12608,8 @@ export default function App() {
  customBuckets: activeSubject.customBuckets || [],
  totalClasses: activeSubject.totalClasses ?? (activeSubject.attendanceSessions || []).length,
  minAttendanceAlairas: activeSubject.minAttendanceAlairas ?? 0,
- minAttendanceMegajanlott: activeSubject.minAttendanceMegajanlott ?? 0
+ minAttendanceMegajanlott: activeSubject.minAttendanceMegajanlott ?? 0,
+ totalLectures: activeSubject.totalLectures ?? (activeSubject.lectureAttendanceSessions || []).length
  });
  setIsSubjectModalOpen(true);
  }}
@@ -12425,6 +13092,55 @@ export default function App() {
  </>
  ) : (
  <div className="space-y-4">
+ {/* KÜLÖN FELÜLET VÁLASZTÓ: GYAKORLATOK vs. ELŐADÁSOK */}
+ <div className={`grid grid-cols-2 gap-1.5 p-1.5 rounded-2xl border ${
+ darkMode ? 'bg-slate-800/80 border-slate-700' : 'bg-slate-100 border-slate-200'
+ }`}>
+ <button
+ type="button"
+ onClick={() => setAttendanceSubTab('practice')}
+ className={`py-2.5 px-3 rounded-xl text-xs sm:text-sm font-extrabold flex items-center justify-center gap-2 transition cursor-pointer ${
+ attendanceSubTab === 'practice'
+ ? 'bg-amber-400 text-slate-950 shadow-sm'
+ : darkMode
+ ? 'text-slate-300 hover:text-white hover:bg-slate-700/60'
+ : 'text-slate-700 hover:text-slate-900 hover:bg-white/70'
+ }`}
+ >
+ <span>Gyakorlatok</span>
+ <span className={`px-2 py-0.5 rounded-full text-[11px] font-extrabold ${
+ attendanceSubTab === 'practice'
+ ? 'bg-slate-950/15 text-slate-950'
+ : darkMode ? 'bg-slate-700 text-slate-200' : 'bg-white text-slate-700'
+ }`}>
+ {st.presentCount}/{st.totalClasses}
+ </span>
+ </button>
+
+ <button
+ type="button"
+ onClick={() => setAttendanceSubTab('lecture')}
+ className={`py-2.5 px-3 rounded-xl text-xs sm:text-sm font-extrabold flex items-center justify-center gap-2 transition cursor-pointer ${
+ attendanceSubTab === 'lecture'
+ ? 'bg-sky-500 text-white shadow-sm'
+ : darkMode
+ ? 'text-slate-300 hover:text-white hover:bg-slate-700/60'
+ : 'text-slate-700 hover:text-slate-900 hover:bg-white/70'
+ }`}
+ >
+ <span>Előadások</span>
+ <span className={`px-2 py-0.5 rounded-full text-[11px] font-extrabold ${
+ attendanceSubTab === 'lecture'
+ ? 'bg-white/20 text-white'
+ : darkMode ? 'bg-slate-700 text-sky-300' : 'bg-white text-sky-700'
+ }`}>
+ {st.lecturePresentCount}/{st.totalLectures}
+ </span>
+ </button>
+ </div>
+
+ {attendanceSubTab === 'practice' ? (
+ <>
  <div className={`p-4 rounded-xl border space-y-3 ${bgSubCard}`}>
  <div className="flex flex-wrap items-center justify-between gap-2">
  <div>
@@ -12616,6 +13332,148 @@ export default function App() {
  </div>
  ))}
  </div>
+ )}
+ </>
+ ) : (
+ <>
+ {/* ELŐADÁSOK JELENLÉTI FELÜLETE (NINCS KÖTELEZŐ MINIMUM) */}
+ <div className={`p-4 rounded-xl border space-y-3 ${bgSubCard}`}>
+ <div className="flex flex-wrap items-center justify-between gap-2">
+ <div>
+ <p className={`text-sm font-bold ${textStrong}`}>
+ Előadás jelenlét: {st.lecturePresentCount} / {st.totalLectures} alkalom
+ </p>
+ <p className={`text-xs mt-0.5 ${textMuted}`}>
+ Az előadásokon való részvételnek <strong>nincs kötelező minimuma</strong> (nem befolyásolja az aláírást).
+ </p>
+ </div>
+ <span className="px-3 py-1 rounded-full text-xs font-bold bg-sky-500/20 text-sky-400 border border-sky-500/35">
+ Nincs kötelező minimum
+ </span>
+ </div>
+
+ {st.totalLectures > 0 && (() => {
+ const unrecordedLectures = Math.max(0, st.totalLectures - st.lecturePresentCount - st.lectureAbsentCount);
+ const lectureRatePct = Math.round((st.lecturePresentCount / st.totalLectures) * 100);
+ const grayCardClass = darkMode
+ ? 'bg-slate-800/90 border-slate-700/90'
+ : 'bg-slate-100/90 border-slate-200';
+
+ return (
+ <div className="grid grid-cols-3 gap-2">
+ <div className={`p-2.5 rounded-xl border text-center ${grayCardClass}`}>
+ <p className={`text-[10px] sm:text-[11px] font-semibold uppercase tracking-wide ${textMuted}`}>
+ Jelen voltam
+ </p>
+ <p className={`text-base sm:text-lg font-extrabold mt-0.5 ${textStrong}`}>
+ {st.lecturePresentCount} <span className={`text-xs font-normal ${textMuted}`}>alkalom</span>
+ </p>
+ <p className={`text-[10px] mt-0.5 ${textMuted}`}>
+ Hátralévő: {unrecordedLectures}
+ </p>
+ </div>
+
+ <div className={`p-2.5 rounded-xl border text-center ${grayCardClass}`}>
+ <p className={`text-[10px] sm:text-[11px] font-semibold uppercase tracking-wide ${textMuted}`}>
+ Hiányoztam
+ </p>
+ <p className={`text-base sm:text-lg font-extrabold mt-0.5 ${textStrong}`}>
+ {st.lectureAbsentCount} <span className={`text-xs font-normal ${textMuted}`}>alkalom</span>
+ </p>
+ <p className={`text-[10px] mt-0.5 ${textMuted}`}>
+ Nincs hiányzási limit
+ </p>
+ </div>
+
+ <div className={`p-2.5 rounded-xl border text-center ${grayCardClass}`}>
+ <p className={`text-[10px] sm:text-[11px] font-semibold uppercase tracking-wide ${textMuted}`}>
+ Részvételi arány
+ </p>
+ <p className="text-base sm:text-lg font-extrabold mt-0.5 text-sky-500">
+ {lectureRatePct}%
+ </p>
+ <p className={`text-[10px] mt-0.5 ${textMuted}`}>
+ {st.lecturePresentCount} / {st.totalLectures} előadás
+ </p>
+ </div>
+ </div>
+ );
+ })()}
+ </div>
+
+ {st.totalLectures === 0 ? (
+ <div className={`p-5 rounded-xl border text-center space-y-2 ${bgSubCard}`}>
+ <p className={`text-sm font-semibold ${textStrong}`}>
+ Ehhez a tantárgyhoz még nincs megadva előadás alkalomszám.
+ </p>
+ <p className={`text-xs ${textMuted}`}>
+ A felső sávban található <strong>„Beállítások”</strong> gombra kattintva adhatod meg az előadások számát (pl. 12 alkalom).
+ </p>
+ </div>
+ ) : (
+ <div className="space-y-2.5">
+ {lectureSessions.map((sess, idx) => (
+ <div
+ key={sess.id || idx}
+ className={`flex flex-wrap sm:flex-nowrap items-center justify-between gap-2.5 p-3 rounded-xl border ${
+ sess.status === 'present'
+ ? darkMode ? 'border-sky-500/40 bg-sky-500/10' : 'border-sky-200 bg-sky-50/70'
+ : sess.status === 'absent'
+ ? darkMode ? 'border-rose-500/40 bg-rose-500/10' : 'border-rose-200 bg-rose-50/70'
+ : darkMode ? 'border-slate-800 bg-slate-800/40' : 'border-slate-200 bg-white'
+ }`}
+ >
+ <div className="flex items-center gap-2.5 min-w-0">
+ <span className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold shrink-0 ${
+ darkMode ? 'bg-slate-800 text-sky-300' : 'bg-sky-50 text-sky-700'
+ }`}>
+ {idx + 1}.
+ </span>
+ <input
+ type="date"
+ value={sess.date || ''}
+ onChange={(e) => handleUpdateLectureSession(idx, { date: e.target.value })}
+ className={`border rounded-lg px-2.5 py-2 sm:py-1.5 text-sm sm:text-xs focus:outline-none ${inputStyle}`}
+ />
+ </div>
+
+ <div className="flex items-center gap-2 w-full sm:w-auto">
+ <button
+ type="button"
+ onClick={() =>
+ handleUpdateLectureSession(idx, {
+ status: sess.status === 'present' ? null : 'present'
+ })
+ }
+ className={`flex-1 sm:flex-initial justify-center px-3 py-2 sm:py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 transition cursor-pointer ${
+ sess.status === 'present'
+ ? 'bg-sky-500 text-white shadow-sm'
+ : darkMode ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+ }`}
+ >
+ <Check className="w-3.5 h-3.5" /> Jelen
+ </button>
+ <button
+ type="button"
+ onClick={() =>
+ handleUpdateLectureSession(idx, {
+ status: sess.status === 'absent' ? null : 'absent'
+ })
+ }
+ className={`flex-1 sm:flex-initial justify-center px-3 py-2 sm:py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 transition cursor-pointer ${
+ sess.status === 'absent'
+ ? 'bg-rose-500 text-white shadow-sm'
+ : darkMode ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+ }`}
+ >
+ <X className="w-3.5 h-3.5" /> Hiányzás
+ </button>
+ </div>
+ </div>
+ ))}
+ </div>
+ )}
+ </>
  )}
  </div>
  )}
@@ -13770,6 +14628,28 @@ export default function App() {
  value={editingSubject.minAttendanceMegajanlott}
  onChange={e => setEditingSubject({ ...editingSubject, minAttendanceMegajanlott: e.target.value })}
  className={`w-full border rounded-lg px-3 py-2.5 sm:py-2 focus:outline-none ${inputStyle}`}
+ />
+ </div>
+ </div>
+
+ <div className={`p-3 rounded-xl border space-y-2 ${bgSubCard}`}>
+ <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+ <div>
+ <label className={`block text-xs font-bold ${textStrong}`}>
+ Összes előadás alkalom (opcionális)
+ </label>
+ <p className={`text-[11px] ${textMuted}`}>
+ Az előadások jelenlétének nincs kötelező minimuma.
+ </p>
+ </div>
+ <input
+ type="number"
+ min="0"
+ max="40"
+ placeholder="Pl. 12"
+ value={editingSubject.totalLectures ?? ''}
+ onChange={e => setEditingSubject({ ...editingSubject, totalLectures: e.target.value })}
+ className={`w-full sm:w-28 border rounded-lg px-3 py-2 sm:py-1.5 font-bold focus:outline-none ${inputStyle}`}
  />
  </div>
  </div>

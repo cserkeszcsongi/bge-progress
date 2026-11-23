@@ -638,6 +638,14 @@ function buildTemplatesForMajor(majorId) {
 
 const APP_RELEASES = [
   {
+    version: 'v2.5.5',
+    date: '2026. 11. 23.',
+    changes: [
+      'A féléves dashboard felső sávjából eltávolítva a külön Főoldal (házikó) gomb, mivel ezt már az alsó navigációs sáv Főoldal gombja látja el',
+      'A Visszajelzés gomb felkerült a felső sávba, így a főoldalon és a féléves dashboardon is mindig közvetlenül elérhető a csengő gomb mellett'
+    ]
+  },
+  {
     version: 'v2.5.4',
     date: '2026. 11. 23.',
     changes: [
@@ -7145,6 +7153,30 @@ export default function App() {
  );
  };
 
+ const renderTopFeedbackButton = (isDarkHeader = false) => {
+ const btnClass = isDarkHeader
+ ? 'px-2.5 sm:px-3 py-2 sm:py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-400 border border-slate-700 text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shrink-0'
+ : darkMode
+ ? 'px-2.5 sm:px-3 py-2 sm:py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-amber-400 border border-slate-800 text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shrink-0'
+ : 'px-2.5 sm:px-3 py-2 sm:py-1.5 rounded-lg bg-white hover:bg-amber-50 text-amber-700 border border-slate-200 shadow-2xs text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shrink-0';
+
+ return (
+ <button
+ type="button"
+ onClick={() => {
+ setFeedbackMailTriggered(false);
+ setIsFeedbackOpen(true);
+ }}
+ title="Visszajelzés küldése"
+ aria-label="Visszajelzés küldése"
+ className={btnClass}
+ >
+ <MessageSquare className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+ <span className="hidden sm:inline">Visszajelzés</span>
+ </button>
+ );
+ };
+
  const renderMenuBody = (closeMenuFn) => (
  <>
  <div className="space-y-2">
@@ -8323,6 +8355,7 @@ export default function App() {
  )}
  </div>
  <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+ {renderTopFeedbackButton(false)}
  {renderNoticeboardBellButton(false)}
  </div>
  </div>
@@ -8949,16 +8982,8 @@ export default function App() {
  </button>
 
  <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+ {renderTopFeedbackButton(true)}
  {renderNoticeboardBellButton(true)}
- <button
- type="button"
- onClick={() => navigateWithSlide('home')}
- title="Főoldal"
- aria-label="Főoldal"
- className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-amber-400 border border-slate-700 transition cursor-pointer shrink-0"
- >
- <Home className="w-4 h-4" />
- </button>
  </div>
  </div>
 

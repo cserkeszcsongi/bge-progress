@@ -638,6 +638,14 @@ function buildTemplatesForMajor(majorId) {
 
 const APP_RELEASES = [
   {
+    version: 'v2.5.0',
+    date: '2026. 11. 23.',
+    changes: [
+      'Új alsó navigációs sáv (Főoldal, Jelenlegi félév, Menü): hosszúkás, frosted glass kapszula kialakítású lebegő sáv az oldal alján, amely telefonon a teljes szélességet lefedi és görgetés közben is mindig látható marad',
+      'Fluid slide animáció a nézetek és a menü közötti gyors váltáskor, valamint rugalmas aktív fülkiemelés az alsó navigációs sávban'
+    ]
+  },
+  {
     version: 'v2.4.5',
     date: '2026. 11. 23.',
     changes: [
@@ -2592,6 +2600,7 @@ export default function App() {
  const [monochrome, setMonochrome] = useState(() => localStorage.getItem('bge_palette') === 'monochrome');
  const [simpleView, setSimpleView] = useState(() => localStorage.getItem('bge_card_view') === 'simple');
  const [isMenuOpen, setIsMenuOpen] = useState(false);
+ const [isBottomMenuOpen, setIsBottomMenuOpen] = useState(false);
 
  const [isStatsModalOpen, setIsStatsModalOpen] = useState(false);
  const [appUsersStats, setAppUsersStats] = useState({ totalUsers: 0, activeUsers: 0, majorCounts: {}, unknownMajorCount: 0 });
@@ -2837,6 +2846,7 @@ export default function App() {
  };
 
  const [activeView, setActiveView] = useState('home');
+ const [viewSlideDir, setViewSlideDir] = useState('none'); // 'none' | 'left' | 'right'
  const [subjects, setSubjects] = useState([]);
  const [savedSemesterDocs, setSavedSemesterDocs] = useState([]);
  const [templates, setTemplates] = useState(() => readLocalCache(TEMPLATES_CACHE_KEY, TEMPLATES_CACHE_TTL_MS) || []);
@@ -3060,6 +3070,27 @@ export default function App() {
  useEffect(() => {
  localStorage.setItem('bge_subject_sort_mode', sortMode);
  }, [sortMode]);
+
+ useEffect(() => {
+ if (!isBottomMenuOpen) return;
+ const handleOutsideBottomMenu = (event) => {
+ if (
+ event.target &&
+ typeof event.target.closest === 'function' &&
+ event.target.closest('[data-bottom-nav-root="true"]')
+ ) {
+ return;
+ }
+ setIsBottomMenuOpen(false);
+ setIsEditingNickname(false);
+ };
+ document.addEventListener('mousedown', handleOutsideBottomMenu);
+ document.addEventListener('touchstart', handleOutsideBottomMenu);
+ return () => {
+ document.removeEventListener('mousedown', handleOutsideBottomMenu);
+ document.removeEventListener('touchstart', handleOutsideBottomMenu);
+ };
+ }, [isBottomMenuOpen]);
 
  useEffect(() => {
  if (!isMenuOpen) return;
@@ -4098,6 +4129,7 @@ export default function App() {
  useEffect(() => {
  if (!user || !userDataLoaded || activeView !== 'home') return;
  if (mustAcceptGdpr || mustSelectMajor) return;
+ if (isBottomMenuOpen) { setIsBottomMenuOpen(false); setIsEditingNickname(false); return; }
 
  const alreadySeenLocal = localStorage.getItem('bge_gazdinfo_prompt_seen') === 'true';
  const hasExistingData = subjects.length > 0 || savedSemesterDocs.length > 0;
@@ -4468,6 +4500,40 @@ export default function App() {
  setSelectedSemester(currentMatch || semesters[0]);
  }
  }, [semesters, selectedSemester]);
+
+ const currentTargetSemester = useMemo(() => {
+ const currentMatch = semesters.find(s => isCurrentSemester(s));
+ if (currentMatch) return currentMatch;
+ if (selectedSemester && semesters.includes(selectedSemester)) return selectedSemester;
+ if (semesters.length > 0) return semesters[semesters.length - 1];
+ return getCurrentSemesterCode();
+ }, [semesters, selectedSemester]);
+
+ const navigateWithSlide = (targetView, targetSem = null) => {
+ setIsMenuOpen(false);
+ setIsEditingNickname(false);
+ setIsHomePlusMenuOpen(false);
+ closeCollectorMenuAnimated();
+
+ if (targetView === 'home') {
+ if (activeView !== 'home') {
+ setViewSlideDir('right');
+ setActiveView('home');
+ }
+ return;
+ }
+
+ if (targetView === 'semester') {
+ const semToOpen = targetSem || currentTargetSemester;
+ if (semToOpen && semToOpen !== selectedSemester) {
+ setSelectedSemester(semToOpen);
+ }
+ if (activeView !== 'semester') {
+ setViewSlideDir('left');
+ setActiveView('semester');
+ }
+ }
+ };
 
  const currentSemesterMeta = useMemo(() => getCurrentSemesterMeta(), []);
 
@@ -6956,9 +7022,12 @@ export default function App() {
  {linkCopied ? (
  <>
  <Check className="w-4 h-4" /> Link másolva! Illeszd be Safariba / Chrome-ba
- </>
+ </div>
  ) : (
- <>
+ <div
+ key={`view-semester-${selectedSemester}`}
+ className={viewSlideDir === 'left' ? 'bge-view-slide-left' : viewSlideDir === 'right' ? 'bge-view-slide-right' : ''}
+ >
  <Copy className="w-4 h-4" /> Link másolása
  </>
  )}
@@ -7041,35 +7110,8 @@ export default function App() {
  );
  };
 
- const renderDropdownMenu = (isDarkHeader = false) => {
- const triggerClass = isDarkHeader
- ? 'px-3 py-2 sm:py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 text-xs sm:text-sm font-bold flex items-center gap-1.5 transition cursor-pointer relative'
- : darkMode
- ? 'px-3 py-2 sm:py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-100 border border-slate-800 text-xs font-bold flex items-center gap-1.5 transition cursor-pointer relative'
- : 'px-3 py-2 sm:py-1.5 rounded-lg bg-white hover:bg-slate-100 text-slate-800 border border-slate-200 shadow-2xs text-xs font-bold flex items-center gap-1.5 transition cursor-pointer relative';
-
- return (
- <div data-dropdown-menu="true" className="relative">
- <button
- type="button"
- onClick={() => setIsMenuOpen(prev => { if (prev) setIsEditingNickname(false); return !prev; })}
- aria-expanded={isMenuOpen}
- className={triggerClass}
- >
- <Menu className="w-4 h-4 text-amber-400 shrink-0" />
- <span>Menü</span>
- {(isSim || canShowMobileInstall) && (
- <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" title={isSim ? 'Szimulátor mód aktív' : 'Alkalmazás telepíthető'} />
- )}
- <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-150 ${isMenuOpen ? 'rotate-180' : ''}`} />
- </button>
-
- {isMenuOpen && (
- <div className={`absolute right-0 mt-2 w-72 sm:w-80 max-h-[85dvh] overflow-y-auto rounded-2xl border shadow-2xl p-3.5 space-y-3.5 z-50 ${
- darkMode
- ? 'bg-slate-900 border-slate-700 text-slate-100'
- : 'bg-white border-slate-200 text-slate-800'
- }`}>
+ const renderMenuBody = (closeMenuFn) => (
+ <>
  <div className="space-y-2">
  <p className={`text-[10px] font-bold uppercase tracking-wider px-1 ${textMuted}`}>
  Hallgatói profil
@@ -7191,7 +7233,7 @@ export default function App() {
  <button
  type="button"
  onClick={() => {
- setIsMenuOpen(false);
+ closeMenuFn();
  setIsEditingNickname(false);
  handleOpenMajorSelectModal();
  }}
@@ -7317,7 +7359,7 @@ export default function App() {
  <button
  type="button"
  onClick={() => {
- setIsMenuOpen(false);
+ closeMenuFn();
  handleOpenThresholdModal();
  }}
  className={`w-full px-3 py-2.5 rounded-xl text-xs font-bold border flex items-center justify-between transition cursor-pointer ${
@@ -7343,7 +7385,7 @@ export default function App() {
  } else {
  setIsSim(true);
  }
- setIsMenuOpen(false);
+ closeMenuFn();
  }}
  className={`w-full px-3 py-2.5 rounded-xl text-xs font-bold border flex items-center justify-between transition cursor-pointer ${
  isSim
@@ -7376,7 +7418,7 @@ export default function App() {
  <button
  type="button"
  onClick={() => {
- setIsMenuOpen(false);
+ closeMenuFn();
  handleTriggerMobileInstall();
  }}
  className={`w-full px-3 py-2.5 rounded-xl text-xs font-extrabold border flex items-center justify-between transition cursor-pointer ${
@@ -7396,7 +7438,7 @@ export default function App() {
  <button
  type="button"
  onClick={() => {
- setIsMenuOpen(false);
+ closeMenuFn();
  setIsStatsModalOpen(true);
  }}
  className={`w-full px-3 py-2.5 rounded-xl text-xs font-bold border flex items-center justify-between transition cursor-pointer ${
@@ -7414,7 +7456,7 @@ export default function App() {
  <button
  type="button"
  onClick={() => {
- setIsMenuOpen(false);
+ closeMenuFn();
  handleOpenTutorial();
  }}
  className={`w-full px-3 py-2.5 rounded-xl text-xs font-bold border flex items-center justify-between transition cursor-pointer ${
@@ -7432,7 +7474,7 @@ export default function App() {
  <button
  type="button"
  onClick={() => {
- setIsMenuOpen(false);
+ closeMenuFn();
  setIsWelcomeOpen(true);
  }}
  className={`w-full px-3 py-2.5 rounded-xl text-xs font-bold border flex items-center justify-between transition cursor-pointer ${
@@ -7451,7 +7493,7 @@ export default function App() {
  <button
  type="button"
  onClick={() => {
- setIsMenuOpen(false);
+ closeMenuFn();
  setIsChangelogOpen(true);
  }}
  className={`w-full px-3 py-2.5 rounded-xl text-xs font-bold border flex items-center justify-between transition cursor-pointer ${
@@ -7514,7 +7556,7 @@ export default function App() {
  <button
  type="button"
  onClick={() => {
- setIsMenuOpen(false);
+ closeMenuFn();
  signOut(auth);
  }}
  className="w-full px-3 py-2.5 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-500 text-white flex items-center justify-center gap-2 transition cursor-pointer"
@@ -7522,6 +7564,40 @@ export default function App() {
  <LogOut className="w-4 h-4" /> Kijelentkezés
  </button>
  </div>
+
+ </>
+ );
+
+ const renderDropdownMenu = (isDarkHeader = false) => {
+ const triggerClass = isDarkHeader
+ ? 'px-3 py-2 sm:py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 text-xs sm:text-sm font-bold flex items-center gap-1.5 transition cursor-pointer relative'
+ : darkMode
+ ? 'px-3 py-2 sm:py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-100 border border-slate-800 text-xs font-bold flex items-center gap-1.5 transition cursor-pointer relative'
+ : 'px-3 py-2 sm:py-1.5 rounded-lg bg-white hover:bg-slate-100 text-slate-800 border border-slate-200 shadow-2xs text-xs font-bold flex items-center gap-1.5 transition cursor-pointer relative';
+
+ return (
+ <div data-dropdown-menu="true" className="relative">
+ <button
+ type="button"
+ onClick={() => setIsMenuOpen(prev => { if (prev) setIsEditingNickname(false); return !prev; })}
+ aria-expanded={isMenuOpen}
+ className={triggerClass}
+ >
+ <Menu className="w-4 h-4 text-amber-400 shrink-0" />
+ <span>Menü</span>
+ {(isSim || canShowMobileInstall) && (
+ <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" title={isSim ? 'Szimulátor mód aktív' : 'Alkalmazás telepíthető'} />
+ )}
+ <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-150 ${isMenuOpen ? 'rotate-180' : ''}`} />
+ </button>
+
+ {isMenuOpen && (
+ <div className={`absolute right-0 mt-2 w-72 sm:w-80 max-h-[85dvh] overflow-y-auto rounded-2xl border shadow-2xl p-3.5 space-y-3.5 z-50 ${
+ darkMode
+ ? 'bg-slate-900 border-slate-700 text-slate-100'
+ : 'bg-white border-slate-200 text-slate-800'
+ }`}>
+ {renderMenuBody(() => setIsMenuOpen(false))}
  </div>
  )}
  </div>
@@ -7636,7 +7712,7 @@ export default function App() {
  isNewVersionAvailable && Date.now() - updateBannerDismissedAt > 60 * 1000;
 
  return (
- <div className={`bge-fluid-app min-h-screen pb-24 transition-colors duration-300 ${bgPage}`}>
+ <div className={`bge-fluid-app min-h-screen pb-32 sm:pb-28 transition-colors duration-300 ${bgPage}`}>
  <style>{`
  @keyframes bgeFluidEnter {
  from {
@@ -7764,6 +7840,63 @@ export default function App() {
  .bge-fluid-app .fixed.inset-0 > div {
  animation: bgeFluidEnter 320ms cubic-bezier(0.34, 1.24, 0.64, 1) both;
  }
+ @keyframes bgeSlideFromRight {
+ 0% {
+ opacity: 0;
+ transform: translate3d(38px, 0, 0);
+ }
+ 100% {
+ opacity: 1;
+ transform: translate3d(0, 0, 0);
+ }
+ }
+ @keyframes bgeSlideFromLeft {
+ 0% {
+ opacity: 0;
+ transform: translate3d(-38px, 0, 0);
+ }
+ 100% {
+ opacity: 1;
+ transform: translate3d(0, 0, 0);
+ }
+ }
+ @keyframes bgeBottomSheetSlideUp {
+ 0% {
+ opacity: 0;
+ transform: translate3d(0, 18px, 0) scale(0.96);
+ filter: blur(8px);
+ }
+ 100% {
+ opacity: 1;
+ transform: translate3d(0, 0, 0) scale(1);
+ filter: blur(0px);
+ }
+ }
+ .bge-view-slide-left {
+ animation: bgeSlideFromRight 340ms cubic-bezier(0.22, 1, 0.36, 1) both;
+ will-change: transform, opacity;
+ }
+ .bge-view-slide-right {
+ animation: bgeSlideFromLeft 340ms cubic-bezier(0.22, 1, 0.36, 1) both;
+ will-change: transform, opacity;
+ }
+ .bge-bottom-nav-capsule {
+ backdrop-filter: blur(24px) saturate(185%);
+ -webkit-backdrop-filter: blur(24px) saturate(185%);
+ }
+ .bge-bottom-nav-capsule::before {
+ content: "";
+ position: absolute;
+ inset: 0;
+ border-radius: inherit;
+ pointer-events: none;
+ background: linear-gradient(135deg, rgba(255, 255, 255, 0.36) 0%, rgba(255, 255, 255, 0.08) 45%, rgba(251, 191, 36, 0.14) 100%);
+ }
+ .bge-bottom-menu-sheet {
+ animation: bgeBottomSheetSlideUp 280ms cubic-bezier(0.34, 1.32, 0.64, 1) both;
+ backdrop-filter: blur(24px) saturate(180%);
+ -webkit-backdrop-filter: blur(24px) saturate(180%);
+ }
  @media (prefers-reduced-motion: reduce) {
  .bge-fluid-app *,
  .bge-fluid-app *::before,
@@ -7820,6 +7953,104 @@ export default function App() {
  </div>
  )}
 
+ {/* ALSÓ FROSTED GLASS NAVIGÁCIÓS KAPSZULA (FŐOLDAL • JELENLEGI FÉLÉV • MENÜ) */}
+ {!isAnyModalOpen && (
+ <nav
+ data-bottom-nav-root="true"
+ aria-label="Alsó navigációs sáv"
+ className="fixed bottom-3 left-3 right-3 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 sm:w-full sm:max-w-md z-40 pointer-events-none"
+ >
+ {isBottomMenuOpen && (
+ <div
+ className={`bge-bottom-menu-sheet pointer-events-auto mb-2.5 w-full max-h-[74dvh] overflow-y-auto rounded-3xl border p-3.5 space-y-3.5 shadow-2xl ${
+ darkMode
+ ? 'bg-slate-900/85 border-white/15 text-slate-100 shadow-black/75'
+ : 'bg-white/88 border-slate-200/90 text-slate-800 shadow-slate-900/20'
+ }`}
+ >
+ {renderMenuBody(() => {
+ setIsBottomMenuOpen(false);
+ setIsEditingNickname(false);
+ })}
+ </div>
+ )}
+
+ <div
+ className={`bge-bottom-nav-capsule pointer-events-auto relative w-full rounded-full border p-1.5 shadow-2xl grid grid-cols-3 items-center gap-1 ${
+ darkMode
+ ? 'bg-slate-900/72 border-white/15 ring-1 ring-white/10 shadow-black/70'
+ : 'bg-white/75 border-white/85 ring-1 ring-slate-900/10 shadow-slate-900/15'
+ }`}
+ >
+ <button
+ type="button"
+ onClick={() => {
+ setIsBottomMenuOpen(false);
+ navigateWithSlide('home');
+ }}
+ aria-current={activeView === 'home' && !isBottomMenuOpen ? 'page' : undefined}
+ className={`relative z-10 py-2 px-2.5 rounded-full flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 text-[11px] sm:text-xs font-extrabold transition-all duration-300 cursor-pointer ${
+ activeView === 'home' && !isBottomMenuOpen
+ ? 'bg-amber-400 text-slate-950 shadow-md shadow-amber-400/30 scale-[1.02]'
+ : darkMode
+ ? 'text-slate-300 hover:text-white hover:bg-white/10'
+ : 'text-slate-700 hover:text-slate-950 hover:bg-slate-900/5'
+ }`}
+ >
+ <Home className="w-4 h-4 shrink-0" />
+ <span className="truncate">Főoldal</span>
+ </button>
+
+ <button
+ type="button"
+ onClick={() => {
+ setIsBottomMenuOpen(false);
+ navigateWithSlide('semester', currentTargetSemester);
+ }}
+ aria-current={activeView === 'semester' && !isBottomMenuOpen ? 'page' : undefined}
+ title={`Jelenlegi félév megnyitása (${formatSemesterLabel(currentTargetSemester)})`}
+ className={`relative z-10 py-2 px-2.5 rounded-full flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 text-[11px] sm:text-xs font-extrabold transition-all duration-300 cursor-pointer ${
+ activeView === 'semester' && !isBottomMenuOpen
+ ? 'bg-amber-400 text-slate-950 shadow-md shadow-amber-400/30 scale-[1.02]'
+ : darkMode
+ ? 'text-slate-300 hover:text-white hover:bg-white/10'
+ : 'text-slate-700 hover:text-slate-950 hover:bg-slate-900/5'
+ }`}
+ >
+ <Calendar className="w-4 h-4 shrink-0" />
+ <span className="truncate">Jelenlegi félév</span>
+ </button>
+
+ <button
+ type="button"
+ onClick={() => {
+ setIsMenuOpen(false);
+ setIsHomePlusMenuOpen(false);
+ closeCollectorMenuAnimated();
+ setIsBottomMenuOpen(prev => {
+ if (prev) setIsEditingNickname(false);
+ return !prev;
+ });
+ }}
+ aria-expanded={isBottomMenuOpen}
+ className={`relative z-10 py-2 px-2.5 rounded-full flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 text-[11px] sm:text-xs font-extrabold transition-all duration-300 cursor-pointer ${
+ isBottomMenuOpen
+ ? 'bg-amber-400 text-slate-950 shadow-md shadow-amber-400/30 scale-[1.02]'
+ : darkMode
+ ? 'text-slate-300 hover:text-white hover:bg-white/10'
+ : 'text-slate-700 hover:text-slate-950 hover:bg-slate-900/5'
+ }`}
+ >
+ <Menu className="w-4 h-4 shrink-0" />
+ <span className="truncate">Menü</span>
+ {(isSim || canShowMobileInstall) && !isBottomMenuOpen && (
+ <span className="absolute top-1.5 right-3 sm:static w-2 h-2 rounded-full bg-amber-400 shrink-0" />
+ )}
+ </button>
+ </div>
+ </nav>
+ )}
+
  {templateToast && (
  <div className="fixed bottom-24 left-4 right-4 sm:left-auto sm:right-6 sm:bottom-24 z-[60] bg-emerald-600 text-white px-4 py-3 rounded-xl shadow-2xl flex items-center gap-2 text-xs sm:text-sm font-semibold">
  <Check className="w-4 h-4 shrink-0" />
@@ -7830,7 +8061,7 @@ export default function App() {
  {/* KICSI FELUGRÓ MINI EMLÉKEZTETŐ ABLAK MOBILRA */}
  {canShowMobileInstall && isInstallMiniPopupVisible && !isAnyModalOpen && (
  <div
- className={`fixed bottom-24 left-3 right-24 sm:left-5 sm:right-auto sm:max-w-xs z-40 rounded-2xl border-2 border-amber-400 p-3 shadow-2xl backdrop-blur-md transition-all ${
+ className={`fixed bottom-[154px] left-3 right-24 sm:bottom-28 sm:left-5 sm:right-auto sm:max-w-xs z-40 rounded-2xl border-2 border-amber-400 p-3 shadow-2xl backdrop-blur-md transition-all ${
  darkMode
  ? 'bg-slate-900/95 text-slate-100 shadow-black/60'
  : 'bg-white/95 text-slate-900 shadow-slate-900/20'
@@ -7984,7 +8215,10 @@ export default function App() {
  )}
 
  {activeView === 'home' ? (
- <>
+ <div
+ key="view-home"
+ className={viewSlideDir === 'right' ? 'bge-view-slide-right' : viewSlideDir === 'left' ? 'bge-view-slide-left' : ''}
+ >
  {isAdmin && isMaintenanceMode && (
  <div className="bg-amber-400 text-slate-950 text-xs font-bold px-3 sm:px-4 py-2 text-center flex flex-wrap items-center justify-center gap-2 shadow-sm">
  <Wrench className="w-4 h-4 shrink-0" />
@@ -8433,10 +8667,7 @@ export default function App() {
  <button
  key={item.semName}
  type="button"
- onClick={() => {
- setSelectedSemester(item.semName);
- setActiveView('semester');
- }}
+ onClick={() => navigateWithSlide('semester', item.semName)}
  className={`w-full px-3 py-2.5 sm:py-2 rounded-xl border text-left flex items-center justify-between gap-2 transition cursor-pointer ${
  item.isCurrent
  ? darkMode
@@ -8520,10 +8751,7 @@ export default function App() {
  return (
  <div
  key={sem}
- onClick={() => {
- setSelectedSemester(sem);
- setActiveView('semester');
- }}
+ onClick={() => navigateWithSlide('semester', sem)}
  className={`rounded-2xl p-5 sm:p-6 transition-all duration-200 cursor-pointer flex flex-col justify-between group ${
  isCurrent
  ? darkMode
@@ -8624,7 +8852,7 @@ export default function App() {
  {appFooter}
  </main>
 
- <div data-home-plus-menu="true" className="fixed bottom-5 right-5 sm:bottom-7 sm:right-7 z-30 flex flex-col items-end gap-3">
+ <div data-home-plus-menu="true" className="fixed bottom-[86px] right-4 sm:bottom-[92px] sm:right-7 z-30 flex flex-col items-end gap-3">
  {isHomePlusMenuOpen && (
  <div className={`w-72 sm:w-80 rounded-2xl border-2 p-2.5 shadow-2xl space-y-2 transition-all ${
  darkMode
@@ -8700,7 +8928,7 @@ export default function App() {
  <div className="max-w-7xl mx-auto px-3 sm:px-4 py-2.5 flex items-center justify-between gap-2">
  <button
  type="button"
- onClick={() => setActiveView('home')}
+ onClick={() => navigateWithSlide('home')}
  className="flex items-center gap-2 sm:gap-2.5 text-left cursor-pointer group min-w-0"
  >
  <img
@@ -8723,7 +8951,7 @@ export default function App() {
  {renderNoticeboardBellButton(true)}
  <button
  type="button"
- onClick={() => setActiveView('home')}
+ onClick={() => navigateWithSlide('home')}
  title="Főoldal"
  aria-label="Főoldal"
  className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-amber-400 border border-slate-700 transition cursor-pointer shrink-0"
@@ -9711,7 +9939,7 @@ export default function App() {
  {appFooter}
  </main>
 
- <div data-collector-menu="true" className="fixed bottom-5 right-5 sm:bottom-7 sm:right-7 z-30 flex flex-col items-end gap-3">
+ <div data-collector-menu="true" className="fixed bottom-[86px] right-4 sm:bottom-[92px] sm:right-7 z-30 flex flex-col items-end gap-3">
  {(isCollectorMenuOpen || isCollectorClosing) && (() => {
  const selectedJokerForCapsule = pendingJokerInfo || activeJokerInfo;
  return (
@@ -9821,7 +10049,7 @@ export default function App() {
  )}
  </button>
  </div>
- </>
+ </div>
  )}
 
  {/* MÚLTBÉLI FÉLÉVEK FELTÖLTÉSE VARÁZSLÓ MODAL */}

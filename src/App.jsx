@@ -1217,6 +1217,12 @@ function writeLocalCache(key, data) {
  }
 }
 
+function toArraySafe(val) {
+ if (Array.isArray(val)) return val;
+ if (val && typeof val === 'object') return Object.values(val);
+ return [];
+}
+
 function formatHu(val, fixedDecimals = null) {
  if (val === null || val === undefined || val === '' || isNaN(Number(val))) return '0';
  const num = Number(val);
@@ -2542,6 +2548,51 @@ function MaintenanceRepairIllustration({ darkMode }) {
  </div>
  </div>
  );
+}
+
+class SafeModalBoundary extends React.Component {
+ constructor(props) {
+ super(props);
+ this.state = { hasError: false, errorMessage: '' };
+ }
+ static getDerivedStateFromError(error) {
+ return { hasError: true, errorMessage: error?.message || String(error || 'Ismeretlen hiba') };
+ }
+ componentDidCatch(error, info) {
+ console.error('Modal render hiba:', error, info);
+ }
+ render() {
+ if (this.state.hasError) {
+ return (
+ <div
+ onClick={() => {
+ this.setState({ hasError: false, errorMessage: '' });
+ if (this.props.onClose) this.props.onClose();
+ }}
+ className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+ >
+ <div
+ onClick={(e) => e.stopPropagation()}
+ className="rounded-2xl max-w-md w-full bg-slate-900 text-white border-2 border-rose-500 p-5 shadow-2xl space-y-3"
+ >
+ <h3 className="text-base font-extrabold text-rose-400">Hiba a Statisztika betöltésekor</h3>
+ <p className="text-xs text-slate-300 break-words">{this.state.errorMessage}</p>
+ <button
+ type="button"
+ onClick={() => {
+ this.setState({ hasError: false, errorMessage: '' });
+ if (this.props.onClose) this.props.onClose();
+ }}
+ className="w-full py-2.5 rounded-xl text-xs font-extrabold bg-amber-400 text-slate-950 cursor-pointer"
+ >
+ Bezárás
+ </button>
+ </div>
+ </div>
+ );
+ }
+ return this.props.children;
+ }
 }
 
 export default function App() {
@@ -4930,8 +4981,8 @@ export default function App() {
  const isExamCourse = subj.courseKind === 'exam';
  const disablePointCalc = Boolean(subj.disablePointCalc);
  let zhElert = 0, zhMax = 0;
- const assessments = subj.assessments || [];
- const customBuckets = subj.customBuckets || [];
+ const assessments = toArraySafe(subj.assessments);
+ const customBuckets = toArraySafe(subj.customBuckets);
 
  const zhAssessments = assessments.filter(a => a.category === 'ZH');
  zhAssessments.forEach(a => {
@@ -4976,14 +5027,14 @@ export default function App() {
  const regularOsszElert = +(zhElert + pluszElert + egyebElert).toFixed(2);
  const regularOsszMax = +(zhMax + pluszMax + egyebMax).toFixed(2);
 
- const sessions = subj.attendanceSessions || [];
+ const sessions = toArraySafe(subj.attendanceSessions);
  const totalClasses = isExamCourse ? 0 : (Number(subj.totalClasses ?? sessions.length) || 0);
  const presentCount = sessions.filter(s => s.status === 'present').length;
  const absentCount = sessions.filter(s => s.status === 'absent').length;
  const minAttAlairas = isExamCourse ? 0 : (Number(subj.minAttendanceAlairas) || 0);
  const minAttMegajanlott = isExamCourse ? 0 : (Number(subj.minAttendanceMegajanlott) || 0);
 
- const lectureSessions = subj.lectureAttendanceSessions || [];
+ const lectureSessions = toArraySafe(subj.lectureAttendanceSessions);
  const totalLectures = isExamCourse ? 0 : totalClasses;
  const lecturePresentCount = lectureSessions.filter(s => s.status === 'present').length;
  const lectureAbsentCount = lectureSessions.filter(s => s.status === 'absent').length;
@@ -6412,7 +6463,7 @@ export default function App() {
  const computeAcademicSemesterAnalytics = (semName) => {
  if (!semName) return null;
  const targetCanonical = getCanonicalSemesterCode(semName);
- const semSubjs = (Array.isArray(subjects) ? subjects : []).filter(
+ const semSubjs = toArraySafe(subjects).filter(
  s => s && (s.semester === semName || getCanonicalSemesterCode(s.semester) === targetCanonical)
  );
  let totalPracticePresent = 0;
@@ -6427,44 +6478,52 @@ export default function App() {
  let zhTotalAchieved = 0;
  let zhTotalMax = 0;
 
- semSubjs.forEach(subj => {
- const st = subjectStatsMap[subj.id] || calcStats(subj);
+ semSubjs.forEach((subj, sIdx) => {
+ const st = (subj.id && subjectStatsMap[subj.id]) ? subjectStatsMap[subj.id] : calcStats(subj);
  if (subj.courseKind !== 'exam' && !subj.disablePointCalc) {
- totalPracticePresent += st.presentCount;
- totalPracticeClasses += st.totalClasses;
- totalLecturePresent += st.lecturePresentCount;
- totalLectureClasses += st.totalLectures;
+ const pPres = Number(st.presentCount) || 0;
+ const pTot = Number(st.totalClasses) || 0;
+ const lPres = Number(st.lecturePresentCount) || 0;
+ const lTot = Number(st.totalLectures) || 0;
 
- const pracPct = st.totalClasses > 0 ? Math.round((st.presentCount / st.totalClasses) * 100) : null;
- const lecPct = st.totalLectures > 0 ? Math.round((st.lecturePresentCount / st.totalLectures) * 100) : null;
+ totalPracticePresent += pPres;
+ totalPracticeClasses += pTot;
+ totalLecturePresent += lPres;
+ totalLectureClasses += lTot;
+
+ const pracPct = pTot > 0 ? Math.round((pPres / pTot) * 100) : null;
+ const lecPct = lTot > 0 ? Math.round((lPres / lTot) * 100) : null;
 
  subjectAttendanceRows.push({
- id: subj.id,
- name: subj.name,
- credits: subj.credits,
- practicePresent: st.presentCount,
- practiceAbsent: st.absentCount,
- practiceTotal: st.totalClasses,
+ id: subj.id || `subj_row_${sIdx}`,
+ name: String(subj.name || 'Névtelen tárgy'),
+ credits: Number(subj.credits) || 0,
+ practicePresent: pPres,
+ practiceAbsent: Number(st.absentCount) || 0,
+ practiceTotal: pTot,
  practicePct,
- lecturePresent: st.lecturePresentCount,
- lectureAbsent: st.lectureAbsentCount,
- lectureTotal: st.totalLectures,
+ lecturePresent: lPres,
+ lectureAbsent: Number(st.lectureAbsentCount) || 0,
+ lectureTotal: lTot,
  lecturePct
  });
 
- const zhs = (subj.assessments || []).filter(a => a.category === 'ZH');
- zhs.forEach(zh => {
+ const zhs = toArraySafe(subj.assessments).filter(a => a && a.category === 'ZH');
+ zhs.forEach((zh, zIdx) => {
  totalZhSlots++;
  const eff = getEffectiveScore(zh);
- const hasScore = eff !== null && eff !== undefined && eff !== '' && !isNaN(Number(eff));
+ const parsedEff = eff !== null && eff !== undefined && eff !== '' ? Number(String(eff).replace(',', '.')) : NaN;
+ const hasScore = !isNaN(parsedEff);
  if (hasScore) {
- const bonusVal = (zh.bonusPoints !== null && zh.bonusPoints !== undefined && zh.bonusPoints !== '' && !isNaN(Number(zh.bonusPoints)))
- ? Number(zh.bonusPoints)
+ const parsedBonus = (zh.bonusPoints !== null && zh.bonusPoints !== undefined && zh.bonusPoints !== '')
+ ? Number(String(zh.bonusPoints).replace(',', '.'))
  : 0;
- const achievedTotal = +(Number(eff) + bonusVal).toFixed(2);
- const maxVal = (zh.max !== null && zh.max !== undefined && zh.max !== '' && Number(zh.max) > 0)
- ? Number(zh.max)
+ const bonusVal = !isNaN(parsedBonus) ? parsedBonus : 0;
+ const achievedTotal = +(parsedEff + bonusVal).toFixed(2);
+ const parsedMax = (zh.max !== null && zh.max !== undefined && zh.max !== '')
+ ? Number(String(zh.max).replace(',', '.'))
  : 0;
+ const maxVal = (!isNaN(parsedMax) && parsedMax > 0) ? parsedMax : 0;
  const pct = maxVal > 0 ? Number(((achievedTotal / maxVal) * 100).toFixed(1)) : null;
 
  zhTotalAchieved += achievedTotal;
@@ -6476,10 +6535,10 @@ export default function App() {
  }
 
  scoredZhs.push({
- subjectId: subj.id,
- subjectName: subj.name,
- zhId: zh.id,
- zhTitle: zh.title || 'ZH',
+ subjectId: subj.id || `subj_${sIdx}`,
+ subjectName: String(subj.name || 'Névtelen tárgy'),
+ zhId: zh.id || `zh_${sIdx}_${zIdx}`,
+ zhTitle: String(zh.title || 'ZH'),
  achieved: achievedTotal,
  max: maxVal,
  pct,
@@ -10067,7 +10126,9 @@ export default function App() {
 
  
  {/* TANULMÁNYI STATISZTIKA MODAL (JELENLÉT ELOSZLÁS, ZH TELJESÍTÉSEK, LEGJOBB/LEGROSSZABB ZH, FÉLÉV ÖSSZEHASONLÍTÁS) */}
- {isAcademicStatsOpen && (() => {
+ {isAcademicStatsOpen && (
+ <SafeModalBoundary onClose={() => setIsAcademicStatsOpen(false)}>
+ {(() => {
  const effectivePrimarySem = statsPrimarySemester || selectedSemester || semesters[0] || (subjects[0]?.semester ?? '');
  const primaryStats = computeAcademicSemesterAnalytics(effectivePrimarySem);
  const compareStats = (statsCompareSemester && getCanonicalSemesterCode(statsCompareSemester) !== getCanonicalSemesterCode(effectivePrimarySem))
@@ -10446,6 +10507,8 @@ export default function App() {
  </div>
  );
  })()}
+ </SafeModalBoundary>
+ )}
 
  {/* EGYÉNI TÁRGYRENDEZŐ MODAL */}
  {isCustomSortModalOpen && (

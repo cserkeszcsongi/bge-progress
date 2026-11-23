@@ -6451,15 +6451,37 @@ export default function App() {
  };
 
  const computeAcademicSemesterAnalytics = (semName) => {
- try {
- if (!semName) return null;
- const targetCanonical = getCanonicalSemesterCode(String(semName));
- const semSubjs = toArraySafe(subjects).filter(
- s => s && typeof s === 'object' && (
- String(s.semester || '') === String(semName) ||
- getCanonicalSemesterCode(String(s.semester || '')) === targetCanonical
- )
- );
+ const safeParseNumber = (raw) => {
+ if (raw === null || raw === undefined || raw === '' || typeof raw === 'boolean') return NaN;
+ if (typeof raw === 'number') return Number.isFinite(raw) ? raw : NaN;
+ if (typeof raw === 'string') {
+ const cleaned = raw.trim().replace(',', '.');
+ if (!cleaned) return NaN;
+ const n = Number(cleaned);
+ return Number.isFinite(n) ? n : NaN;
+ }
+ return NaN;
+ };
+
+ const safeStr = (raw, fallback = '') => {
+ if (raw === null || raw === undefined) return fallback;
+ if (typeof raw === 'string') return raw;
+ if (typeof raw === 'number' || typeof raw === 'boolean') return `${raw}`;
+ return fallback;
+ };
+
+ const semLabelStr = safeStr(semName, '').trim();
+ if (!semLabelStr) return null;
+
+ const targetCanonical = getCanonicalSemesterCode(semLabelStr);
+ const allSubjs = toArraySafe(subjects);
+ const semSubjs = allSubjs.filter((s) => {
+ if (!s || typeof s !== 'object') return false;
+ const sSem = safeStr(s.semester, '').trim();
+ if (!sSem) return false;
+ return sSem === semLabelStr || getCanonicalSemesterCode(sSem) === targetCanonical;
+ });
+
  let totalPracticePresent = 0;
  let totalPracticeClasses = 0;
  let totalLecturePresent = 0;
@@ -6473,25 +6495,30 @@ export default function App() {
  let zhTotalMax = 0;
 
  semSubjs.forEach((subj, sIdx) => {
- let st;
  try {
- st = (subj.id && subjectStatsMap && subjectStatsMap[subj.id]) ? subjectStatsMap[subj.id] : calcStats(subj);
+ let st = null;
+ if (subj.id && subjectStatsMap && typeof subjectStatsMap === 'object' && subjectStatsMap[subj.id]) {
+ st = subjectStatsMap[subj.id];
+ } else {
+ try {
+ st = calcStats(subj);
  } catch {
- st = {
- presentCount: 0,
- absentCount: 0,
- totalClasses: 0,
- lecturePresentCount: 0,
- lectureAbsentCount: 0,
- totalLectures: 0
- };
+ st = null;
  }
- if (subj.courseKind !== 'exam' && !subj.disablePointCalc) {
- const pPres = Number(st.presentCount) || 0;
- const pTot = Number(st.totalClasses) || 0;
- const lPres = Number(st.lecturePresentCount) || 0;
- const lTot = Number(st.totalLectures) || 0;
+ }
 
+ const fallbackSessions = toArraySafe(subj.attendanceSessions);
+ const fallbackLectureSessions = toArraySafe(subj.lectureAttendanceSessions);
+
+ const pPres = st ? (Number(st.presentCount) || 0) : fallbackSessions.filter(x => x && x.status === 'present').length;
+ const pAbs = st ? (Number(st.absentCount) || 0) : fallbackSessions.filter(x => x && x.status === 'absent').length;
+ const pTot = st ? (Number(st.totalClasses) || 0) : (Number(subj.totalClasses ?? fallbackSessions.length) || 0);
+
+ const lPres = st ? (Number(st.lecturePresentCount) || 0) : fallbackLectureSessions.filter(x => x && x.status === 'present').length;
+ const lAbs = st ? (Number(st.lectureAbsentCount) || 0) : fallbackLectureSessions.filter(x => x && x.status === 'absent').length;
+ const lTot = st ? (Number(st.totalLectures) || 0) : pTot;
+
+ if (subj.courseKind !== 'exam' && !subj.disablePointCalc) {
  totalPracticePresent += pPres;
  totalPracticeClasses += pTot;
  totalLecturePresent += lPres;
@@ -6501,50 +6528,51 @@ export default function App() {
  const lecPct = lTot > 0 ? Math.min(100, Math.max(0, Math.round((lPres / lTot) * 100))) : null;
 
  subjectAttendanceRows.push({
- id: String(subj.id || `subj_row_${sIdx}`),
- name: String(subj.name || 'Névtelen tárgy'),
+ id: safeStr(subj.id, `subj_row_${sIdx}`),
+ name: safeStr(subj.name, 'Névtelen tárgy'),
  credits: Number(subj.credits) || 0,
  practicePresent: pPres,
- practiceAbsent: Number(st.absentCount) || 0,
+ practiceAbsent: pAbs,
  practiceTotal: pTot,
  practicePct,
  lecturePresent: lPres,
- lectureAbsent: Number(st.lectureAbsentCount) || 0,
+ lectureAbsent: lAbs,
  lectureTotal: lTot,
  lecturePct
  });
 
- const zhs = toArraySafe(subj.assessments).filter(a => a && typeof a === 'object' && a.category === 'ZH');
+ const zhs = toArraySafe(subj.assessments).filter(
+ (a) => a && typeof a === 'object' && a.category === 'ZH'
+ );
+
  zhs.forEach((zh, zIdx) => {
  totalZhSlots++;
- const eff = getEffectiveScore(zh);
- const parsedEff = eff !== null && eff !== undefined && eff !== '' ? Number(String(eff).replace(',', '.')) : NaN;
- const hasScore = !isNaN(parsedEff);
- if (hasScore) {
- const parsedBonus = (zh.bonusPoints !== null && zh.bonusPoints !== undefined && zh.bonusPoints !== '')
- ? Number(String(zh.bonusPoints).replace(',', '.'))
- : 0;
+ let eff;
+ try {
+ eff = getEffectiveScore(zh);
+ } catch {
+ eff = zh.achieved;
+ }
+ const parsedEff = safeParseNumber(eff);
+ if (!isNaN(parsedEff)) {
+ const parsedBonus = safeParseNumber(zh.bonusPoints);
  const bonusVal = !isNaN(parsedBonus) ? parsedBonus : 0;
  const achievedTotal = +(parsedEff + bonusVal).toFixed(2);
- const parsedMax = (zh.max !== null && zh.max !== undefined && zh.max !== '')
- ? Number(String(zh.max).replace(',', '.'))
- : 0;
+ const parsedMax = safeParseNumber(zh.max);
  const maxVal = (!isNaN(parsedMax) && parsedMax > 0) ? parsedMax : 0;
  const pct = maxVal > 0 ? Number(((achievedTotal / maxVal) * 100).toFixed(1)) : null;
 
  zhTotalAchieved += achievedTotal;
  zhTotalMax += maxVal;
- if (pct !== null && pct >= 50) {
- passedZhCount++;
- } else if (pct === null && achievedTotal > 0) {
+ if ((pct !== null && pct >= 50) || (pct === null && achievedTotal > 0)) {
  passedZhCount++;
  }
 
  scoredZhs.push({
- subjectId: String(subj.id || `subj_${sIdx}`),
- subjectName: String(subj.name || 'Névtelen tárgy'),
- zhId: String(zh.id || `zh_${sIdx}_${zIdx}`),
- zhTitle: String(zh.title || 'ZH'),
+ subjectId: safeStr(subj.id, `subj_${sIdx}`),
+ subjectName: safeStr(subj.name, 'Névtelen tárgy'),
+ zhId: safeStr(zh.id, `zh_${sIdx}_${zIdx}`),
+ zhTitle: safeStr(zh.title, 'ZH'),
  achieved: achievedTotal,
  max: maxVal,
  pct,
@@ -6552,6 +6580,9 @@ export default function App() {
  });
  }
  });
+ }
+ } catch (subjErr) {
+ console.warn('Tárgy statisztika kihagyva:', subjErr);
  }
  });
 
@@ -6565,11 +6596,15 @@ export default function App() {
  const worstZh = sortedByPerf.length > 0 ? sortedByPerf[0] : null;
  const bestZh = sortedByPerf.length > 0 ? sortedByPerf[sortedByPerf.length - 1] : null;
  const avgZhPct = zhTotalMax > 0 ? Number(((zhTotalAchieved / zhTotalMax) * 100).toFixed(1)) : null;
- const practiceOverallPct = totalPracticeClasses > 0 ? Math.min(100, Math.max(0, Math.round((totalPracticePresent / totalPracticeClasses) * 100))) : null;
- const lectureOverallPct = totalLectureClasses > 0 ? Math.min(100, Math.max(0, Math.round((totalLecturePresent / totalLectureClasses) * 100))) : null;
+ const practiceOverallPct = totalPracticeClasses > 0
+ ? Math.min(100, Math.max(0, Math.round((totalPracticePresent / totalPracticeClasses) * 100)))
+ : null;
+ const lectureOverallPct = totalLectureClasses > 0
+ ? Math.min(100, Math.max(0, Math.round((totalLecturePresent / totalLectureClasses) * 100)))
+ : null;
 
  return {
- semName: String(semName),
+ semName: semLabelStr,
  subjectCount: semSubjs.length,
  subjectAttendanceRows,
  totalPracticePresent,
@@ -6587,10 +6622,6 @@ export default function App() {
  worstZh,
  bestZh
  };
- } catch (err) {
- console.error('Tanulmányi statisztika számítási hiba:', err);
- return null;
- }
  };
 
  const handleReloadForUpdate = async () => {
@@ -10176,9 +10207,9 @@ export default function App() {
  </div>
 
  <div className="p-4 sm:p-6 overflow-y-auto overscroll-contain space-y-5 flex-1 min-h-0">
- {!semStats ? (
+ {(!semStats || semStats.subjectCount === 0) ? (
  <p className={`text-sm text-center py-6 ${textMuted}`}>
- Nincs elérhető adat ebben a félévben.
+ Nincs elérhető tantárgyi adat ebben a félévben.
  </p>
  ) : (
  <>

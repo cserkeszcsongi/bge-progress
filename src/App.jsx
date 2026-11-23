@@ -4868,6 +4868,7 @@ export default function App() {
 
  if (targetView === 'home') {
  if (activeView !== 'home') {
+ window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
  setViewSlideDir('right');
  setActiveView('home');
  }
@@ -4880,6 +4881,7 @@ export default function App() {
  setSelectedSemester(semToOpen);
  }
  if (activeView !== 'semester') {
+ window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
  setViewSlideDir('left');
  setActiveView('semester');
  }
@@ -8237,7 +8239,7 @@ export default function App() {
  }
  .bge-fluid-app section,
  .bge-fluid-app article {
- animation: bgeFluidEnter 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
+ animation: bgeFluidEnter 320ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
  }
  .bge-fluid-reveal {
  animation: bgeCollapseReveal 300ms cubic-bezier(0.34, 1.25, 0.64, 1) both;
@@ -8312,11 +8314,25 @@ export default function App() {
  filter: blur(0px);
  }
  }
+ @keyframes bgeMobileViewFade {
+ 0% {
+ opacity: 0;
+ }
+ 100% {
+ opacity: 1;
+ }
+ }
  .bge-view-slide-left {
  animation: bgeSlideFromRight 300ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
  }
  .bge-view-slide-right {
  animation: bgeSlideFromLeft 300ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+ }
+ @media (max-width: 767px) {
+ .bge-view-slide-left,
+ .bge-view-slide-right {
+ animation: bgeMobileViewFade 200ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+ }
  }
  .bge-view-slide-left section,
  .bge-view-slide-left article,
@@ -8343,7 +8359,6 @@ export default function App() {
  }
  /* === TELJES APPLIKÁCIÓS FROSTED GLASS RENDSZER === */
  .bge-fluid-app header,
- .bge-fluid-app section > div,
  .bge-fluid-app .rounded-2xl,
  .bge-fluid-app .rounded-3xl {
  backdrop-filter: blur(18px) saturate(165%);
@@ -8513,11 +8528,21 @@ export default function App() {
  `}</style>
 
  {/* AMBIENT FROSTED GLASS HÁTTÉRRÉTEG */}
- <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden" aria-hidden="true">
- <div className={`absolute -top-28 -left-24 w-96 h-96 rounded-full blur-3xl transition-colors duration-500 ${darkMode ? 'bg-amber-400/18' : 'bg-amber-300/42'}`} />
- <div className={`absolute top-1/3 -right-24 w-[26rem] h-[26rem] rounded-full blur-3xl transition-colors duration-500 ${darkMode ? 'bg-sky-500/18' : 'bg-sky-300/40'}`} />
- <div className={`absolute -bottom-28 left-1/4 w-96 h-96 rounded-full blur-3xl transition-colors duration-500 ${darkMode ? 'bg-emerald-500/15' : 'bg-emerald-300/34'}`} />
- </div>
+ <div
+ aria-hidden="true"
+ className="pointer-events-none fixed top-0 left-0 right-0 -z-10"
+ style={{
+ height: '100lvh',
+ minHeight: '100vh',
+ transform: 'translate3d(0, 0, 0)',
+ backfaceVisibility: 'hidden',
+ WebkitBackfaceVisibility: 'hidden',
+ contain: 'strict',
+ backgroundImage: darkMode
+ ? 'radial-gradient(circle 340px at 8% 8%, rgba(251, 191, 36, 0.16) 0%, rgba(251, 191, 36, 0) 72%), radial-gradient(circle 380px at 92% 42%, rgba(14, 165, 233, 0.16) 0%, rgba(14, 165, 233, 0) 72%), radial-gradient(circle 360px at 34% 92%, rgba(16, 185, 129, 0.13) 0%, rgba(16, 185, 129, 0) 72%)'
+ : 'radial-gradient(circle 340px at 8% 8%, rgba(252, 211, 77, 0.36) 0%, rgba(252, 211, 77, 0) 72%), radial-gradient(circle 380px at 92% 42%, rgba(125, 211, 252, 0.34) 0%, rgba(125, 211, 252, 0) 72%), radial-gradient(circle 360px at 34% 92%, rgba(110, 231, 183, 0.30) 0%, rgba(110, 231, 183, 0) 72%)'
+ }}
+ />
 
  <input
  ref={neptunExcelInputRef}

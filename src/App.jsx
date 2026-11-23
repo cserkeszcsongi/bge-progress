@@ -8530,10 +8530,11 @@ export default function App() {
  {isReloadingApp ? 'Frissítés...' : 'Oldal frissítése'}
  </button>
  <button
+  data-no-glass="true"
  type="button"
  onClick={() => setUpdateBannerDismissedAt(Date.now())}
  title="Emlékeztessen később"
- className="p-1.5 text-slate-400 hover:text-white cursor-pointer"
+ className="bg-transparent p-1.5 text-slate-400 hover:text-white cursor-pointer"
  >
  <X className="w-4 h-4" />
  </button>
@@ -8691,6 +8692,7 @@ export default function App() {
  Tedd ki parancsikonként!
  </p>
  <button
+  data-no-glass="true"
  type="button"
  onClick={() => {
  setIsInstallMiniPopupVisible(false);
@@ -8698,7 +8700,7 @@ export default function App() {
  }}
  title="Bezárás"
  aria-label="Mini emlékeztető bezárása"
- className={`p-0.5 -mt-0.5 -mr-1 rounded-md cursor-pointer ${textMuted} hover:text-amber-500`}
+ className={`bg-transparent p-0.5 -mt-0.5 -mr-1 rounded-md cursor-pointer ${textMuted} hover:text-amber-500`}
  >
  <X className="w-3.5 h-3.5" />
  </button>
@@ -8754,9 +8756,10 @@ export default function App() {
  </div>
  </div>
  <button
+  data-no-glass="true"
  type="button"
  onClick={() => setIsInstallGuideOpen(false)}
- className="text-slate-400 hover:text-white p-1.5 cursor-pointer shrink-0"
+ className="bg-transparent text-slate-400 hover:text-white p-1.5 cursor-pointer shrink-0"
  >
  <X className="w-5 h-5" />
  </button>
@@ -10764,10 +10767,11 @@ export default function App() {
  </div>
  </div>
  <button
+  data-no-glass="true"
  type="button"
  disabled={isSavingPastSemesters}
  onClick={() => setIsPastSemestersWizardOpen(false)}
- className="text-slate-400 hover:text-white p-1.5 cursor-pointer shrink-0 disabled:opacity-50"
+ className="bg-transparent text-slate-400 hover:text-white p-1.5 cursor-pointer shrink-0 disabled:opacity-50"
  >
  <X className="w-5 h-5" />
  </button>
@@ -11189,10 +11193,11 @@ export default function App() {
  </div>
  </div>
  <button
+  data-no-glass="true"
  type="button"
  disabled={isParsingExcel}
  onClick={() => setExcelImportTargetSemCode(null)}
- className="text-slate-400 hover:text-white p-1.5 cursor-pointer shrink-0 disabled:opacity-50"
+ className="bg-transparent text-slate-400 hover:text-white p-1.5 cursor-pointer shrink-0 disabled:opacity-50"
  >
  <X className="w-5 h-5" />
  </button>
@@ -11307,9 +11312,10 @@ export default function App() {
  </div>
  </div>
  <button
+  data-no-glass="true"
  type="button"
  onClick={() => setIsStatsModalOpen(false)}
- className="text-slate-400 hover:text-white p-1.5 cursor-pointer shrink-0"
+ className="bg-transparent text-slate-400 hover:text-white p-1.5 cursor-pointer shrink-0"
  >
  <X className="w-5 h-5" />
  </button>
@@ -11512,9 +11518,10 @@ export default function App() {
  </div>
  </div>
  <button
+  data-no-glass="true"
  type="button"
  onClick={() => setIsAvgCalcOpen(false)}
- className="text-slate-400 hover:text-white p-1.5 cursor-pointer shrink-0"
+ className="bg-transparent text-slate-400 hover:text-white p-1.5 cursor-pointer shrink-0"
  >
  <X className="w-5 h-5" />
  </button>
@@ -11766,9 +11773,10 @@ export default function App() {
  </div>
  </div>
  <button
+  data-no-glass="true"
  type="button"
  onClick={() => setIsCustomSortModalOpen(false)}
- className="text-slate-400 hover:text-white p-1.5 cursor-pointer shrink-0"
+ className="bg-transparent text-slate-400 hover:text-white p-1.5 cursor-pointer shrink-0"
  >
  <X className="w-5 h-5" />
  </button>
@@ -11924,10 +11932,11 @@ export default function App() {
  </div>
  {!mustAcceptGdpr && (
  <button
+  data-no-glass="true"
  type="button"
  onClick={() => setIsGdprModalOpen(false)}
  title="Bezárás"
- className="text-slate-400 hover:text-white p-1.5 cursor-pointer shrink-0"
+ className="bg-transparent text-slate-400 hover:text-white p-1.5 cursor-pointer shrink-0"
  >
  <X className="w-5 h-5" />
  </button>
@@ -12110,11 +12119,12 @@ export default function App() {
  </div>
  {!mustSelectMajor && (
  <button
+  data-no-glass="true"
  type="button"
  disabled={isSavingMajor}
  onClick={() => setIsMajorSelectModalOpen(false)}
  title="Bezárás"
- className="text-slate-400 hover:text-white p-1.5 cursor-pointer shrink-0 disabled:opacity-50"
+ className="bg-transparent text-slate-400 hover:text-white p-1.5 cursor-pointer shrink-0 disabled:opacity-50"
  >
  <X className="w-5 h-5" />
  </button>
@@ -12285,9 +12295,10 @@ export default function App() {
  </div>
  </div>
  <button
+  data-no-glass="true"
  type="button"
  onClick={() => setIsDegreeCreditsModalOpen(false)}
- className="text-slate-400 hover:text-white p-1.5 cursor-pointer shrink-0"
+ className="bg-transparent text-slate-400 hover:text-white p-1.5 cursor-pointer shrink-0"
  >
  <X className="w-5 h-5" />
  </button>
@@ -12436,9 +12447,10 @@ export default function App() {
  </div>
  </div>
  <button
+  data-no-glass="true"
  type="button"
  onClick={() => setIsThresholdModalOpen(false)}
- className="text-slate-400 hover:text-white p-1.5 cursor-pointer shrink-0"
+ className="bg-transparent text-slate-400 hover:text-white p-1.5 cursor-pointer shrink-0"
  >
  <X className="w-5 h-5" />
  </button>
@@ -12545,10 +12557,11 @@ export default function App() {
  </div>
  </div>
  <button
+  data-no-glass="true"
  type="button"
  onClick={handleCloseWelcome}
  title="Bezárás"
- className="text-slate-400 hover:text-white p-1.5 cursor-pointer shrink-0"
+ className="bg-transparent text-slate-400 hover:text-white p-1.5 cursor-pointer shrink-0"
  >
  <X className="w-5 h-5" />
  </button>
@@ -12654,9 +12667,10 @@ export default function App() {
  </div>
  </div>
  <button
+  data-no-glass="true"
  type="button"
  onClick={() => setIsFeedbackOpen(false)}
- className="text-slate-400 hover:text-white p-1.5 cursor-pointer shrink-0"
+ className="bg-transparent text-slate-400 hover:text-white p-1.5 cursor-pointer shrink-0"
  >
  <X className="w-5 h-5" />
  </button>
@@ -12793,10 +12807,11 @@ export default function App() {
  </div>
  </div>
  <button
+  data-no-glass="true"
  type="button"
  onClick={handleCloseTutorial}
  title="Bemutató bezárása"
- className="text-slate-400 hover:text-white p-1.5 cursor-pointer"
+ className="bg-transparent text-slate-400 hover:text-white p-1.5 cursor-pointer"
  >
  <X className="w-5 h-5" />
  </button>
@@ -12962,9 +12977,10 @@ export default function App() {
  </button>
  )}
  <button
+  data-no-glass="true"
  type="button"
  onClick={handleCloseChangelog}
- className="text-slate-400 hover:text-white p-1.5 cursor-pointer"
+ className="bg-transparent text-slate-400 hover:text-white p-1.5 cursor-pointer"
  >
  <X className="w-5 h-5" />
  </button>
@@ -13141,10 +13157,11 @@ export default function App() {
  </div>
  </div>
  <button
+  data-no-glass="true"
  type="button"
  disabled={isSavingJoker}
  onClick={() => setIsJokerModalOpen(false)}
- className="text-violet-100 hover:text-white p-1.5 cursor-pointer disabled:opacity-50"
+ className="bg-transparent text-violet-100 hover:text-white p-1.5 cursor-pointer disabled:opacity-50"
  >
  <X className="w-5 h-5" />
  </button>
@@ -13517,10 +13534,11 @@ export default function App() {
  <h2 className="font-extrabold text-sm sm:text-base">Félév végleges törlése</h2>
  </div>
  <button
+  data-no-glass="true"
  type="button"
  disabled={isDeletingSemester}
  onClick={() => setSemesterToDelete(null)}
- className="text-rose-100 hover:text-white p-1 cursor-pointer disabled:opacity-50"
+ className="bg-transparent text-rose-100 hover:text-white p-1 cursor-pointer disabled:opacity-50"
  >
  <X className="w-5 h-5" />
  </button>
@@ -13811,8 +13829,9 @@ export default function App() {
  </div>
 
  <button
+  data-no-glass="true"
  onClick={() => setActiveSubjectId(null)}
- className="p-2 text-slate-400 hover:text-white cursor-pointer shrink-0 -mr-1 -mt-1"
+ className="bg-transparent p-2 text-slate-400 hover:text-white cursor-pointer shrink-0 -mr-1 -mt-1"
  >
  <X className="w-5 h-5" />
  </button>
@@ -13865,16 +13884,17 @@ export default function App() {
  </div>
 
  {!st.isExamCourse && !st.disablePointCalc && (
- <div className={`flex border-b px-3 sm:px-6 shrink-0 ${darkMode ? 'border-slate-800 bg-slate-900/50' : 'border-slate-200 bg-slate-50'}`}>
+ <div className={`flex border-b px-3 sm:px-6 shrink-0 bg-transparent ${darkMode ? 'border-slate-800' : 'border-slate-200'}`}>
  <button
  type="button"
+ data-no-glass="true"
  onClick={() => {
  setDetailTab('points');
  if (detailModalBodyRef.current) {
  detailModalBodyRef.current.scrollTop = 0;
  }
  }}
- className={`py-3 px-3 sm:px-4 text-xs sm:text-sm font-semibold border-b-2 transition cursor-pointer ${
+ className={`bg-transparent py-3 px-3 sm:px-4 text-xs sm:text-sm font-semibold border-b-2 transition cursor-pointer ${
  detailTab === 'points'
  ? 'border-amber-400 text-amber-500'
  : `border-transparent ${textMuted}`
@@ -13884,13 +13904,14 @@ export default function App() {
  </button>
  <button
  type="button"
+ data-no-glass="true"
  onClick={() => {
  setDetailTab('attendance');
  if (detailModalBodyRef.current) {
  detailModalBodyRef.current.scrollTop = 0;
  }
  }}
- className={`py-3 px-3 sm:px-4 text-xs sm:text-sm font-semibold border-b-2 transition cursor-pointer flex items-center gap-2 ${
+ className={`bg-transparent py-3 px-3 sm:px-4 text-xs sm:text-sm font-semibold border-b-2 transition cursor-pointer flex items-center gap-2 ${
  detailTab === 'attendance'
  ? 'border-amber-400 text-amber-500'
  : `border-transparent ${textMuted}`
@@ -14907,7 +14928,7 @@ export default function App() {
  >
  <div className="px-4 sm:px-6 py-3.5 sm:py-4 bg-slate-900 text-white flex justify-between items-center">
  <h2 className="font-bold text-sm sm:text-base">{bucketModal.id ? 'Gyűjtő szerkesztése' : 'Új egyéb gyűjtő létrehozása'}</h2>
- <button onClick={() => setBucketModal(null)} className="text-slate-400 hover:text-white p-1 cursor-pointer"><X className="w-5 h-5" /></button>
+ <button data-no-glass="true" onClick={() => setBucketModal(null)} className="bg-transparent text-slate-400 hover:text-white p-1 cursor-pointer"><X className="w-5 h-5" /></button>
  </div>
  <form onSubmit={handleSaveBucketModal} className="p-4 sm:p-6 space-y-4">
  <div>
@@ -14967,7 +14988,7 @@ export default function App() {
  ? 'Vizsgapontszám rögzítése (Max: 100 p)'
  : `${itemModal.id ? 'Tétel szerkesztése' : 'Új tétel'} (${itemModal.category === 'Egyeb' ? 'Egyéb gyűjtő' : itemModal.category})`}
  </h2>
- <button onClick={() => setItemModal(null)} className="text-slate-400 hover:text-white p-1 cursor-pointer"><X className="w-5 h-5" /></button>
+ <button data-no-glass="true" onClick={() => setItemModal(null)} className="bg-transparent text-slate-400 hover:text-white p-1 cursor-pointer"><X className="w-5 h-5" /></button>
  </div>
  <form noValidate onSubmit={handleSaveItemModal} className="p-4 sm:p-6 overflow-y-auto overscroll-contain space-y-4 flex-1 min-h-0">
  {!itemModal.isAutoExam && activeSubject?.courseKind !== 'exam' && (
@@ -15122,7 +15143,7 @@ export default function App() {
  >
  <div className="px-4 sm:px-6 py-3.5 sm:py-4 bg-slate-900 text-white flex justify-between items-center">
  <h2 className="font-bold text-sm sm:text-base">Új félév létrehozása</h2>
- <button onClick={() => setIsSemesterModalOpen(false)} className="text-slate-400 hover:text-white p-1 cursor-pointer"><X className="w-5 h-5" /></button>
+ <button data-no-glass="true" onClick={() => setIsSemesterModalOpen(false)} className="bg-transparent text-slate-400 hover:text-white p-1 cursor-pointer"><X className="w-5 h-5" /></button>
  </div>
  <form onSubmit={handleAddSemester} className="p-4 sm:p-6 space-y-4">
  <div>
@@ -15235,10 +15256,11 @@ export default function App() {
  <p className="text-[11px] text-slate-400 truncate">Jelenlegi: {formatSemesterLabel(editingSemesterOldName)}</p>
  </div>
  <button
+  data-no-glass="true"
  type="button"
  disabled={isUpdatingSemester}
  onClick={() => setEditingSemesterOldName(null)}
- className="text-slate-400 hover:text-white p-1 cursor-pointer disabled:opacity-50"
+ className="bg-transparent text-slate-400 hover:text-white p-1 cursor-pointer disabled:opacity-50"
  >
  <X className="w-5 h-5" />
  </button>
@@ -15371,8 +15393,9 @@ export default function App() {
  )}
  </div>
  <button
+  data-no-glass="true"
  onClick={() => { setIsSubjectModalOpen(false); setSelectedSubjectMajorId(null); }}
- className="text-slate-400 hover:text-white p-1.5 cursor-pointer shrink-0"
+ className="bg-transparent text-slate-400 hover:text-white p-1.5 cursor-pointer shrink-0"
  >
  <X className="w-5 h-5" />
  </button>
@@ -15477,11 +15500,12 @@ export default function App() {
  </button>
  </div>
 
- <div className={`flex border-b px-3 sm:px-6 shrink-0 ${darkMode ? 'border-slate-800 bg-slate-900/50' : 'border-slate-200 bg-slate-50'}`}>
+ <div className={`flex border-b px-3 sm:px-6 shrink-0 bg-transparent ${darkMode ? 'border-slate-800' : 'border-slate-200'}`}>
  <button
  type="button"
+ data-no-glass="true"
  onClick={() => setSubjectModalMode('template')}
- className={`py-2.5 px-3 sm:px-4 text-xs sm:text-sm font-semibold border-b-2 transition cursor-pointer flex items-center gap-1.5 ${
+ className={`bg-transparent py-2.5 px-3 sm:px-4 text-xs sm:text-sm font-semibold border-b-2 transition cursor-pointer flex items-center gap-1.5 ${
  subjectModalMode === 'template'
  ? 'border-amber-400 text-amber-500'
  : `border-transparent ${textMuted}`
@@ -15492,8 +15516,9 @@ export default function App() {
  </button>
  <button
  type="button"
+ data-no-glass="true"
  onClick={() => setSubjectModalMode('manual')}
- className={`py-2.5 px-3 sm:px-4 text-xs sm:text-sm font-semibold border-b-2 transition cursor-pointer ${
+ className={`bg-transparent py-2.5 px-3 sm:px-4 text-xs sm:text-sm font-semibold border-b-2 transition cursor-pointer ${
  subjectModalMode === 'manual'
  ? 'border-amber-400 text-amber-500'
  : `border-transparent ${textMuted}`
@@ -16147,12 +16172,13 @@ export default function App() {
  </button>
  )}
  <button
+  data-no-glass="true"
  type="button"
  onClick={() => {
  setIsNoticeboardOpen(false);
  setIsAddingNotice(false);
  }}
- className="text-slate-400 hover:text-white p-1.5 cursor-pointer"
+ className="bg-transparent text-slate-400 hover:text-white p-1.5 cursor-pointer"
  >
  <X className="w-5 h-5" />
  </button>
@@ -16172,9 +16198,10 @@ export default function App() {
  <Bell className="w-4 h-4" /> Új faliújság közlemény létrehozása
  </p>
  <button
+  data-no-glass="true"
  type="button"
  onClick={() => setIsAddingNotice(false)}
- className={`p-1 rounded-lg cursor-pointer ${textMuted}`}
+ className={`bg-transparent p-1 rounded-lg cursor-pointer ${textMuted}`}
  >
  <X className="w-4 h-4" />
  </button>
@@ -16397,10 +16424,11 @@ export default function App() {
  </div>
  </div>
  <button
+  data-no-glass="true"
  type="button"
  onClick={() => handleMarkNoticeAsRead(activeNoticePopup.id)}
  title="Bezárás"
- className="text-slate-400 hover:text-white p-1.5 cursor-pointer shrink-0"
+ className="bg-transparent text-slate-400 hover:text-white p-1.5 cursor-pointer shrink-0"
  >
  <X className="w-5 h-5" />
  </button>

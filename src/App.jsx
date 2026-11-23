@@ -6449,11 +6449,15 @@ export default function App() {
  };
 
  const handleOpenAcademicStatsModal = () => {
- const fallbackPrimary = semesters[0] || (subjects[0]?.semester ?? '');
- const primary = (selectedSemester && semesters.includes(selectedSemester))
+ const safeSemesters = Array.isArray(semesters) ? semesters : [];
+ const safeSubjects = toArraySafe(subjects);
+ const fallbackPrimary = safeSemesters[0] || (safeSubjects[0]?.semester ? String(safeSubjects[0].semester) : '');
+ const primary = (selectedSemester && safeSemesters.includes(selectedSemester))
  ? selectedSemester
  : fallbackPrimary;
- const otherSemesters = semesters.filter(s => getCanonicalSemesterCode(s) !== getCanonicalSemesterCode(primary));
+ const otherSemesters = safeSemesters.filter(
+ s => getCanonicalSemesterCode(String(s)) !== getCanonicalSemesterCode(String(primary))
+ );
  const defaultCompare = otherSemesters.length > 0 ? otherSemesters[otherSemesters.length - 1] : '';
  setStatsPrimarySemester(primary);
  setStatsCompareSemester(defaultCompare);
@@ -6461,10 +6465,14 @@ export default function App() {
  };
 
  const computeAcademicSemesterAnalytics = (semName) => {
+ try {
  if (!semName) return null;
- const targetCanonical = getCanonicalSemesterCode(semName);
+ const targetCanonical = getCanonicalSemesterCode(String(semName));
  const semSubjs = toArraySafe(subjects).filter(
- s => s && (s.semester === semName || getCanonicalSemesterCode(s.semester) === targetCanonical)
+ s => s && typeof s === 'object' && (
+ String(s.semester || '') === String(semName) ||
+ getCanonicalSemesterCode(String(s.semester || '')) === targetCanonical
+ )
  );
  let totalPracticePresent = 0;
  let totalPracticeClasses = 0;
@@ -6479,7 +6487,19 @@ export default function App() {
  let zhTotalMax = 0;
 
  semSubjs.forEach((subj, sIdx) => {
- const st = (subj.id && subjectStatsMap[subj.id]) ? subjectStatsMap[subj.id] : calcStats(subj);
+ let st;
+ try {
+ st = (subj.id && subjectStatsMap && subjectStatsMap[subj.id]) ? subjectStatsMap[subj.id] : calcStats(subj);
+ } catch {
+ st = {
+ presentCount: 0,
+ absentCount: 0,
+ totalClasses: 0,
+ lecturePresentCount: 0,
+ lectureAbsentCount: 0,
+ totalLectures: 0
+ };
+ }
  if (subj.courseKind !== 'exam' && !subj.disablePointCalc) {
  const pPres = Number(st.presentCount) || 0;
  const pTot = Number(st.totalClasses) || 0;
@@ -6491,11 +6511,11 @@ export default function App() {
  totalLecturePresent += lPres;
  totalLectureClasses += lTot;
 
- const pracPct = pTot > 0 ? Math.round((pPres / pTot) * 100) : null;
- const lecPct = lTot > 0 ? Math.round((lPres / lTot) * 100) : null;
+ const pracPct = pTot > 0 ? Math.min(100, Math.max(0, Math.round((pPres / pTot) * 100))) : null;
+ const lecPct = lTot > 0 ? Math.min(100, Math.max(0, Math.round((lPres / lTot) * 100))) : null;
 
  subjectAttendanceRows.push({
- id: subj.id || `subj_row_${sIdx}`,
+ id: String(subj.id || `subj_row_${sIdx}`),
  name: String(subj.name || 'Névtelen tárgy'),
  credits: Number(subj.credits) || 0,
  practicePresent: pPres,
@@ -6508,7 +6528,7 @@ export default function App() {
  lecturePct
  });
 
- const zhs = toArraySafe(subj.assessments).filter(a => a && a.category === 'ZH');
+ const zhs = toArraySafe(subj.assessments).filter(a => a && typeof a === 'object' && a.category === 'ZH');
  zhs.forEach((zh, zIdx) => {
  totalZhSlots++;
  const eff = getEffectiveScore(zh);
@@ -6535,9 +6555,9 @@ export default function App() {
  }
 
  scoredZhs.push({
- subjectId: subj.id || `subj_${sIdx}`,
+ subjectId: String(subj.id || `subj_${sIdx}`),
  subjectName: String(subj.name || 'Névtelen tárgy'),
- zhId: zh.id || `zh_${sIdx}_${zIdx}`,
+ zhId: String(zh.id || `zh_${sIdx}_${zIdx}`),
  zhTitle: String(zh.title || 'ZH'),
  achieved: achievedTotal,
  max: maxVal,
@@ -6559,11 +6579,11 @@ export default function App() {
  const worstZh = sortedByPerf.length > 0 ? sortedByPerf[0] : null;
  const bestZh = sortedByPerf.length > 0 ? sortedByPerf[sortedByPerf.length - 1] : null;
  const avgZhPct = zhTotalMax > 0 ? Number(((zhTotalAchieved / zhTotalMax) * 100).toFixed(1)) : null;
- const practiceOverallPct = totalPracticeClasses > 0 ? Math.round((totalPracticePresent / totalPracticeClasses) * 100) : null;
- const lectureOverallPct = totalLectureClasses > 0 ? Math.round((totalLecturePresent / totalLectureClasses) * 100) : null;
+ const practiceOverallPct = totalPracticeClasses > 0 ? Math.min(100, Math.max(0, Math.round((totalPracticePresent / totalPracticeClasses) * 100))) : null;
+ const lectureOverallPct = totalLectureClasses > 0 ? Math.min(100, Math.max(0, Math.round((totalLecturePresent / totalLectureClasses) * 100))) : null;
 
  return {
- semName,
+ semName: String(semName),
  subjectCount: semSubjs.length,
  subjectAttendanceRows,
  totalPracticePresent,
@@ -6581,6 +6601,10 @@ export default function App() {
  worstZh,
  bestZh
  };
+ } catch (err) {
+ console.error('Tanulmányi statisztika számítási hiba:', err);
+ return null;
+ }
  };
 
  const handleReloadForUpdate = async () => {
@@ -8253,7 +8277,7 @@ export default function App() {
  isCurrentSemester(selectedSemester) ? 'border-amber-400 font-bold' : 'border-slate-700'
  }`}
  >
- {semesters.map(sem => (
+ {(semesters.length > 0 ? semesters : (effectivePrimarySem ? [effectivePrimarySem] : [])).map(sem => (
  <option key={sem} value={sem}>
  {formatSemesterLabel(sem)}{isCurrentSemester(sem) ? ' • Aktuális' : ''}
  </option>

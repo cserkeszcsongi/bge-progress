@@ -1154,17 +1154,17 @@ const TUTORIAL_SLIDES = [
  },
  {
  id: 'joker_simulator',
- shortLabel: '7. Gyűjtő & Stat.',
- badge: '7 / 9 • Gyűjtő menü, Statisztika, Joker & Átlagszámoló',
- title: 'Lebegő Gyűjtő menü, Tanulmányi Statisztika, Joker ZH és Átlagszámoló',
+ shortLabel: '7. Gyűjtő & Joker',
+ badge: '7 / 9 • Gyűjtő kapszula, Joker ZH & Átlagszámoló',
+ title: 'Lebegő Gyűjtő kapszula, Joker ZH és Átlagszámoló',
  description:
- 'A féléves dashboard jobb alsó sarkában található „Gyűjtő” gomb egyetlen érintésre előhívja az összes tervező- és elemzőeszközt.',
+ 'A féléves dashboard jobb alsó sarkában található lebegő kapszula egyetlen érintésre előhívja a legfontosabb tervezőeszközöket.',
  steps: [
- 'Gyűjtő menügomb (jobb alsó sarok): megnyomásával előugrik a lebegő eszköztár az Új tantárgy (+), az Átlagszámoló, a JOKER ZH és az új Statisztika gombbal.',
- 'Statisztika: áttekinthetően mutatja az adott félév tárgyankénti jelenléti eloszlását (gyakorlatokon és előadásokon), a ZH-teljesítéseket, valamint a félév legrosszabb és legjobb ZH-ját.',
- 'JOKER ZH és Átlagszámoló: a lebegő sávból azonnal kijelölheted az újraírandó ZH-t, vagy 1–5-ös jegygombokkal élőben szimulálhatod a súlyozott átlagot és a KKI-t.'
+ 'Lebegő kapszula (jobb alsó sarok): megnyomásával előugrik az Új tantárgy (+), az Átlagszámoló és a JOKER ZH gomb.',
+ 'JOKER ZH kijelzés: ha már kiválasztottál egy újraírandó ZH-t, a kapszula megnyitásakor a JOKER ZH gomb alján azonnal látod, melyik tárgy melyik ZH-ja lett kiválasztva.',
+ 'Átlagszámoló: 1–5-ös színes jegygombokkal élőben szimulálhatod a féléved súlyozott átlagát és korrigált kreditindexét.'
  ],
- tip: 'A Statisztika ablak mindig az éppen megnyitott féléved jelenléti és ZH-mutatóit összesíti egyetlen átlátható nézetben.'
+ tip: 'A dashboard tetején található két jelenléti mini kártyán egyetlen pillantással követheted a gyakorlatok és előadások tárgyankénti megoszlását is.'
  },
  {
  id: 'failed_attendance_pwa',
@@ -1533,23 +1533,6 @@ function JokerIcon({ className = 'w-4 h-4' }) {
  );
 }
 
-function AcademicStatsIcon({ className = 'w-4 h-4' }) {
- return (
- <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
- <path d="M21.21 15.89A10 10 0 1 1 8 2.83" />
- <path d="M22 12A10 10 0 0 0 12 2v10z" />
- </svg>
- );
-}
-
-function TrendMiniIcon({ className = 'w-3.5 h-3.5' }) {
- return (
- <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
- <polyline points="22 7 13.5 15.5 8.5 10.5 2 17" />
- <polyline points="16 7 22 7 22 13" />
- </svg>
- );
-}
 function TutorialSlidePreview({ slideId, darkMode }) {
  const cardBg = darkMode ? 'bg-slate-900 border-slate-700/90' : 'bg-white border-slate-200';
  const subBg = darkMode ? 'bg-slate-800/80 border-slate-700' : 'bg-slate-50 border-slate-200/80';
@@ -1742,26 +1725,23 @@ function TutorialSlidePreview({ slideId, darkMode }) {
  <div className={`rounded-2xl border p-3.5 sm:p-4 shadow-md space-y-3 ${cardBg}`}>
  <div className="flex flex-wrap items-center gap-2">
  <span className="px-3 py-1 rounded-full text-xs font-extrabold bg-amber-400 text-slate-950 inline-flex items-center gap-1.5 shadow-md">
- <Plus className="w-3.5 h-3.5" /> Gyűjtő kapszula
- </span>
- <span className="px-3 py-1 rounded-full text-xs font-bold bg-indigo-600 text-white inline-flex items-center gap-1.5 shadow-md">
- <AcademicStatsIcon className="w-3.5 h-3.5" /> Statisztika
- </span>
- <span className="px-3 py-1 rounded-full text-xs font-bold bg-violet-600 text-white inline-flex items-center gap-1.5 shadow-md">
- <JokerIcon className="w-3.5 h-3.5" /> JOKER ZH
+ <Plus className="w-3.5 h-3.5" /> Új tantárgy
  </span>
  <span className="px-3 py-1 rounded-full text-xs font-bold bg-cyan-500 text-slate-950 inline-flex items-center gap-1.5 shadow-md">
  <Calculator className="w-3.5 h-3.5" /> Átlagszámoló
  </span>
+ <span className="px-3 py-1 rounded-full text-xs font-bold bg-violet-600 text-white inline-flex items-center gap-1.5 shadow-md">
+ <JokerIcon className="w-3.5 h-3.5" /> JOKER ZH
+ </span>
  </div>
  <div className="grid grid-cols-2 gap-2">
  <div className={`p-2.5 rounded-xl border ${subBg}`}>
- <span className="text-[10px] font-bold text-emerald-500 uppercase block">Legjobb ZH</span>
- <strong className={`text-xs font-extrabold ${strong}`}>93,3% (28 / 30 p)</strong>
+ <span className="text-[10px] font-bold text-amber-500 uppercase block">Gyakorlatok jelenléte</span>
+ <strong className={`text-xs font-extrabold ${strong}`}>83% (25 / 30 alkalom)</strong>
  </div>
  <div className={`p-2.5 rounded-xl border ${subBg}`}>
- <span className="text-[10px] font-bold text-rose-500 uppercase block">Legrosszabb ZH</span>
- <strong className={`text-xs font-extrabold ${strong}`}>53,3% (16 / 30 p)</strong>
+ <span className="text-[10px] font-bold text-sky-500 uppercase block">Előadások jelenléte</span>
+ <strong className={`text-xs font-extrabold ${strong}`}>70% (21 / 30 alkalom)</strong>
  </div>
  </div>
  </div>
@@ -2550,51 +2530,6 @@ function MaintenanceRepairIllustration({ darkMode }) {
  );
 }
 
-class SafeModalBoundary extends React.Component {
- constructor(props) {
- super(props);
- this.state = { hasError: false, errorMessage: '' };
- }
- static getDerivedStateFromError(error) {
- return { hasError: true, errorMessage: error?.message || String(error || 'Ismeretlen hiba') };
- }
- componentDidCatch(error, info) {
- console.error('Modal render hiba:', error, info);
- }
- render() {
- if (this.state.hasError) {
- return (
- <div
- onClick={() => {
- this.setState({ hasError: false, errorMessage: '' });
- if (this.props.onClose) this.props.onClose();
- }}
- className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4"
- >
- <div
- onClick={(e) => e.stopPropagation()}
- className="rounded-2xl max-w-md w-full bg-slate-900 text-white border-2 border-rose-500 p-5 shadow-2xl space-y-3"
- >
- <h3 className="text-base font-extrabold text-rose-400">Hiba a Statisztika betöltésekor</h3>
- <p className="text-xs text-slate-300 break-words">{this.state.errorMessage}</p>
- <button
- type="button"
- onClick={() => {
- this.setState({ hasError: false, errorMessage: '' });
- if (this.props.onClose) this.props.onClose();
- }}
- className="w-full py-2.5 rounded-xl text-xs font-extrabold bg-amber-400 text-slate-950 cursor-pointer"
- >
- Bezárás
- </button>
- </div>
- </div>
- );
- }
- return this.props.children;
- }
-}
-
 export default function App() {
  const [darkMode, setDarkMode] = useState(() => localStorage.getItem('bge_theme') === 'dark');
  const [monochrome, setMonochrome] = useState(() => localStorage.getItem('bge_palette') === 'monochrome');
@@ -2893,7 +2828,6 @@ export default function App() {
  const [avgCalcGrades, setAvgCalcGrades] = useState({});
 
  const [isCollectorMenuOpen, setIsCollectorMenuOpen] = useState(false);
- const [isAcademicStatsOpen, setIsAcademicStatsOpen] = useState(false);
 
  const [activeSubjectId, setActiveSubjectId] = useState(null);
  const [detailTab, setDetailTab] = useState('points');
@@ -6086,7 +6020,6 @@ export default function App() {
  semesterToDelete ||
  isCustomSortModalOpen ||
  isAvgCalcOpen ||
- isAcademicStatsOpen ||
  isStatsModalOpen ||
  isInstallGuideOpen ||
  mustAcceptGdpr ||
@@ -6124,7 +6057,6 @@ export default function App() {
  if (isJokerModalOpen && !isSavingJoker) { setIsJokerModalOpen(false); return; }
  if (isCustomSortModalOpen) { setIsCustomSortModalOpen(false); return; }
  if (isAvgCalcOpen) { setIsAvgCalcOpen(false); return; }
- if (isAcademicStatsOpen) { setIsAcademicStatsOpen(false); return; }
  if (isDegreeCreditsModalOpen) { setIsDegreeCreditsModalOpen(false); return; }
  if (isThresholdModalOpen) { setIsThresholdModalOpen(false); return; }
  if (isPastSemestersWizardOpen && !isSavingPastSemesters) { setIsPastSemestersWizardOpen(false); return; }
@@ -6182,11 +6114,6 @@ export default function App() {
  if (isAvgCalcOpen) {
  e.preventDefault();
  setIsAvgCalcOpen(false);
- return;
- }
- if (isAcademicStatsOpen) {
- e.preventDefault();
- setIsAcademicStatsOpen(false);
  return;
  }
  if (activeNoticePopup) {
@@ -6446,196 +6373,75 @@ export default function App() {
  });
  };
 
- const handleOpenAcademicStatsModal = () => {
- setIsAcademicStatsOpen(true);
- };
-
- const activeStatsSemesterCode = useMemo(() => {
- if (selectedSemester) return selectedSemester;
- if (Array.isArray(semesters) && semesters.length > 0) return semesters[0];
- const firstSubj = toArraySafe(subjects)[0];
- return firstSubj?.semester ? String(firstSubj.semester) : '';
- }, [selectedSemester, semesters, subjects]);
-
- const currentAcademicStats = useMemo(() => {
- try {
- const safeParseNumber = (raw) => {
- if (raw === null || raw === undefined || raw === '' || typeof raw === 'boolean') return NaN;
- if (typeof raw === 'number') return Number.isFinite(raw) ? raw : NaN;
- if (typeof raw === 'string') {
- const cleaned = raw.trim().replace(',', '.');
- if (!cleaned) return NaN;
- const n = Number(cleaned);
- return Number.isFinite(n) ? n : NaN;
- }
- return NaN;
- };
-
- const safeStr = (raw, fallback = '') => {
- if (raw === null || raw === undefined) return fallback;
- if (typeof raw === 'string') return raw;
- if (typeof raw === 'number' || typeof raw === 'boolean') return `${raw}`;
- return fallback;
- };
-
- const semLabelStr = safeStr(activeStatsSemesterCode, '').trim();
- const targetCanonical = getCanonicalSemesterCode(semLabelStr);
-
- const directSemSubjs = (Array.isArray(semesterSubjects) && semesterSubjects.length > 0)
- ? semesterSubjects
- : toArraySafe(subjects).filter((s) => {
- if (!s || typeof s !== 'object') return false;
- const sSem = safeStr(s.semester, '').trim();
- if (!sSem) return false;
- return sSem === semLabelStr || getCanonicalSemesterCode(sSem) === targetCanonical;
- });
-
+ const semesterAttendanceSummary = useMemo(() => {
  let totalPracticePresent = 0;
+ let totalPracticeAbsent = 0;
  let totalPracticeClasses = 0;
  let totalLecturePresent = 0;
+ let totalLectureAbsent = 0;
  let totalLectureClasses = 0;
+ const rows = [];
 
- const subjectAttendanceRows = [];
- const scoredZhs = [];
- let totalZhSlots = 0;
- let passedZhCount = 0;
- let zhTotalAchieved = 0;
- let zhTotalMax = 0;
+ semesterSubjects.forEach((subj) => {
+ if (!subj || subj.courseKind === 'exam') return;
+ const st = subjectStatsMap[subj.id] || calcStats(subj);
+ const pPres = Number(st.presentCount) || 0;
+ const pAbs = Number(st.absentCount) || 0;
+ const pTot = Math.max(Number(st.totalClasses) || 0, toArraySafe(subj.attendanceSessions).length);
+ const pRem = Math.max(0, pTot - pPres - pAbs);
 
- directSemSubjs.forEach((subj, sIdx) => {
- if (!subj || typeof subj !== 'object') return;
- const st = (subj.id && subjectStatsMap && subjectStatsMap[subj.id])
- ? subjectStatsMap[subj.id]
- : calcStats(subj);
+ const lPres = Number(st.lecturePresentCount) || 0;
+ const lAbs = Number(st.lectureAbsentCount) || 0;
+ const lTot = Math.max(Number(st.totalLectures) || 0, pTot, toArraySafe(subj.lectureAttendanceSessions).length);
+ const lRem = Math.max(0, lTot - lPres - lAbs);
 
- const isExam = subj.courseKind === 'exam';
- const rawPracticeSessions = toArraySafe(subj.attendanceSessions);
- const rawLectureSessions = toArraySafe(subj.lectureAttendanceSessions);
-
- const pPres = st ? (Number(st.presentCount) || 0) : rawPracticeSessions.filter(x => x && x.status === 'present').length;
- const pAbs = st ? (Number(st.absentCount) || 0) : rawPracticeSessions.filter(x => x && x.status === 'absent').length;
- const pTot = isExam
- ? 0
- : Math.max(
- st ? (Number(st.totalClasses) || 0) : 0,
- Number(subj.totalClasses) || 0,
- rawPracticeSessions.length
- );
-
- const lPres = st ? (Number(st.lecturePresentCount) || 0) : rawLectureSessions.filter(x => x && x.status === 'present').length;
- const lAbs = st ? (Number(st.lectureAbsentCount) || 0) : rawLectureSessions.filter(x => x && x.status === 'absent').length;
- const lTot = isExam
- ? 0
- : Math.max(
- st ? (Number(st.totalLectures) || 0) : 0,
- Number(subj.totalLectures) || 0,
- pTot,
- rawLectureSessions.length
- );
-
- if (!isExam) {
  totalPracticePresent += pPres;
+ totalPracticeAbsent += pAbs;
  totalPracticeClasses += pTot;
+
  totalLecturePresent += lPres;
+ totalLectureAbsent += lAbs;
  totalLectureClasses += lTot;
 
- const pracPct = pTot > 0 ? Math.min(100, Math.max(0, Math.round((pPres / pTot) * 100))) : null;
- const lecPct = lTot > 0 ? Math.min(100, Math.max(0, Math.round((lPres / lTot) * 100))) : null;
-
- subjectAttendanceRows.push({
- id: safeStr(subj.id, `subj_row_${sIdx}`),
- name: safeStr(subj.name, 'Névtelen tárgy'),
- credits: Number(subj.credits) || 0,
+ rows.push({
+ id: subj.id,
+ name: subj.name || 'Névtelen tárgy',
  practicePresent: pPres,
  practiceAbsent: pAbs,
+ practiceRemaining: pRem,
  practiceTotal: pTot,
- practicePct,
+ practicePresentPct: pTot > 0 ? Math.min(100, Math.max(0, Math.round((pPres / pTot) * 100))) : null,
+ practiceAbsentPct: pTot > 0 ? Math.min(100, Math.max(0, Math.round((pAbs / pTot) * 100))) : 0,
+ minAttAlairas: Number(st.minAttAlairas) || 0,
+ attendanceAlairasPossible: Boolean(st.attendanceAlairasPossible),
  lecturePresent: lPres,
  lectureAbsent: lAbs,
+ lectureRemaining: lRem,
  lectureTotal: lTot,
- lecturePct
+ lecturePresentPct: lTot > 0 ? Math.min(100, Math.max(0, Math.round((lPres / lTot) * 100))) : null,
+ lectureAbsentPct: lTot > 0 ? Math.min(100, Math.max(0, Math.round((lAbs / lTot) * 100))) : 0
+ });
  });
 
- const zhs = toArraySafe(subj.assessments).filter((a) => {
- if (!a || typeof a !== 'object') return false;
- const cat = safeStr(a.category, '').trim().toUpperCase();
- return cat === 'ZH';
- });
-
- zhs.forEach((zh, zIdx) => {
- totalZhSlots++;
- const eff = getEffectiveScore(zh);
- const parsedEff = safeParseNumber(eff);
- if (!isNaN(parsedEff)) {
- const parsedBonus = safeParseNumber(zh.bonusPoints);
- const bonusVal = !isNaN(parsedBonus) ? parsedBonus : 0;
- const achievedTotal = +(parsedEff + bonusVal).toFixed(2);
- const parsedMax = safeParseNumber(zh.max);
- const maxVal = (!isNaN(parsedMax) && parsedMax > 0) ? parsedMax : 0;
- const pct = maxVal > 0 ? Number(((achievedTotal / maxVal) * 100).toFixed(1)) : null;
-
- zhTotalAchieved += achievedTotal;
- zhTotalMax += maxVal;
- if ((pct !== null && pct >= 50) || (pct === null && achievedTotal > 0)) {
- passedZhCount++;
- }
-
- scoredZhs.push({
- subjectId: safeStr(subj.id, `subj_${sIdx}`),
- subjectName: safeStr(subj.name, 'Névtelen tárgy'),
- zhId: safeStr(zh.id, `zh_${sIdx}_${zIdx}`),
- zhTitle: safeStr(zh.title, 'ZH'),
- achieved: achievedTotal,
- max: maxVal,
- pct,
- isJoker: Boolean(zh.isJokerRewritten)
- });
- }
- });
- }
- });
-
- const sortedByPerf = [...scoredZhs].sort((a, b) => {
- const scoreA = a.pct !== null ? a.pct : a.achieved;
- const scoreB = b.pct !== null ? b.pct : b.achieved;
- if (scoreA !== scoreB) return scoreA - scoreB;
- return a.achieved - b.achieved;
- });
-
- const worstZh = sortedByPerf.length > 0 ? sortedByPerf[0] : null;
- const bestZh = sortedByPerf.length > 0 ? sortedByPerf[sortedByPerf.length - 1] : null;
- const avgZhPct = zhTotalMax > 0 ? Number(((zhTotalAchieved / zhTotalMax) * 100).toFixed(1)) : null;
- const practiceOverallPct = totalPracticeClasses > 0
- ? Math.min(100, Math.max(0, Math.round((totalPracticePresent / totalPracticeClasses) * 100)))
- : null;
- const lectureOverallPct = totalLectureClasses > 0
- ? Math.min(100, Math.max(0, Math.round((totalLecturePresent / totalLectureClasses) * 100)))
- : null;
+ const practiceRemaining = Math.max(0, totalPracticeClasses - totalPracticePresent - totalPracticeAbsent);
+ const lectureRemaining = Math.max(0, totalLectureClasses - totalLecturePresent - totalLectureAbsent);
 
  return {
- semName: semLabelStr,
- subjectCount: directSemSubjs.length,
- subjectAttendanceRows,
+ rows,
  totalPracticePresent,
+ totalPracticeAbsent,
+ practiceRemaining,
  totalPracticeClasses,
- practiceOverallPct,
+ practicePct: totalPracticeClasses > 0 ? Math.min(100, Math.max(0, Math.round((totalPracticePresent / totalPracticeClasses) * 100))) : null,
+ practiceAbsentPct: totalPracticeClasses > 0 ? Math.min(100, Math.max(0, Math.round((totalPracticeAbsent / totalPracticeClasses) * 100))) : 0,
  totalLecturePresent,
+ totalLectureAbsent,
+ lectureRemaining,
  totalLectureClasses,
- lectureOverallPct,
- totalZhSlots,
- completedZhCount: scoredZhs.length,
- passedZhCount,
- zhTotalAchieved: +zhTotalAchieved.toFixed(2),
- zhTotalMax: +zhTotalMax.toFixed(2),
- avgZhPct,
- worstZh,
- bestZh
+ lecturePct: totalLectureClasses > 0 ? Math.min(100, Math.max(0, Math.round((totalLecturePresent / totalLectureClasses) * 100))) : null,
+ lectureAbsentPct: totalLectureClasses > 0 ? Math.min(100, Math.max(0, Math.round((totalLectureAbsent / totalLectureClasses) * 100))) : 0
  };
- } catch (statsErr) {
- console.error('Statisztika számítási hiba:', statsErr);
- return null;
- }
- }, [activeStatsSemesterCode, semesterSubjects, subjects, subjectStatsMap, isSim, simScores]);
+ }, [semesterSubjects, subjectStatsMap]);
 
  const handleReloadForUpdate = async () => {
  if (isReloadingApp) return;
@@ -8425,7 +8231,7 @@ export default function App() {
 
  {semesterSubjects.length > 0 && (
  <>
- <section className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4 mb-5">
+ <section className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4 mb-2.5 sm:mb-4">
  <div className={`p-3.5 sm:p-4 rounded-xl border shadow-sm ${bgCard}`}>
  <p className={`text-[11px] sm:text-xs font-medium uppercase ${textMuted}`}>Aláírások</p>
  <p className={`text-xl sm:text-2xl font-bold mt-1 ${textStrong}`}>{kpis.alairtDb} / {kpis.osszesTargy}</p>
@@ -8449,6 +8255,206 @@ export default function App() {
  <p className={`text-[11px] sm:text-xs mt-1 ${textMuted}`}>
  {kpis.fMax > 0 ? `${kpis.fElert} / ${kpis.fMax} összpont` : `${kpis.fElert} összpont`}
  </p>
+ </div>
+ </section>
+
+ <section className="grid grid-cols-1 md:grid-cols-2 gap-2.5 sm:gap-4 mb-5">
+ {/* MINI KÁRTYA 1: GYAKORLATOK JELENLÉTE */}
+ <div className={`p-3.5 sm:p-4 rounded-xl border shadow-sm flex flex-col justify-between gap-2.5 ${bgCard}`}>
+ <div className="space-y-2">
+ <div className="flex items-start justify-between gap-2">
+ <div className="min-w-0">
+ <p className="text-[11px] sm:text-xs font-bold uppercase tracking-wide text-amber-500">
+ Gyakorlatok jelenléte
+ </p>
+ <div className="flex items-baseline gap-2 mt-0.5 flex-wrap">
+ <span className={`text-xl sm:text-2xl font-extrabold ${textStrong}`}>
+ {semesterAttendanceSummary.practicePct !== null ? `${semesterAttendanceSummary.practicePct}%` : '—'}
+ </span>
+ <span className={`text-[11px] sm:text-xs font-medium ${textMuted}`}>
+ {semesterAttendanceSummary.totalPracticePresent} / {semesterAttendanceSummary.totalPracticeClasses} alkalom
+ </span>
+ </div>
+ </div>
+ <div className="flex items-center gap-1.5 flex-wrap justify-end text-[10px] sm:text-[11px] font-bold shrink-0">
+ <span className={`px-2 py-0.5 rounded-full ${darkMode ? 'bg-emerald-500/20 text-emerald-300' : 'bg-emerald-100 text-emerald-700'}`}>
+ Jelen: {semesterAttendanceSummary.totalPracticePresent}
+ </span>
+ <span className={`px-2 py-0.5 rounded-full ${darkMode ? 'bg-rose-500/20 text-rose-300' : 'bg-rose-100 text-rose-700'}`}>
+ Hiányzás: {semesterAttendanceSummary.totalPracticeAbsent}
+ </span>
+ <span className={`px-2 py-0.5 rounded-full ${darkMode ? 'bg-slate-800 text-slate-300' : 'bg-slate-100 text-slate-600'}`}>
+ Hátra: {semesterAttendanceSummary.practiceRemaining}
+ </span>
+ </div>
+ </div>
+
+ <div className={`w-full h-2 rounded-full overflow-hidden flex ${darkMode ? 'bg-slate-800' : 'bg-slate-200'}`}>
+ <div
+ className="h-full bg-emerald-500 transition-all duration-300"
+ style={{ width: `${semesterAttendanceSummary.practicePct ?? 0}%` }}
+ />
+ <div
+ className="h-full bg-rose-500 transition-all duration-300"
+ style={{ width: `${semesterAttendanceSummary.practiceAbsentPct}%` }}
+ />
+ </div>
+ </div>
+
+ {semesterAttendanceSummary.rows.length > 0 ? (
+ <div className={`pt-2 border-t space-y-1.5 max-h-36 overflow-y-auto pr-0.5 ${darkMode ? 'border-slate-800' : 'border-slate-100'}`}>
+ {semesterAttendanceSummary.rows.map((row) => (
+ <button
+ key={`prac_${row.id}`}
+ type="button"
+ onClick={() => {
+ setActiveSubjectId(row.id);
+ setDetailTab('attendance');
+ setAttendanceSubTab('practice');
+ }}
+ title={`${row.name} — Gyakorlati jelenlét megnyitása`}
+ className={`w-full text-left px-2 py-1 rounded-lg transition cursor-pointer ${
+ darkMode ? 'hover:bg-slate-800/80' : 'hover:bg-slate-50'
+ }`}
+ >
+ <div className="flex items-center justify-between gap-2 text-[11px]">
+ <span className={`font-semibold truncate ${textStrong}`}>{row.name}</span>
+ <span className="flex items-center gap-1.5 shrink-0 font-bold">
+ {row.practiceTotal > 0 ? (
+ <>
+ <span className={
+ !row.attendanceAlairasPossible
+ ? 'text-rose-500'
+ : row.practicePresent >= row.minAttAlairas
+ ? 'text-emerald-500'
+ : textStrong
+ }>
+ {row.practicePresent}/{row.practiceTotal}
+ </span>
+ {row.practiceAbsent > 0 && (
+ <span className="text-rose-500 text-[10px]">({row.practiceAbsent} h.)</span>
+ )}
+ <span className={`text-[10px] ${textMuted}`}>{row.practicePresentPct}%</span>
+ </>
+ ) : (
+ <span className={`text-[10px] font-normal ${textMuted}`}>Nincs beállítva</span>
+ )}
+ </span>
+ </div>
+ {row.practiceTotal > 0 && (
+ <div className={`w-full h-1.5 rounded-full overflow-hidden flex mt-1 ${darkMode ? 'bg-slate-800' : 'bg-slate-200'}`}>
+ <div
+ className="h-full bg-amber-400 transition-all duration-300"
+ style={{ width: `${row.practicePresentPct ?? 0}%` }}
+ />
+ <div
+ className="h-full bg-rose-500 transition-all duration-300"
+ style={{ width: `${row.practiceAbsentPct}%` }}
+ />
+ </div>
+ )}
+ </button>
+ ))}
+ </div>
+ ) : (
+ <p className={`text-[11px] italic ${textMuted}`}>Nincs gyakorlati jelenléttel rendelkező tárgy.</p>
+ )}
+ </div>
+
+ {/* MINI KÁRTYA 2: ELŐADÁSOK JELENLÉTE */}
+ <div className={`p-3.5 sm:p-4 rounded-xl border shadow-sm flex flex-col justify-between gap-2.5 ${bgCard}`}>
+ <div className="space-y-2">
+ <div className="flex items-start justify-between gap-2">
+ <div className="min-w-0">
+ <p className="text-[11px] sm:text-xs font-bold uppercase tracking-wide text-sky-500">
+ Előadások jelenléte <span className={`normal-case font-medium ${textMuted}`}>(nincs min.)</span>
+ </p>
+ <div className="flex items-baseline gap-2 mt-0.5 flex-wrap">
+ <span className={`text-xl sm:text-2xl font-extrabold ${textStrong}`}>
+ {semesterAttendanceSummary.lecturePct !== null ? `${semesterAttendanceSummary.lecturePct}%` : '—'}
+ </span>
+ <span className={`text-[11px] sm:text-xs font-medium ${textMuted}`}>
+ {semesterAttendanceSummary.totalLecturePresent} / {semesterAttendanceSummary.totalLectureClasses} alkalom
+ </span>
+ </div>
+ </div>
+ <div className="flex items-center gap-1.5 flex-wrap justify-end text-[10px] sm:text-[11px] font-bold shrink-0">
+ <span className={`px-2 py-0.5 rounded-full ${darkMode ? 'bg-sky-500/20 text-sky-300' : 'bg-sky-100 text-sky-700'}`}>
+ Jelen: {semesterAttendanceSummary.totalLecturePresent}
+ </span>
+ <span className={`px-2 py-0.5 rounded-full ${darkMode ? 'bg-rose-500/20 text-rose-300' : 'bg-rose-100 text-rose-700'}`}>
+ Hiányzás: {semesterAttendanceSummary.totalLectureAbsent}
+ </span>
+ <span className={`px-2 py-0.5 rounded-full ${darkMode ? 'bg-slate-800 text-slate-300' : 'bg-slate-100 text-slate-600'}`}>
+ Hátra: {semesterAttendanceSummary.lectureRemaining}
+ </span>
+ </div>
+ </div>
+
+ <div className={`w-full h-2 rounded-full overflow-hidden flex ${darkMode ? 'bg-slate-800' : 'bg-slate-200'}`}>
+ <div
+ className="h-full bg-sky-500 transition-all duration-300"
+ style={{ width: `${semesterAttendanceSummary.lecturePct ?? 0}%` }}
+ />
+ <div
+ className="h-full bg-rose-500 transition-all duration-300"
+ style={{ width: `${semesterAttendanceSummary.lectureAbsentPct}%` }}
+ />
+ </div>
+ </div>
+
+ {semesterAttendanceSummary.rows.length > 0 ? (
+ <div className={`pt-2 border-t space-y-1.5 max-h-36 overflow-y-auto pr-0.5 ${darkMode ? 'border-slate-800' : 'border-slate-100'}`}>
+ {semesterAttendanceSummary.rows.map((row) => (
+ <button
+ key={`lec_${row.id}`}
+ type="button"
+ onClick={() => {
+ setActiveSubjectId(row.id);
+ setDetailTab('attendance');
+ setAttendanceSubTab('lecture');
+ }}
+ title={`${row.name} — Előadás jelenlét megnyitása`}
+ className={`w-full text-left px-2 py-1 rounded-lg transition cursor-pointer ${
+ darkMode ? 'hover:bg-slate-800/80' : 'hover:bg-slate-50'
+ }`}
+ >
+ <div className="flex items-center justify-between gap-2 text-[11px]">
+ <span className={`font-semibold truncate ${textStrong}`}>{row.name}</span>
+ <span className="flex items-center gap-1.5 shrink-0 font-bold">
+ {row.lectureTotal > 0 ? (
+ <>
+ <span className={textStrong}>
+ {row.lecturePresent}/{row.lectureTotal}
+ </span>
+ {row.lectureAbsent > 0 && (
+ <span className="text-rose-500 text-[10px]">({row.lectureAbsent} h.)</span>
+ )}
+ <span className={`text-[10px] ${textMuted}`}>{row.lecturePresentPct}%</span>
+ </>
+ ) : (
+ <span className={`text-[10px] font-normal ${textMuted}`}>Nincs beállítva</span>
+ )}
+ </span>
+ </div>
+ {row.lectureTotal > 0 && (
+ <div className={`w-full h-1.5 rounded-full overflow-hidden flex mt-1 ${darkMode ? 'bg-slate-800' : 'bg-slate-200'}`}>
+ <div
+ className="h-full bg-sky-500 transition-all duration-300"
+ style={{ width: `${row.lecturePresentPct ?? 0}%` }}
+ />
+ <div
+ className="h-full bg-rose-500 transition-all duration-300"
+ style={{ width: `${row.lectureAbsentPct}%` }}
+ />
+ </div>
+ )}
+ </button>
+ ))}
+ </div>
+ ) : (
+ <p className={`text-[11px] italic ${textMuted}`}>Nincs előadás jelenléttel rendelkező tárgy.</p>
+ )}
  </div>
  </section>
 
@@ -9011,8 +9017,10 @@ export default function App() {
  </main>
 
  <div data-collector-menu="true" className="fixed bottom-5 right-5 sm:bottom-7 sm:right-7 z-30 flex flex-col items-end gap-3">
- {isCollectorMenuOpen && (
- <div className={`rounded-3xl border-2 p-2.5 sm:p-3 shadow-2xl backdrop-blur-md flex flex-col items-stretch gap-2 min-w-[215px] sm:min-w-[235px] transition-all ${
+ {isCollectorMenuOpen && (() => {
+ const selectedJokerForCapsule = pendingJokerInfo || activeJokerInfo;
+ return (
+ <div className={`rounded-3xl border-2 p-2.5 sm:p-3 shadow-2xl backdrop-blur-md flex flex-col items-stretch gap-2 min-w-[225px] max-w-[280px] sm:min-w-[245px] transition-all ${
  darkMode
  ? 'bg-slate-900/95 border-amber-400/70 text-slate-100 shadow-black/70'
  : 'bg-white/95 border-amber-400 text-slate-900 shadow-slate-900/20'
@@ -9021,45 +9029,34 @@ export default function App() {
  type="button"
  onClick={() => {
  setIsCollectorMenuOpen(false);
- handleOpenAcademicStatsModal();
- }}
- disabled={semesters.length === 0 && subjects.length === 0}
- title="Tanulmányi statisztika: jelenlét-eloszlás, ZH-teljesítések, legjobb/legrosszabb ZH"
- className="w-full px-3.5 py-2.5 rounded-2xl text-xs sm:text-sm font-extrabold bg-indigo-600 hover:bg-indigo-500 disabled:opacity-45 disabled:cursor-not-allowed text-white shadow-md flex items-center justify-between gap-2.5 transition cursor-pointer"
- >
- <span className="flex items-center gap-2">
- <AcademicStatsIcon className="w-4 h-4 shrink-0" />
- <span>Statisztika</span>
- </span>
- <TrendMiniIcon className="w-3.5 h-3.5 opacity-80 shrink-0" />
- </button>
-
- <button
- type="button"
- onClick={() => {
- setIsCollectorMenuOpen(false);
  handleOpenJokerModal();
  }}
  disabled={semesterSubjects.length === 0}
  title={
- pendingJokerInfo
- ? `Eredményre vár: ${pendingJokerInfo.subject.name} — ${pendingJokerInfo.assessment.title}`
+ selectedJokerForCapsule
+ ? `Kiválasztott Joker ZH: ${selectedJokerForCapsule.subject.name} — ${selectedJokerForCapsule.assessment.title}`
  : 'Tetszőleges tantárgy egyik ZH-jának javítása Joker ZH-val'
  }
- className={`w-full px-3.5 py-2.5 rounded-2xl text-xs sm:text-sm font-extrabold disabled:opacity-45 disabled:cursor-not-allowed text-white flex items-center justify-between gap-2 transition cursor-pointer ${
+ className={`w-full px-3.5 py-2.5 rounded-2xl text-xs sm:text-sm font-extrabold disabled:opacity-45 disabled:cursor-not-allowed text-white flex flex-col items-stretch gap-1.5 transition cursor-pointer ${
  pendingJokerInfo
  ? 'bg-gradient-to-r from-violet-600 via-fuchsia-600 to-amber-500 ring-2 ring-amber-300 shadow-md'
  : 'bg-violet-600 hover:bg-violet-500 shadow-md'
  }`}
  >
+ <span className="flex items-center justify-between gap-2 w-full">
  <span className="flex items-center gap-2 min-w-0">
  <JokerIcon className="w-4 h-4 shrink-0" />
- <span className="truncate">
- {pendingJokerInfo ? `JOKER: ${pendingJokerInfo.assessment.title}` : 'JOKER ZH'}
+ <span className="truncate">JOKER ZH</span>
  </span>
- </span>
- {(pendingJokerInfo || activeJokerInfo) && (
+ {selectedJokerForCapsule && (
  <span className="w-2 h-2 rounded-full bg-amber-300 shrink-0" />
+ )}
+ </span>
+ {selectedJokerForCapsule && (
+ <span className="w-full pt-1.5 border-t border-white/25 text-[10px] sm:text-[11px] font-semibold text-white/95 leading-snug text-left truncate block">
+ {selectedJokerForCapsule.subject.name} — {selectedJokerForCapsule.assessment.title}
+ {pendingJokerInfo ? ' (várakozik)' : ''}
+ </span>
  )}
  </button>
 
@@ -9094,13 +9091,14 @@ export default function App() {
  </span>
  </button>
  </div>
- )}
+ );
+ })()}
 
  <button
  type="button"
  onClick={() => setIsCollectorMenuOpen(prev => !prev)}
  aria-expanded={isCollectorMenuOpen}
- title="Új tantárgy, Átlagszámoló, Joker ZH, Statisztika"
+ title="Új tantárgy, Átlagszámoló, Joker ZH"
  aria-label="Eszközök kapszula"
  className={`w-12 sm:w-14 py-2.5 sm:py-3 rounded-full flex flex-col items-center justify-center gap-1.5 transition transform hover:scale-105 active:scale-95 cursor-pointer relative ${
  isCollectorMenuOpen
@@ -9109,7 +9107,7 @@ export default function App() {
  }`}
  >
  {isCollectorMenuOpen ? (
- <X className="w-6 h-6 stroke-[2.75] my-3" />
+ <X className="w-6 h-6 stroke-[2.75] my-2" />
  ) : (
  <>
  <span className="w-6 h-6 rounded-full bg-slate-950/12 flex items-center justify-center">
@@ -9120,9 +9118,6 @@ export default function App() {
  </span>
  <span className="w-6 h-6 rounded-full bg-slate-950/12 flex items-center justify-center">
  <JokerIcon className="w-3.5 h-3.5" />
- </span>
- <span className="w-6 h-6 rounded-full bg-slate-950/12 flex items-center justify-center">
- <AcademicStatsIcon className="w-3.5 h-3.5" />
  </span>
  </>
  )}
@@ -10179,258 +10174,7 @@ export default function App() {
  )}
 
  
- {/* TANULMÁNYI STATISZTIKA MODAL (DINAMIKUSAN FRISSÜLŐ, ADOTT FÉLÉV ADATAI) */}
- {isAcademicStatsOpen && (
- <SafeModalBoundary onClose={() => setIsAcademicStatsOpen(false)}>
- <div
- data-top-modal="true"
- onClick={() => setIsAcademicStatsOpen(false)}
- className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-2.5 sm:p-4 overscroll-none"
- >
- <div
- onClick={(e) => e.stopPropagation()}
- className={`rounded-2xl max-w-3xl w-full max-h-[93dvh] flex flex-col shadow-2xl overflow-hidden border-2 border-indigo-500/70 ${bgCard}`}
- >
- <div className="px-4 sm:px-6 py-3.5 sm:py-4 bg-slate-900 text-white flex justify-between items-center border-b border-slate-800 shrink-0">
- <div className="flex items-center gap-2.5 min-w-0">
- <div className="w-9 h-9 rounded-xl bg-indigo-500 text-white flex items-center justify-center shrink-0">
- <AcademicStatsIcon className="w-5 h-5" />
- </div>
- <div className="min-w-0">
- <div className="flex items-center gap-2 flex-wrap">
- <h2 className="font-extrabold text-sm sm:text-base leading-tight">
- Statisztika — {formatSemesterLabel(activeStatsSemesterCode)}
- </h2>
- {isSim && (
- <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-400 text-slate-950">
- Szimulátor
- </span>
- )}
- </div>
- <p className="text-[11px] text-indigo-300 truncate">
- Élő adatok: jelenlét-eloszlás, ZH-teljesítések, legjobb &amp; legrosszabb ZH
- </p>
- </div>
- </div>
- <button
- type="button"
- onClick={() => setIsAcademicStatsOpen(false)}
- className="text-slate-400 hover:text-white p-1.5 cursor-pointer shrink-0"
- >
- <X className="w-5 h-5" />
- </button>
- </div>
 
- <div className="p-4 sm:p-6 overflow-y-auto overscroll-contain space-y-5 flex-1 min-h-0">
- {(!currentAcademicStats || currentAcademicStats.subjectCount === 0) ? (
- <p className={`text-sm text-center py-6 ${textMuted}`}>
- Nincs elérhető tantárgyi adat ebben a félévben.
- </p>
- ) : (
- <>
- {/* 1. ZH TELJESÍTÉSEK & ÖSSZESÍTETT JELENLÉT */}
- <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
- <div className={`p-3.5 rounded-2xl border space-y-1.5 ${bgSubCard}`}>
- <span className={`text-[11px] font-extrabold uppercase block ${textMuted}`}>
- ZH teljesítések
- </span>
- <p className={`text-xl sm:text-2xl font-extrabold ${textStrong}`}>
- {currentAcademicStats.completedZhCount} / {currentAcademicStats.totalZhSlots}{' '}
- <span className={`text-xs font-semibold ${textMuted}`}>rögzítve</span>
- </p>
- <p className="text-xs font-semibold text-emerald-500">
- Sikeres (≥50%): {currentAcademicStats.passedZhCount} db
- {currentAcademicStats.avgZhPct !== null && ` • Átlag: ${formatHu(currentAcademicStats.avgZhPct)}%`}
- </p>
- </div>
-
- <div className={`p-3.5 rounded-2xl border space-y-1.5 ${bgSubCard}`}>
- <span className={`text-[11px] font-extrabold uppercase block ${textMuted}`}>
- Gyakorlati részvétel
- </span>
- <p className={`text-xl sm:text-2xl font-extrabold ${textStrong}`}>
- {currentAcademicStats.practiceOverallPct !== null ? `${currentAcademicStats.practiceOverallPct}%` : '—'}
- </p>
- <p className={`text-xs ${textMuted}`}>
- Összesen: <strong className={textStrong}>{currentAcademicStats.totalPracticePresent}</strong> / {currentAcademicStats.totalPracticeClasses} alkalom
- </p>
- </div>
-
- <div className={`p-3.5 rounded-2xl border space-y-1.5 ${bgSubCard}`}>
- <span className={`text-[11px] font-extrabold uppercase block ${textMuted}`}>
- Előadás részvétel
- </span>
- <p className={`text-xl sm:text-2xl font-extrabold ${textStrong}`}>
- {currentAcademicStats.lectureOverallPct !== null ? `${currentAcademicStats.lectureOverallPct}%` : '—'}
- </p>
- <p className={`text-xs ${textMuted}`}>
- Összesen: <strong className={textStrong}>{currentAcademicStats.totalLecturePresent}</strong> / {currentAcademicStats.totalLectureClasses} alkalom
- </p>
- </div>
- </div>
-
- {/* 2. LEGROSSZABB ZH ÉS LEGJOBB ZH */}
- <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
- <div className={`p-4 rounded-2xl border-2 space-y-2 ${
- darkMode
- ? 'bg-rose-950/25 border-rose-500/45'
- : 'bg-rose-50/80 border-rose-300'
- }`}>
- <span className="text-[11px] font-extrabold uppercase tracking-wide text-rose-500 block">
- Legrosszabb ZH
- </span>
- {currentAcademicStats.worstZh ? (
- <>
- <p className={`text-2xl font-extrabold ${textStrong}`}>
- {currentAcademicStats.worstZh.pct !== null ? `${formatHu(currentAcademicStats.worstZh.pct)}%` : `${formatHu(currentAcademicStats.worstZh.achieved)} p`}
- {currentAcademicStats.worstZh.max > 0 && (
- <span className={`text-xs font-semibold ml-1.5 ${textMuted}`}>
- ({formatHu(currentAcademicStats.worstZh.achieved)} / {formatHu(currentAcademicStats.worstZh.max)} p)
- </span>
- )}
- </p>
- <p className={`text-xs font-bold ${textStrong}`}>
- {currentAcademicStats.worstZh.subjectName} — <span className="text-rose-500">{currentAcademicStats.worstZh.zhTitle}</span>
- </p>
- </>
- ) : (
- <p className={`text-xs italic ${textMuted}`}>Még nincs rögzített ZH eredmény ebben a félévben.</p>
- )}
- </div>
-
- <div className={`p-4 rounded-2xl border-2 space-y-2 ${
- darkMode
- ? 'bg-emerald-950/25 border-emerald-500/45'
- : 'bg-emerald-50/80 border-emerald-300'
- }`}>
- <span className="text-[11px] font-extrabold uppercase tracking-wide text-emerald-500 block">
- Legjobb ZH
- </span>
- {currentAcademicStats.bestZh ? (
- <>
- <p className={`text-2xl font-extrabold ${textStrong}`}>
- {currentAcademicStats.bestZh.pct !== null ? `${formatHu(currentAcademicStats.bestZh.pct)}%` : `${formatHu(currentAcademicStats.bestZh.achieved)} p`}
- {currentAcademicStats.bestZh.max > 0 && (
- <span className={`text-xs font-semibold ml-1.5 ${textMuted}`}>
- ({formatHu(currentAcademicStats.bestZh.achieved)} / {formatHu(currentAcademicStats.bestZh.max)} p)
- </span>
- )}
- </p>
- <p className={`text-xs font-bold ${textStrong}`}>
- {currentAcademicStats.bestZh.subjectName} — <span className="text-emerald-500">{currentAcademicStats.bestZh.zhTitle}</span>
- </p>
- </>
- ) : (
- <p className={`text-xs italic ${textMuted}`}>Még nincs rögzített ZH eredmény ebben a félévben.</p>
- )}
- </div>
- </div>
-
- {/* 3. TÁRGYANKÉNTI JELENLÉT ELOSZLÁSA ELŐADÁSOKON / GYAKORLATOKON */}
- <div className={`p-4 rounded-2xl border space-y-3 ${bgSubCard}`}>
- <div className="flex flex-wrap items-center justify-between gap-2">
- <div>
- <h3 className={`text-sm font-extrabold ${textStrong}`}>
- Tárgyankénti jelenlét eloszlása (Gyakorlatok &amp; Előadások)
- </h3>
- <p className={`text-[11px] ${textMuted}`}>
- {formatSemesterLabel(currentAcademicStats.semName)} tantárgyai szerint
- </p>
- </div>
- <div className="flex items-center gap-3 text-[11px] font-bold">
- <span className="inline-flex items-center gap-1.5 text-amber-500">
- <span className="w-2.5 h-2.5 rounded-full bg-amber-400" /> Gyakorlat
- </span>
- <span className="inline-flex items-center gap-1.5 text-sky-500">
- <span className="w-2.5 h-2.5 rounded-full bg-sky-500" /> Előadás
- </span>
- </div>
- </div>
-
- {currentAcademicStats.subjectAttendanceRows.length === 0 ? (
- <p className={`text-xs italic py-3 text-center ${textMuted}`}>
- Ebben a félévben nincs jelenléti bontással rendelkező tárgy.
- </p>
- ) : (
- <div className="space-y-2.5">
- {currentAcademicStats.subjectAttendanceRows.map(row => (
- <div
- key={row.id}
- className={`p-3 rounded-xl border space-y-2 ${bgCard}`}
- >
- <div className="flex items-center justify-between gap-2">
- <p className={`text-xs sm:text-sm font-bold truncate ${textStrong}`}>
- {row.name}
- </p>
- <span className="text-[11px] font-semibold text-amber-500 shrink-0">
- {row.credits} kr.
- </span>
- </div>
-
- <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
- {/* Gyakorlat eloszlás */}
- <div className="space-y-1">
- <div className="flex items-center justify-between text-[11px]">
- <span className={`font-semibold ${textMuted}`}>Gyakorlatok</span>
- <span className={`font-extrabold ${textStrong}`}>
- {row.practiceTotal > 0
- ? `${row.practicePresent} / ${row.practiceTotal} (${row.practicePct}%)`
- : 'Nincs beállítva'}
- </span>
- </div>
- <div className={`w-full h-2 rounded-full overflow-hidden ${darkMode ? 'bg-slate-800' : 'bg-slate-200'}`}>
- <div
- className="h-full bg-amber-400 rounded-full transition-all duration-300"
- style={{ width: `${row.practicePct ?? 0}%` }}
- />
- </div>
- </div>
-
- {/* Előadás eloszlás */}
- <div className="space-y-1">
- <div className="flex items-center justify-between text-[11px]">
- <span className={`font-semibold ${textMuted}`}>Előadások (nincs min.)</span>
- <span className={`font-extrabold ${textStrong}`}>
- {row.lectureTotal > 0
- ? `${row.lecturePresent} / ${row.lectureTotal} (${row.lecturePct}%)`
- : 'Nincs beállítva'}
- </span>
- </div>
- <div className={`w-full h-2 rounded-full overflow-hidden ${darkMode ? 'bg-slate-800' : 'bg-slate-200'}`}>
- <div
- className="h-full bg-sky-500 rounded-full transition-all duration-300"
- style={{ width: `${row.lecturePct ?? 0}%` }}
- />
- </div>
- </div>
- </div>
- </div>
- ))}
- </div>
- )}
- </div>
- </>
- )}
- </div>
-
- <div className={`px-4 sm:px-6 py-3.5 border-t flex items-center justify-between gap-2 shrink-0 ${
- darkMode ? 'border-slate-800 bg-slate-900/70' : 'border-slate-200 bg-slate-50'
- }`}>
- <span className={`text-[11px] ${textMuted}`}>
- {formatSemesterLabel(activeStatsSemesterCode)} • {currentAcademicStats?.subjectCount || 0} tárgy élő adatai
- </span>
- <button
- type="button"
- onClick={() => setIsAcademicStatsOpen(false)}
- className="px-5 py-2 text-xs sm:text-sm font-bold bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl cursor-pointer shrink-0"
- >
- Bezárás
- </button>
- </div>
- </div>
- </div>
- </SafeModalBoundary>
- )}
 
  {/* EGYÉNI TÁRGYRENDEZŐ MODAL */}
  {isCustomSortModalOpen && (

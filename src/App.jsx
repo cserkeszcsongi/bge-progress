@@ -638,6 +638,14 @@ function buildTemplatesForMajor(majorId) {
 
 const APP_RELEASES = [
  {
+ version: 'v2.4.2',
+ date: '2026. 11. 23.',
+ changes: [
+ 'iOS Liquid Glass animáció a dashboard alsó gyűjtő kapszulájához: rugalmas (spring) kibontás, finom üveges fénytörés/blur és lépcsőzetes (staggered) gombmegjelenés nyitáskor és becsukáskor',
+ 'Minden megnyitásra és becsukásra kiterjedő animáció: modális ablakok, legördülő menük, lenyitható szekciók és gombnyomások sima, fluid átmenettel'
+ ]
+ },
+ {
  version: 'v2.4.1',
  date: '2026. 11. 23.',
  changes: [
@@ -2852,6 +2860,52 @@ export default function App() {
  const [avgCalcGrades, setAvgCalcGrades] = useState({});
 
  const [isCollectorMenuOpen, setIsCollectorMenuOpen] = useState(false);
+ const [isCollectorClosing, setIsCollectorClosing] = useState(false);
+ const collectorCloseTimerRef = useRef(null);
+
+ const toggleCollectorMenu = () => {
+ if (collectorCloseTimerRef.current) {
+ clearTimeout(collectorCloseTimerRef.current);
+ collectorCloseTimerRef.current = null;
+ }
+ if (isCollectorMenuOpen) {
+ setIsCollectorClosing(true);
+ collectorCloseTimerRef.current = setTimeout(() => {
+ setIsCollectorMenuOpen(false);
+ setIsCollectorClosing(false);
+ collectorCloseTimerRef.current = null;
+ }, 205);
+ } else {
+ setIsCollectorClosing(false);
+ setIsCollectorMenuOpen(true);
+ }
+ };
+
+ const closeCollectorMenuAnimated = (afterClose = null) => {
+ if (!isCollectorMenuOpen && !isCollectorClosing) {
+ if (afterClose) afterClose();
+ return;
+ }
+ if (collectorCloseTimerRef.current) {
+ clearTimeout(collectorCloseTimerRef.current);
+ collectorCloseTimerRef.current = null;
+ }
+ setIsCollectorClosing(true);
+ collectorCloseTimerRef.current = setTimeout(() => {
+ setIsCollectorMenuOpen(false);
+ setIsCollectorClosing(false);
+ collectorCloseTimerRef.current = null;
+ if (afterClose) afterClose();
+ }, 205);
+ };
+
+ useEffect(() => {
+ return () => {
+ if (collectorCloseTimerRef.current) {
+ clearTimeout(collectorCloseTimerRef.current);
+ }
+ };
+ }, []);
  const [isAttendanceDashboardExpanded, setIsAttendanceDashboardExpanded] = useState(false);
 
  const [activeSubjectId, setActiveSubjectId] = useState(null);
@@ -2875,7 +2929,7 @@ export default function App() {
  ) {
  return;
  }
- setIsCollectorMenuOpen(false);
+ closeCollectorMenuAnimated();
  };
  document.addEventListener('mousedown', handleOutsideCollectorClick);
  document.addEventListener('touchstart', handleOutsideCollectorClick);
@@ -7194,7 +7248,7 @@ export default function App() {
  @keyframes bgeFluidEnter {
  from {
  opacity: 0;
- transform: translateY(8px) scale(0.992);
+ transform: translateY(10px) scale(0.988);
  }
  to {
  opacity: 1;
@@ -7204,30 +7258,118 @@ export default function App() {
  @keyframes bgeCollapseReveal {
  from {
  opacity: 0;
- transform: translateY(-6px) scale(0.99);
+ transform: translateY(-8px) scale(0.985);
  }
  to {
  opacity: 1;
  transform: translateY(0) scale(1);
  }
  }
+ @keyframes bgeLiquidGlassOpen {
+ 0% {
+ opacity: 0;
+ transform: translateY(16px) scale(0.72);
+ filter: blur(10px) saturate(135%);
+ }
+ 62% {
+ opacity: 1;
+ transform: translateY(-3px) scale(1.025);
+ filter: blur(0px) saturate(165%);
+ }
+ 100% {
+ opacity: 1;
+ transform: translateY(0) scale(1);
+ filter: blur(0px) saturate(145%);
+ }
+ }
+ @keyframes bgeLiquidGlassClose {
+ 0% {
+ opacity: 1;
+ transform: translateY(0) scale(1);
+ filter: blur(0px) saturate(145%);
+ }
+ 100% {
+ opacity: 0;
+ transform: translateY(12px) scale(0.78);
+ filter: blur(8px) saturate(110%);
+ }
+ }
+ @keyframes bgeLiquidItemIn {
+ 0% {
+ opacity: 0;
+ transform: translateY(8px) scale(0.94);
+ }
+ 100% {
+ opacity: 1;
+ transform: translateY(0) scale(1);
+ }
+ }
+ @keyframes bgeBackdropFadeIn {
+ from {
+ opacity: 0;
+ backdrop-filter: blur(0px);
+ }
+ to {
+ opacity: 1;
+ backdrop-filter: blur(4px);
+ }
+ }
  .bge-fluid-app button,
  .bge-fluid-app [role="button"],
  .bge-fluid-app a[href] {
- transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1), background-color 220ms cubic-bezier(0.22, 1, 0.36, 1), border-color 220ms cubic-bezier(0.22, 1, 0.36, 1), color 200ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 240ms cubic-bezier(0.22, 1, 0.36, 1), opacity 200ms ease;
+ transition: transform 220ms cubic-bezier(0.34, 1.38, 0.64, 1), background-color 240ms cubic-bezier(0.22, 1, 0.36, 1), border-color 240ms cubic-bezier(0.22, 1, 0.36, 1), color 200ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 260ms cubic-bezier(0.22, 1, 0.36, 1), opacity 220ms cubic-bezier(0.22, 1, 0.36, 1);
+ will-change: transform;
  }
  .bge-fluid-app button:active:not(:disabled),
  .bge-fluid-app [role="button"]:active:not([aria-disabled="true"]),
  .bge-fluid-app a[href]:active {
- transform: scale(0.972);
+ transform: scale(0.955);
+ transition-duration: 110ms;
  }
  .bge-fluid-app section,
  .bge-fluid-app article {
- animation: bgeFluidEnter 280ms cubic-bezier(0.22, 1, 0.36, 1) both;
+ animation: bgeFluidEnter 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
  }
  .bge-fluid-reveal {
- animation: bgeCollapseReveal 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
+ animation: bgeCollapseReveal 300ms cubic-bezier(0.34, 1.25, 0.64, 1) both;
  transform-origin: top center;
+ }
+ .bge-liquid-glass-panel {
+ position: relative;
+ overflow: hidden;
+ backdrop-filter: blur(22px) saturate(175%);
+ -webkit-backdrop-filter: blur(22px) saturate(175%);
+ transform-origin: bottom right;
+ }
+ .bge-liquid-glass-panel::before {
+ content: "";
+ position: absolute;
+ inset: 0;
+ border-radius: inherit;
+ pointer-events: none;
+ background: linear-gradient(135deg, rgba(255, 255, 255, 0.34) 0%, rgba(255, 255, 255, 0.08) 38%, rgba(255, 255, 255, 0.02) 70%, rgba(251, 191, 36, 0.14) 100%);
+ }
+ .bge-liquid-glass-open {
+ animation: bgeLiquidGlassOpen 380ms cubic-bezier(0.34, 1.38, 0.64, 1) both;
+ }
+ .bge-liquid-glass-closing {
+ animation: bgeLiquidGlassClose 210ms cubic-bezier(0.32, 0.72, 0, 1) forwards;
+ pointer-events: none;
+ }
+ .bge-liquid-item-1 {
+ animation: bgeLiquidItemIn 300ms cubic-bezier(0.34, 1.32, 0.64, 1) 45ms both;
+ }
+ .bge-liquid-item-2 {
+ animation: bgeLiquidItemIn 320ms cubic-bezier(0.34, 1.32, 0.64, 1) 90ms both;
+ }
+ .bge-liquid-item-3 {
+ animation: bgeLiquidItemIn 340ms cubic-bezier(0.34, 1.32, 0.64, 1) 135ms both;
+ }
+ .bge-fluid-app .fixed.inset-0 {
+ animation: bgeBackdropFadeIn 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+ }
+ .bge-fluid-app .fixed.inset-0 > div {
+ animation: bgeFluidEnter 320ms cubic-bezier(0.34, 1.24, 0.64, 1) both;
  }
  @media (prefers-reduced-motion: reduce) {
  .bge-fluid-app *,
@@ -9353,19 +9495,18 @@ export default function App() {
  </main>
 
  <div data-collector-menu="true" className="fixed bottom-5 right-5 sm:bottom-7 sm:right-7 z-30 flex flex-col items-end gap-3">
- {isCollectorMenuOpen && (() => {
+ {(isCollectorMenuOpen || isCollectorClosing) && (() => {
  const selectedJokerForCapsule = pendingJokerInfo || activeJokerInfo;
  return (
- <div className={`rounded-3xl border-2 p-2.5 sm:p-3 shadow-2xl backdrop-blur-md flex flex-col items-stretch gap-2 min-w-[225px] max-w-[280px] sm:min-w-[245px] transition-all ${
+ <div className={`bge-liquid-glass-panel ${isCollectorClosing ? 'bge-liquid-glass-closing' : 'bge-liquid-glass-open'} rounded-3xl border p-2.5 sm:p-3 shadow-2xl flex flex-col items-stretch gap-2 min-w-[225px] max-w-[280px] sm:min-w-[245px] ${
  darkMode
- ? 'bg-slate-900/95 border-amber-400/70 text-slate-100 shadow-black/70'
- : 'bg-white/95 border-amber-400 text-slate-900 shadow-slate-900/20'
+ ? 'bg-slate-900/68 border-white/20 ring-1 ring-amber-400/35 text-slate-100 shadow-black/75'
+ : 'bg-white/68 border-white/75 ring-1 ring-amber-400/40 text-slate-900 shadow-slate-900/20'
  }`}>
  <button
  type="button"
  onClick={() => {
- setIsCollectorMenuOpen(false);
- handleOpenJokerModal();
+ closeCollectorMenuAnimated(() => handleOpenJokerModal());
  }}
  disabled={semesterSubjects.length === 0}
  title={
@@ -9373,10 +9514,10 @@ export default function App() {
  ? `Kiválasztott Joker ZH: ${selectedJokerForCapsule.subject.name} — ${selectedJokerForCapsule.assessment.title}`
  : 'Tetszőleges tantárgy egyik ZH-jának javítása Joker ZH-val'
  }
- className={`w-full px-3.5 py-2.5 rounded-2xl text-xs sm:text-sm font-extrabold disabled:opacity-45 disabled:cursor-not-allowed text-white flex flex-col items-stretch gap-1.5 transition cursor-pointer ${
+ className={`bge-liquid-item-1 w-full px-3.5 py-2.5 rounded-2xl text-xs sm:text-sm font-extrabold disabled:opacity-45 disabled:cursor-not-allowed text-white flex flex-col items-stretch gap-1.5 cursor-pointer ${
  pendingJokerInfo
- ? 'bg-gradient-to-r from-violet-600 via-fuchsia-600 to-amber-500 ring-2 ring-amber-300 shadow-md'
- : 'bg-violet-600 hover:bg-violet-500 shadow-md'
+ ? 'bg-gradient-to-r from-violet-600/90 via-fuchsia-600/90 to-amber-500/90 ring-2 ring-amber-300/80 shadow-md'
+ : 'bg-violet-600/88 hover:bg-violet-500/95 shadow-md'
  }`}
  >
  <span className="flex items-center justify-between gap-2 w-full">
@@ -9399,12 +9540,11 @@ export default function App() {
  <button
  type="button"
  onClick={() => {
- setIsCollectorMenuOpen(false);
- handleOpenAvgCalcModal();
+ closeCollectorMenuAnimated(() => handleOpenAvgCalcModal());
  }}
  disabled={semesterSubjects.length === 0}
  title="Átlagszámoló (1–5 skálás tervező a félév tárgyaival)"
- className="w-full px-3.5 py-2.5 rounded-2xl text-xs sm:text-sm font-extrabold bg-cyan-400 hover:bg-cyan-300 disabled:opacity-45 disabled:cursor-not-allowed text-slate-950 shadow-md flex items-center justify-between gap-2 transition cursor-pointer"
+ className="bge-liquid-item-2 w-full px-3.5 py-2.5 rounded-2xl text-xs sm:text-sm font-extrabold bg-cyan-400/88 hover:bg-cyan-300/95 disabled:opacity-45 disabled:cursor-not-allowed text-slate-950 shadow-md flex items-center justify-between gap-2 cursor-pointer"
  >
  <span className="flex items-center gap-2">
  <Calculator className="w-4 h-4 shrink-0" />
@@ -9415,11 +9555,10 @@ export default function App() {
  <button
  type="button"
  onClick={() => {
- setIsCollectorMenuOpen(false);
- handleOpenCreateNewSubjectModal();
+ closeCollectorMenuAnimated(() => handleOpenCreateNewSubjectModal());
  }}
  title="Új tantárgy felvétele"
- className="w-full px-3.5 py-2.5 rounded-2xl text-xs sm:text-sm font-extrabold bg-amber-400 hover:bg-amber-300 text-slate-950 shadow-md flex items-center justify-between gap-2 transition cursor-pointer"
+ className="bge-liquid-item-3 w-full px-3.5 py-2.5 rounded-2xl text-xs sm:text-sm font-extrabold bg-amber-400/90 hover:bg-amber-300/95 text-slate-950 shadow-md flex items-center justify-between gap-2 cursor-pointer"
  >
  <span className="flex items-center gap-2">
  <Plus className="w-4 h-4 stroke-[2.75] shrink-0" />
@@ -9432,8 +9571,8 @@ export default function App() {
 
  <button
  type="button"
- onClick={() => setIsCollectorMenuOpen(prev => !prev)}
- aria-expanded={isCollectorMenuOpen}
+ onClick={toggleCollectorMenu}
+ aria-expanded={isCollectorMenuOpen && !isCollectorClosing}
  title="Új tantárgy, Átlagszámoló, Joker ZH"
  aria-label="Eszközök kapszula"
  className={`w-12 sm:w-14 py-2.5 sm:py-3 rounded-full flex flex-col items-center justify-center gap-1.5 transition transform hover:scale-105 active:scale-95 cursor-pointer relative ${

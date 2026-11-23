@@ -7239,16 +7239,32 @@ export default function App() {
  ? 'bg-slate-950 text-slate-100 bge-glass-dark'
  : 'bg-slate-100 text-slate-800 bge-glass-light';
  const bgCard = darkMode
- ? 'bg-slate-900/58 border-white/15 backdrop-blur-xl shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_12px_32px_rgba(0,0,0,0.38)]'
- : 'bg-white/62 border-white/80 backdrop-blur-xl shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_10px_28px_rgba(15,23,42,0.08)]';
+ ? 'bg-slate-900/42 border-white/16 backdrop-blur-xl shadow-[inset_0_1px_0_rgba(255,255,255,0.14),0_12px_32px_rgba(0,0,0,0.38)]'
+ : 'bg-white/44 border-white/75 backdrop-blur-xl shadow-[inset_0_1px_0_rgba(255,255,255,0.92),0_10px_28px_rgba(15,23,42,0.08)]';
  const bgSubCard = darkMode
- ? 'bg-slate-800/48 border-white/12 backdrop-blur-md shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]'
- : 'bg-white/52 border-white/75 backdrop-blur-md shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]';
+ ? 'bg-slate-800/36 border-white/12 backdrop-blur-md shadow-[inset_0_1px_0_rgba(255,255,255,0.1)]'
+ : 'bg-white/38 border-white/70 backdrop-blur-md shadow-[inset_0_1px_0_rgba(255,255,255,0.85)]';
+ const modalBackdrop = darkMode
+ ? 'bg-slate-950/65 backdrop-blur-md'
+ : 'bg-slate-900/26 backdrop-blur-md';
+ const modalCard = darkMode
+ ? 'bg-slate-900/62 border-white/18 text-slate-100 backdrop-blur-2xl shadow-[inset_0_1px_0_rgba(255,255,255,0.14),0_24px_60px_rgba(0,0,0,0.58)]'
+ : 'bg-white/72 border-white/85 text-slate-800 backdrop-blur-2xl shadow-[inset_0_1px_0_rgba(255,255,255,0.95),0_24px_60px_rgba(15,23,42,0.16)]';
+ const modalHeader = darkMode
+ ? 'bg-slate-900/58 text-white border-b border-white/12 backdrop-blur-xl'
+ : 'bg-white/58 text-slate-900 border-b border-slate-200/80 backdrop-blur-xl';
+ const modalCloseBtn = darkMode
+ ? 'bg-transparent text-slate-400 hover:text-white'
+ : 'bg-transparent text-slate-500 hover:text-slate-900';
+ const modalHeaderSubtext = darkMode ? 'text-slate-400' : 'text-slate-500';
+ const modalHeaderAmber = darkMode ? 'text-amber-400' : 'text-amber-600';
+ const modalHeaderEmerald = darkMode ? 'text-emerald-400' : 'text-emerald-600';
+ const modalHeaderCyan = darkMode ? 'text-cyan-300' : 'text-cyan-700';
  const textMuted = darkMode ? 'text-slate-400' : 'text-slate-500';
  const textStrong = darkMode ? 'text-white' : 'text-slate-900';
  const inputStyle = darkMode
- ? 'bg-slate-900/55 border-white/15 text-white placeholder-slate-400 backdrop-blur-md focus:border-amber-400 text-base sm:text-sm'
- : 'bg-white/65 border-slate-300/75 text-slate-900 placeholder-slate-400 backdrop-blur-md focus:border-amber-400 text-base sm:text-sm';
+ ? 'bg-slate-900/45 border-white/15 text-white placeholder-slate-400 backdrop-blur-md focus:border-amber-400 text-base sm:text-sm'
+ : 'bg-white/62 border-slate-300/75 text-slate-900 placeholder-slate-400 backdrop-blur-md focus:border-amber-400 text-base sm:text-sm';
 
  if (!splashHidden) {
  return (
@@ -7460,10 +7476,10 @@ export default function App() {
 
  const renderNoticeboardBellButton = (isDarkHeader = false) => {
  const btnClass = isDarkHeader
- ? 'p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-400 border border-slate-700 transition cursor-pointer relative shrink-0'
+ ? 'p-2 rounded-lg bg-slate-800/60 hover:bg-slate-700/75 text-amber-400 border border-white/15 transition cursor-pointer relative shrink-0'
  : darkMode
- ? 'p-2 sm:p-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-amber-400 border border-slate-800 transition cursor-pointer relative shrink-0'
- : 'p-2 sm:p-1.5 rounded-lg bg-white hover:bg-amber-50 text-amber-600 border border-slate-200 shadow-2xs transition cursor-pointer relative shrink-0';
+ ? 'p-2 sm:p-1.5 rounded-lg bg-slate-900/55 hover:bg-slate-800/75 text-amber-400 border border-white/15 transition cursor-pointer relative shrink-0'
+ : 'p-2 sm:p-1.5 rounded-lg bg-white/58 hover:bg-amber-50/85 text-amber-600 border border-white/80 shadow-2xs transition cursor-pointer relative shrink-0';
 
  return (
  <button
@@ -7500,10 +7516,10 @@ export default function App() {
 
  const renderTopFeedbackButton = (isDarkHeader = false) => {
  const btnClass = isDarkHeader
- ? 'px-2.5 sm:px-3 py-2 sm:py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-400 border border-slate-700 text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shrink-0'
+ ? 'px-2.5 sm:px-3 py-2 sm:py-1.5 rounded-lg bg-slate-800/60 hover:bg-slate-700/75 text-amber-400 border border-white/15 text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shrink-0'
  : darkMode
- ? 'px-2.5 sm:px-3 py-2 sm:py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-amber-400 border border-slate-800 text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shrink-0'
- : 'px-2.5 sm:px-3 py-2 sm:py-1.5 rounded-lg bg-white hover:bg-amber-50 text-amber-700 border border-slate-200 shadow-2xs text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shrink-0';
+ ? 'px-2.5 sm:px-3 py-2 sm:py-1.5 rounded-lg bg-slate-900/55 hover:bg-slate-800/75 text-amber-400 border border-white/15 text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shrink-0'
+ : 'px-2.5 sm:px-3 py-2 sm:py-1.5 rounded-lg bg-white/58 hover:bg-amber-50/85 text-amber-700 border border-white/80 shadow-2xs text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shrink-0';
 
  return (
  <button
@@ -8007,8 +8023,8 @@ export default function App() {
  {isMenuOpen && (
  <div className={`absolute right-0 mt-2 w-72 sm:w-80 max-h-[85dvh] overflow-y-auto rounded-2xl border shadow-2xl p-3.5 space-y-3.5 z-50 ${
  darkMode
- ? 'bg-slate-900 border-slate-700 text-slate-100'
- : 'bg-white border-slate-200 text-slate-800'
+ ? 'bg-slate-900/66 border-white/15 text-slate-100 backdrop-blur-2xl'
+ : 'bg-white/68 border-white/80 text-slate-800 backdrop-blur-2xl'
  }`}>
  {renderMenuBody(() => setIsMenuOpen(false))}
  </div>
@@ -8338,13 +8354,21 @@ export default function App() {
  backdrop-filter: none !important;
  -webkit-backdrop-filter: none !important;
  }
- .bge-fluid-app header,
- .bge-fluid-app header.bge-dashboard-header {
- background-color: rgba(15, 23, 42, 0.78) !important;
- backdrop-filter: blur(28px) saturate(185%) !important;
- -webkit-backdrop-filter: blur(28px) saturate(185%) !important;
- border-bottom: 1px solid rgba(255, 255, 255, 0.16) !important;
+ .bge-fluid-app.bge-glass-dark header,
+ .bge-fluid-app.bge-glass-dark header.bge-dashboard-header {
+ background-color: rgba(15, 23, 42, 0.48) !important;
+ backdrop-filter: blur(26px) saturate(190%) !important;
+ -webkit-backdrop-filter: blur(26px) saturate(190%) !important;
+ border-bottom: 1px solid rgba(255, 255, 255, 0.14) !important;
  box-shadow: 0 8px 28px rgba(2, 6, 23, 0.26), inset 0 -1px 0 rgba(255, 255, 255, 0.08) !important;
+ }
+ .bge-fluid-app.bge-glass-light header,
+ .bge-fluid-app.bge-glass-light header.bge-dashboard-header {
+ background-color: rgba(255, 255, 255, 0.44) !important;
+ backdrop-filter: blur(26px) saturate(190%) !important;
+ -webkit-backdrop-filter: blur(26px) saturate(190%) !important;
+ border-bottom: 1px solid rgba(255, 255, 255, 0.72) !important;
+ box-shadow: 0 8px 24px rgba(15, 23, 42, 0.07), inset 0 -1px 0 rgba(255, 255, 255, 0.55) !important;
  }
  .bge-fluid-app button:not([data-no-glass="true"]),
  .bge-fluid-app a[href]:not([data-no-glass="true"]) {
@@ -8490,9 +8514,9 @@ export default function App() {
 
  {/* AMBIENT FROSTED GLASS HÁTTÉRRÉTEG */}
  <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden" aria-hidden="true">
- <div className={`absolute -top-28 -left-24 w-96 h-96 rounded-full blur-3xl transition-colors duration-500 ${darkMode ? 'bg-amber-400/15' : 'bg-amber-300/35'}`} />
- <div className={`absolute top-1/3 -right-24 w-[26rem] h-[26rem] rounded-full blur-3xl transition-colors duration-500 ${darkMode ? 'bg-sky-500/15' : 'bg-sky-300/35'}`} />
- <div className={`absolute -bottom-28 left-1/4 w-96 h-96 rounded-full blur-3xl transition-colors duration-500 ${darkMode ? 'bg-emerald-500/12' : 'bg-emerald-300/28'}`} />
+ <div className={`absolute -top-28 -left-24 w-96 h-96 rounded-full blur-3xl transition-colors duration-500 ${darkMode ? 'bg-amber-400/18' : 'bg-amber-300/42'}`} />
+ <div className={`absolute top-1/3 -right-24 w-[26rem] h-[26rem] rounded-full blur-3xl transition-colors duration-500 ${darkMode ? 'bg-sky-500/18' : 'bg-sky-300/40'}`} />
+ <div className={`absolute -bottom-28 left-1/4 w-96 h-96 rounded-full blur-3xl transition-colors duration-500 ${darkMode ? 'bg-emerald-500/15' : 'bg-emerald-300/34'}`} />
  </div>
 
  <input
@@ -8505,16 +8529,18 @@ export default function App() {
 
  <AnimatedPresence show={Boolean(showUpdateBanner)} variant="toast" duration={220}>
  {showUpdateBanner && (
- <div className="fixed top-3 left-3 right-3 sm:left-1/2 sm:-translate-x-1/2 sm:max-w-lg z-[70] rounded-2xl border-2 border-amber-400 bg-slate-900/95 text-white backdrop-blur-md shadow-2xl px-4 py-3 flex items-center justify-between gap-3">
+ <div className={`fixed top-3 left-3 right-3 sm:left-1/2 sm:-translate-x-1/2 sm:max-w-lg z-[70] rounded-2xl border-2 border-amber-400 backdrop-blur-2xl shadow-2xl px-4 py-3 flex items-center justify-between gap-3 ${
+ darkMode ? 'bg-slate-900/72 text-white' : 'bg-white/75 text-slate-900'
+ }`}>
  <div className="flex items-start sm:items-center gap-2.5 min-w-0">
  <div className="w-8 h-8 rounded-xl bg-amber-400 text-slate-950 flex items-center justify-center shrink-0 mt-0.5 sm:mt-0">
  <RefreshCw className={`w-4 h-4 ${isReloadingApp ? 'animate-spin' : ''}`} />
  </div>
  <div className="min-w-0">
- <p className="text-xs sm:text-sm font-extrabold text-amber-400 leading-tight">
+ <p className={`text-xs sm:text-sm font-extrabold leading-tight ${darkMode ? 'text-amber-400' : 'text-amber-600'}`}>
  Új verzió érhető el!
  </p>
- <p className="text-[11px] sm:text-xs text-slate-200 leading-snug mt-0.5">
+ <p className={`text-[11px] sm:text-xs leading-snug mt-0.5 ${darkMode ? 'text-slate-200' : 'text-slate-600'}`}>
  Frissítsd az oldalt a legújabb funkciók és javítások betöltéséhez.
  </p>
  </div>
@@ -8534,7 +8560,7 @@ export default function App() {
  type="button"
  onClick={() => setUpdateBannerDismissedAt(Date.now())}
  title="Emlékeztessen később"
- className="bg-transparent p-1.5 text-slate-400 hover:text-white cursor-pointer"
+ className={`p-1.5 cursor-pointer ${modalCloseBtn}`}
  >
  <X className="w-4 h-4" />
  </button>
@@ -8571,8 +8597,8 @@ export default function App() {
  <div
  className={`bge-bottom-menu-sheet pointer-events-auto mb-2.5 w-full max-h-[74dvh] overflow-y-auto overscroll-contain touch-pan-y rounded-3xl border p-3.5 space-y-3.5 shadow-2xl ${
  darkMode
- ? 'bg-slate-900/88 border-white/15 text-slate-100 shadow-black/75'
- : 'bg-white/92 border-slate-200/90 text-slate-800 shadow-slate-900/20'
+ ? 'bg-slate-900/66 border-white/15 text-slate-100 shadow-black/75'
+ : 'bg-white/68 border-white/80 text-slate-800 shadow-slate-900/18'
  }`}
  >
  {renderMenuBody(() => {
@@ -8586,8 +8612,8 @@ export default function App() {
  <div
  className={`bge-bottom-nav-capsule pointer-events-auto relative w-full rounded-full border p-1.5 shadow-2xl grid grid-cols-3 items-stretch gap-1 ${
  darkMode
- ? 'bg-slate-900/78 border-white/15 ring-1 ring-white/10 shadow-black/70'
- : 'bg-white/80 border-white/85 ring-1 ring-slate-900/10 shadow-slate-900/15'
+ ? 'bg-slate-900/54 border-white/16 ring-1 ring-white/10 shadow-black/70'
+ : 'bg-white/50 border-white/85 ring-1 ring-slate-900/10 shadow-slate-900/12'
  }`}
  >
  <button
@@ -8739,27 +8765,27 @@ export default function App() {
  <div
  data-top-modal="true"
  onClick={() => setIsInstallGuideOpen(false)}
- className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-2.5 sm:p-4 overscroll-none"
+ className={`fixed inset-0 ${modalBackdrop} z-50 flex items-center justify-center p-2.5 sm:p-4 overscroll-none`}
  >
  <div
  onClick={(e) => e.stopPropagation()}
- className={`rounded-2xl max-w-md w-full shadow-2xl overflow-hidden border-2 border-amber-400 ${bgCard}`}
+ className={`rounded-2xl max-w-md w-full shadow-2xl overflow-hidden border-2 border-amber-400 ${modalCard}`}
  >
- <div className="px-4 sm:px-6 py-3.5 sm:py-4 bg-slate-900 text-white flex justify-between items-center border-b border-slate-800">
+ <div className={`px-4 sm:px-6 py-3.5 sm:py-4 flex justify-between items-center ${modalHeader}`}>
  <div className="flex items-center gap-2.5 min-w-0">
  <div className="w-8 h-8 rounded-lg bg-amber-400 text-slate-950 flex items-center justify-center shrink-0">
  <Download className="w-4 h-4" />
  </div>
  <div className="min-w-0">
  <h2 className="font-extrabold text-sm sm:text-base leading-tight">App letöltése parancsikonként</h2>
- <p className="text-[11px] text-amber-400 truncate">Főképernyőre helyezés mobilon</p>
+ <p className={`text-[11px] font-semibold truncate ${modalHeaderAmber}`}>Főképernyőre helyezés mobilon</p>
  </div>
  </div>
  <button
   data-no-glass="true"
  type="button"
  onClick={() => setIsInstallGuideOpen(false)}
- className="bg-transparent text-slate-400 hover:text-white p-1.5 cursor-pointer shrink-0"
+ className={`p-1.5 cursor-pointer shrink-0 ${modalCloseBtn}`}
  >
  <X className="w-5 h-5" />
  </button>
@@ -9478,7 +9504,11 @@ export default function App() {
  key={`view-semester-${selectedSemester}`}
  className={viewSlideDir === 'left' ? 'bge-view-slide-left' : viewSlideDir === 'right' ? 'bge-view-slide-right' : ''}
  >
- <header className="bge-dashboard-header bg-slate-900/78 text-white sticky top-0 z-30 shadow-md border-b border-white/15 backdrop-blur-2xl">
+ <header className={`bge-dashboard-header sticky top-0 z-30 shadow-md border-b backdrop-blur-2xl transition-colors duration-200 ${
+ darkMode
+ ? 'bg-slate-900/48 text-white border-white/15'
+ : 'bg-white/44 text-slate-900 border-white/75'
+ }`}>
  <div className="max-w-7xl mx-auto px-3 sm:px-4 py-2.5 flex items-center justify-between gap-2">
  <button
  type="button"
@@ -9493,18 +9523,22 @@ export default function App() {
  className="h-9 sm:h-11 w-auto object-contain shrink-0"
  />
  <div className="min-w-0">
- <h1 className="font-bold text-sm sm:text-lg leading-tight group-hover:text-amber-400 transition truncate">
+ <h1 className={`font-bold text-sm sm:text-lg leading-tight transition truncate ${
+ darkMode ? 'text-white group-hover:text-amber-400' : 'text-slate-900 group-hover:text-amber-600'
+ }`}>
  BGE Progress
  </h1>
- <p className="text-[11px] sm:text-xs text-slate-300 font-semibold truncate max-w-[180px] sm:max-w-xs">
+ <p className={`text-[11px] sm:text-xs font-semibold truncate max-w-[180px] sm:max-w-xs ${
+ darkMode ? 'text-slate-300' : 'text-slate-600'
+ }`}>
  {formatSemesterLabel(selectedSemester)}
  </p>
  </div>
  </button>
 
  <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
- {renderTopFeedbackButton(true)}
- {renderNoticeboardBellButton(true)}
+ {renderTopFeedbackButton(darkMode)}
+ {renderNoticeboardBellButton(darkMode)}
  </div>
  </div>
 
@@ -9957,8 +9991,8 @@ export default function App() {
  {isSortMenuOpen && (
  <div className={`absolute right-0 mt-2 w-64 rounded-2xl border shadow-2xl p-2 space-y-1 z-40 ${
  darkMode
- ? 'bg-slate-900 border-slate-700 text-slate-100'
- : 'bg-white border-slate-200 text-slate-800'
+ ? 'bg-slate-900/66 border-white/15 text-slate-100 backdrop-blur-2xl'
+ : 'bg-white/68 border-white/80 text-slate-800 backdrop-blur-2xl'
  }`}>
  {[
  { id: 'az', label: 'A → Z (ABC sorrend)' },
@@ -10507,8 +10541,8 @@ export default function App() {
  {(isHomePlusMenuOpen || isHomePlusMenuClosing) && (
  <div className={`bge-liquid-glass-panel ${isHomePlusMenuClosing ? 'bge-liquid-glass-closing' : 'bge-liquid-glass-open'} w-72 sm:w-80 rounded-3xl border p-2.5 sm:p-3 shadow-2xl flex flex-col items-stretch gap-2 ${
  darkMode
- ? 'bg-slate-900/68 border-white/20 ring-1 ring-amber-400/35 text-slate-100 shadow-black/75'
- : 'bg-white/68 border-white/75 ring-1 ring-amber-400/40 text-slate-900 shadow-slate-900/20'
+ ? 'bg-slate-900/52 border-white/20 ring-1 ring-amber-400/35 text-slate-100 shadow-black/75'
+ : 'bg-white/50 border-white/80 ring-1 ring-amber-400/40 text-slate-900 shadow-slate-900/18'
  }`}>
  <button
  type="button"
@@ -10586,8 +10620,8 @@ export default function App() {
  return (
  <div className={`bge-liquid-glass-panel ${isCollectorClosing ? 'bge-liquid-glass-closing' : 'bge-liquid-glass-open'} rounded-3xl border p-2.5 sm:p-3 shadow-2xl flex flex-col items-stretch gap-2 min-w-[225px] max-w-[280px] sm:min-w-[245px] ${
  darkMode
- ? 'bg-slate-900/68 border-white/20 ring-1 ring-amber-400/35 text-slate-100 shadow-black/75'
- : 'bg-white/68 border-white/75 ring-1 ring-amber-400/40 text-slate-900 shadow-slate-900/20'
+ ? 'bg-slate-900/52 border-white/20 ring-1 ring-amber-400/35 text-slate-100 shadow-black/75'
+ : 'bg-white/50 border-white/80 ring-1 ring-amber-400/40 text-slate-900 shadow-slate-900/18'
  }`}>
  <button
  type="button"
@@ -10744,13 +10778,13 @@ export default function App() {
  <div
  data-top-modal={!excelImportTargetSemCode ? 'true' : undefined}
  onClick={() => !isSavingPastSemesters && setIsPastSemestersWizardOpen(false)}
- className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-2.5 sm:p-4 overscroll-none"
+ className={`fixed inset-0 ${modalBackdrop} z-50 flex items-center justify-center p-2.5 sm:p-4 overscroll-none`}
  >
  <div
  onClick={(e) => e.stopPropagation()}
- className={`rounded-2xl max-w-2xl w-full max-h-[93dvh] flex flex-col shadow-2xl overflow-hidden border-2 border-emerald-500/70 ${bgCard}`}
+ className={`rounded-2xl max-w-2xl w-full max-h-[93dvh] flex flex-col shadow-2xl overflow-hidden border-2 border-emerald-500/70 ${modalCard}`}
  >
- <div className="px-4 sm:px-6 py-3.5 sm:py-4 bg-slate-900 text-white flex justify-between items-center border-b border-slate-800 shrink-0">
+ <div className={`px-4 sm:px-6 py-3.5 sm:py-4 flex justify-between items-center shrink-0 ${modalHeader}`}>
  <div className="flex items-center gap-2.5 min-w-0">
  <div className="w-9 h-9 rounded-xl bg-emerald-500 text-white flex items-center justify-center shrink-0">
  <FastForward className="w-5 h-5" />
@@ -10759,7 +10793,7 @@ export default function App() {
  <h2 className="font-extrabold text-sm sm:text-base leading-tight truncate">
  Múltbéli félévek gyors feltöltése
  </h2>
- <p className="text-[11px] text-emerald-400 font-semibold truncate">
+ <p className={`text-[11px] font-semibold truncate ${modalHeaderEmerald}`}>
  {wizardStepIndex === 0
  ? `Aktuális időszak: ${currentSemesterMeta.code} (${currentSemesterMeta.seasonLabel})`
  : `${wizardStepIndex} / ${totalPastSteps}. múltbéli félév • ${activePastSem?.fullLabel}`}
@@ -10771,7 +10805,7 @@ export default function App() {
  type="button"
  disabled={isSavingPastSemesters}
  onClick={() => setIsPastSemestersWizardOpen(false)}
- className="bg-transparent text-slate-400 hover:text-white p-1.5 cursor-pointer shrink-0 disabled:opacity-50"
+ className={`p-1.5 cursor-pointer shrink-0 disabled:opacity-50 ${modalCloseBtn}`}
  >
  <X className="w-5 h-5" />
  </button>
@@ -11172,13 +11206,13 @@ export default function App() {
  <div
  data-top-modal="true"
  onClick={() => !isParsingExcel && setExcelImportTargetSemCode(null)}
- className="fixed inset-0 bg-black/85 backdrop-blur-sm z-[60] flex items-center justify-center p-2.5 sm:p-4 overscroll-none"
+ className={`fixed inset-0 ${modalBackdrop} z-[60] flex items-center justify-center p-2.5 sm:p-4 overscroll-none`}
  >
  <div
  onClick={(e) => e.stopPropagation()}
- className={`rounded-2xl max-w-lg w-full max-h-[92dvh] flex flex-col shadow-2xl overflow-hidden border-2 border-amber-400 ${bgCard}`}
+ className={`rounded-2xl max-w-lg w-full max-h-[92dvh] flex flex-col shadow-2xl overflow-hidden border-2 border-amber-400 ${modalCard}`}
  >
- <div className="px-4 sm:px-6 py-3.5 sm:py-4 bg-slate-900 text-white flex justify-between items-center border-b border-slate-800 shrink-0">
+ <div className={`px-4 sm:px-6 py-3.5 sm:py-4 flex justify-between items-center shrink-0 ${modalHeader}`}>
  <div className="flex items-center gap-2.5 min-w-0">
  <div className="w-9 h-9 rounded-xl bg-amber-400 text-slate-950 flex items-center justify-center shrink-0">
  <FileSpreadsheet className="w-5 h-5" />
@@ -11187,7 +11221,7 @@ export default function App() {
  <h2 className="font-extrabold text-sm sm:text-base leading-tight truncate">
  Neptun Excel fájl feltöltése
  </h2>
- <p className="text-[11px] text-amber-400 font-semibold truncate">
+ <p className={`text-[11px] font-semibold truncate ${modalHeaderAmber}`}>
  Célfélév: {targetSemLabel}
  </p>
  </div>
@@ -11197,7 +11231,7 @@ export default function App() {
  type="button"
  disabled={isParsingExcel}
  onClick={() => setExcelImportTargetSemCode(null)}
- className="bg-transparent text-slate-400 hover:text-white p-1.5 cursor-pointer shrink-0 disabled:opacity-50"
+ className={`p-1.5 cursor-pointer shrink-0 disabled:opacity-50 ${modalCloseBtn}`}
  >
  <X className="w-5 h-5" />
  </button>
@@ -11295,27 +11329,27 @@ export default function App() {
  <div
  data-top-modal="true"
  onClick={() => setIsStatsModalOpen(false)}
- className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-2.5 sm:p-4 overscroll-none"
+ className={`fixed inset-0 ${modalBackdrop} z-50 flex items-center justify-center p-2.5 sm:p-4 overscroll-none`}
  >
  <div
  onClick={(e) => e.stopPropagation()}
- className={`rounded-2xl max-w-lg w-full max-h-[92dvh] flex flex-col shadow-2xl overflow-hidden border ${bgCard}`}
+ className={`rounded-2xl max-w-lg w-full max-h-[92dvh] flex flex-col shadow-2xl overflow-hidden border ${modalCard}`}
  >
- <div className="px-4 sm:px-6 py-3.5 sm:py-4 bg-slate-900 text-white flex justify-between items-center border-b border-slate-800 shrink-0">
+ <div className={`px-4 sm:px-6 py-3.5 sm:py-4 flex justify-between items-center shrink-0 ${modalHeader}`}>
  <div className="flex items-center gap-2.5 min-w-0">
  <div className="w-8 h-8 rounded-lg bg-violet-500 text-white flex items-center justify-center shrink-0">
  <BarChart3 className="w-4 h-4" />
  </div>
  <div className="min-w-0">
  <h2 className="font-extrabold text-sm sm:text-base leading-tight">App statisztika</h2>
- <p className="text-[11px] text-slate-400 truncate">BGE Progress élő használati adatok</p>
+ <p className={`text-[11px] truncate ${modalHeaderSubtext}`}>BGE Progress élő használati adatok</p>
  </div>
  </div>
  <button
   data-no-glass="true"
  type="button"
  onClick={() => setIsStatsModalOpen(false)}
- className="bg-transparent text-slate-400 hover:text-white p-1.5 cursor-pointer shrink-0"
+ className={`p-1.5 cursor-pointer shrink-0 ${modalCloseBtn}`}
  >
  <X className="w-5 h-5" />
  </button>
@@ -11501,27 +11535,27 @@ export default function App() {
  <div
  data-top-modal="true"
  onClick={() => setIsAvgCalcOpen(false)}
- className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-2.5 sm:p-4 overscroll-none"
+ className={`fixed inset-0 ${modalBackdrop} z-50 flex items-center justify-center p-2.5 sm:p-4 overscroll-none`}
  >
  <div
  onClick={(e) => e.stopPropagation()}
- className={`rounded-2xl max-w-xl w-full max-h-[92dvh] flex flex-col shadow-2xl overflow-hidden border-2 border-cyan-400/70 ${bgCard}`}
+ className={`rounded-2xl max-w-xl w-full max-h-[92dvh] flex flex-col shadow-2xl overflow-hidden border-2 border-cyan-400/70 ${modalCard}`}
  >
- <div className="px-4 sm:px-6 py-3.5 sm:py-4 bg-slate-900 text-white flex justify-between items-center border-b border-slate-800 shrink-0">
+ <div className={`px-4 sm:px-6 py-3.5 sm:py-4 flex justify-between items-center shrink-0 ${modalHeader}`}>
  <div className="flex items-center gap-2.5 min-w-0">
  <div className="w-9 h-9 rounded-xl bg-cyan-400 text-slate-950 flex items-center justify-center shrink-0">
  <Calculator className="w-5 h-5" />
  </div>
  <div className="min-w-0">
  <h2 className="font-extrabold text-sm sm:text-base leading-tight">Átlagszámoló (1–5 jegyek)</h2>
- <p className="text-[11px] text-cyan-300 truncate">{formatSemesterLabel(selectedSemester)}</p>
+ <p className={`text-[11px] font-semibold truncate ${modalHeaderCyan}`}>{formatSemesterLabel(selectedSemester)}</p>
  </div>
  </div>
  <button
   data-no-glass="true"
  type="button"
  onClick={() => setIsAvgCalcOpen(false)}
- className="bg-transparent text-slate-400 hover:text-white p-1.5 cursor-pointer shrink-0"
+ className={`p-1.5 cursor-pointer shrink-0 ${modalCloseBtn}`}
  >
  <X className="w-5 h-5" />
  </button>
@@ -11756,27 +11790,27 @@ export default function App() {
  <div
  data-top-modal="true"
  onClick={() => setIsCustomSortModalOpen(false)}
- className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-2.5 sm:p-4 overscroll-none"
+ className={`fixed inset-0 ${modalBackdrop} z-50 flex items-center justify-center p-2.5 sm:p-4 overscroll-none`}
  >
  <div
  onClick={(e) => e.stopPropagation()}
- className={`rounded-2xl max-w-md w-full max-h-[90dvh] flex flex-col shadow-2xl overflow-hidden border ${bgCard}`}
+ className={`rounded-2xl max-w-md w-full max-h-[90dvh] flex flex-col shadow-2xl overflow-hidden border ${modalCard}`}
  >
- <div className="px-4 sm:px-6 py-3.5 sm:py-4 bg-slate-900 text-white flex justify-between items-center border-b border-slate-800 shrink-0">
+ <div className={`px-4 sm:px-6 py-3.5 sm:py-4 flex justify-between items-center shrink-0 ${modalHeader}`}>
  <div className="flex items-center gap-2.5 min-w-0">
  <div className="w-8 h-8 rounded-lg bg-amber-400 text-slate-950 flex items-center justify-center shrink-0">
  <ArrowUpDown className="w-4 h-4" />
  </div>
  <div className="min-w-0">
  <h2 className="font-extrabold text-sm sm:text-base leading-tight">Egyéni sorrend beállítása</h2>
- <p className="text-[11px] text-slate-400 truncate">{formatSemesterLabel(selectedSemester)}</p>
+ <p className={`text-[11px] truncate ${modalHeaderSubtext}`}>{formatSemesterLabel(selectedSemester)}</p>
  </div>
  </div>
  <button
   data-no-glass="true"
  type="button"
  onClick={() => setIsCustomSortModalOpen(false)}
- className="bg-transparent text-slate-400 hover:text-white p-1.5 cursor-pointer shrink-0"
+ className={`p-1.5 cursor-pointer shrink-0 ${modalCloseBtn}`}
  >
  <X className="w-5 h-5" />
  </button>
@@ -11908,13 +11942,13 @@ export default function App() {
  onClick={() => {
  if (!mustAcceptGdpr) setIsGdprModalOpen(false);
  }}
- className="fixed inset-0 bg-black/85 backdrop-blur-sm z-[80] flex items-center justify-center p-2.5 sm:p-4 overscroll-none"
+ className={`fixed inset-0 ${modalBackdrop} z-[80] flex items-center justify-center p-2.5 sm:p-4 overscroll-none`}
  >
  <div
  onClick={(e) => e.stopPropagation()}
- className={`rounded-2xl max-w-xl w-full max-h-[92dvh] flex flex-col shadow-2xl overflow-hidden border-2 border-emerald-500/70 ${bgCard}`}
+ className={`rounded-2xl max-w-xl w-full max-h-[92dvh] flex flex-col shadow-2xl overflow-hidden border-2 border-emerald-500/70 ${modalCard}`}
  >
- <div className="px-4 sm:px-6 py-3.5 sm:py-4 bg-slate-900 text-white flex justify-between items-center border-b border-slate-800 shrink-0">
+ <div className={`px-4 sm:px-6 py-3.5 sm:py-4 flex justify-between items-center shrink-0 ${modalHeader}`}>
  <div className="flex items-center gap-3 min-w-0">
  <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-emerald-500 text-white flex items-center justify-center shrink-0">
  <ShieldCheck className="w-5 h-5 sm:w-6 sm:h-6" />
@@ -11923,7 +11957,7 @@ export default function App() {
  <h2 className="font-extrabold text-sm sm:text-base leading-tight">
  Személyes adatok védelme (GDPR)
  </h2>
- <p className="text-[11px] text-emerald-400 font-semibold truncate">
+ <p className={`text-[11px] font-semibold truncate ${modalHeaderEmerald}`}>
  {mustAcceptGdpr
  ? 'A folytatáshoz egyszeri elfogadás szükséges'
  : `Adatkezelési tájékoztató • ${GDPR_POLICY_VERSION} (2026. 11. 20.)`}
@@ -11936,7 +11970,7 @@ export default function App() {
  type="button"
  onClick={() => setIsGdprModalOpen(false)}
  title="Bezárás"
- className="bg-transparent text-slate-400 hover:text-white p-1.5 cursor-pointer shrink-0"
+ className={`p-1.5 cursor-pointer shrink-0 ${modalCloseBtn}`}
  >
  <X className="w-5 h-5" />
  </button>
@@ -12095,13 +12129,13 @@ export default function App() {
  onClick={() => {
  if (!mustSelectMajor && !isSavingMajor) setIsMajorSelectModalOpen(false);
  }}
- className="fixed inset-0 bg-black/85 backdrop-blur-sm z-[79] flex items-center justify-center p-2.5 sm:p-4 overscroll-none"
+ className={`fixed inset-0 ${modalBackdrop} z-[79] flex items-center justify-center p-2.5 sm:p-4 overscroll-none`}
  >
  <div
  onClick={(e) => e.stopPropagation()}
- className={`rounded-2xl max-w-lg w-full max-h-[92dvh] flex flex-col shadow-2xl overflow-hidden border-2 border-amber-400 ${bgCard}`}
+ className={`rounded-2xl max-w-lg w-full max-h-[92dvh] flex flex-col shadow-2xl overflow-hidden border-2 border-amber-400 ${modalCard}`}
  >
- <div className="px-4 sm:px-6 py-3.5 sm:py-4 bg-slate-900 text-white flex justify-between items-center border-b border-slate-800 shrink-0">
+ <div className={`px-4 sm:px-6 py-3.5 sm:py-4 flex justify-between items-center shrink-0 ${modalHeader}`}>
  <div className="flex items-center gap-3 min-w-0">
  <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-amber-400 text-slate-950 flex items-center justify-center shrink-0">
  <GraduationCap className="w-5 h-5 sm:w-6 sm:h-6" />
@@ -12110,7 +12144,7 @@ export default function App() {
  <h2 className="font-extrabold text-sm sm:text-base leading-tight">
  {mustSelectMajor ? 'Milyen szakra jársz a BGE-n?' : 'Szak módosítása'}
  </h2>
- <p className="text-[11px] text-amber-400 font-semibold truncate">
+ <p className={`text-[11px] font-semibold truncate ${modalHeaderAmber}`}>
  {mustSelectMajor
  ? 'A folytatáshoz válaszd ki a szakodat (később a Menüben módosítható)'
  : 'Profilodhoz rendelt BGE alapszak frissítése'}
@@ -12124,7 +12158,7 @@ export default function App() {
  disabled={isSavingMajor}
  onClick={() => setIsMajorSelectModalOpen(false)}
  title="Bezárás"
- className="bg-transparent text-slate-400 hover:text-white p-1.5 cursor-pointer shrink-0 disabled:opacity-50"
+ className={`p-1.5 cursor-pointer shrink-0 disabled:opacity-50 ${modalCloseBtn}`}
  >
  <X className="w-5 h-5" />
  </button>
@@ -12202,19 +12236,19 @@ export default function App() {
  <div
  data-top-modal="true"
  onClick={() => !isApplyingGazdinfoSetup && handleAnswerGazdinfoOnboarding(false)}
- className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4 overscroll-none"
+ className={`fixed inset-0 ${modalBackdrop} z-50 flex items-center justify-center p-3 sm:p-4 overscroll-none`}
  >
  <div
  onClick={(e) => e.stopPropagation()}
- className={`rounded-2xl max-w-md w-full shadow-2xl overflow-hidden border-2 border-amber-400/70 ${bgCard}`}
+ className={`rounded-2xl max-w-md w-full shadow-2xl overflow-hidden border-2 border-amber-400/70 ${modalCard}`}
  >
- <div className="px-5 py-4 bg-slate-900 text-white flex items-center gap-3 border-b border-slate-800">
+ <div className={`px-5 py-4 flex items-center gap-3 ${modalHeader}`}>
  <div className="w-10 h-10 rounded-xl bg-amber-400 text-slate-950 flex items-center justify-center shrink-0">
  <GraduationCap className="w-6 h-6" />
  </div>
  <div>
  <h2 className="font-extrabold text-base sm:text-lg leading-tight">Gazdinfós vagy?</h2>
- <p className="text-xs text-amber-400 font-semibold">Gyors kezdőbeállítás</p>
+ <p className={`text-xs font-semibold ${modalHeaderAmber}`}>Gyors kezdőbeállítás</p>
  </div>
  </div>
 
@@ -12276,20 +12310,20 @@ export default function App() {
  <div
  data-top-modal="true"
  onClick={() => setIsDegreeCreditsModalOpen(false)}
- className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-2.5 sm:p-4 overscroll-none"
+ className={`fixed inset-0 ${modalBackdrop} z-50 flex items-center justify-center p-2.5 sm:p-4 overscroll-none`}
  >
  <div
  onClick={(e) => e.stopPropagation()}
- className={`rounded-2xl max-w-md w-full shadow-2xl overflow-hidden border ${bgCard}`}
+ className={`rounded-2xl max-w-md w-full shadow-2xl overflow-hidden border ${modalCard}`}
  >
- <div className="px-4 sm:px-6 py-3.5 sm:py-4 bg-slate-900 text-white flex justify-between items-center border-b border-slate-800">
+ <div className={`px-4 sm:px-6 py-3.5 sm:py-4 flex justify-between items-center ${modalHeader}`}>
  <div className="flex items-center gap-2.5 min-w-0">
  <div className="w-8 h-8 rounded-lg bg-emerald-500 text-white flex items-center justify-center shrink-0">
  <GraduationCap className="w-4 h-4" />
  </div>
  <div className="min-w-0">
  <h2 className="font-extrabold text-sm sm:text-base leading-tight">Képzési kreditek beállítása</h2>
- <p className="text-[11px] text-slate-400 truncate">
+ <p className={`text-[11px] truncate ${modalHeaderSubtext}`}>
  Kötelező + szabadon választott kreditek a szakod szerint
  </p>
  </div>
@@ -12298,7 +12332,7 @@ export default function App() {
   data-no-glass="true"
  type="button"
  onClick={() => setIsDegreeCreditsModalOpen(false)}
- className="bg-transparent text-slate-400 hover:text-white p-1.5 cursor-pointer shrink-0"
+ className={`p-1.5 cursor-pointer shrink-0 ${modalCloseBtn}`}
  >
  <X className="w-5 h-5" />
  </button>
@@ -12428,20 +12462,20 @@ export default function App() {
  <div
  data-top-modal="true"
  onClick={() => setIsThresholdModalOpen(false)}
- className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-2.5 sm:p-4 overscroll-none"
+ className={`fixed inset-0 ${modalBackdrop} z-50 flex items-center justify-center p-2.5 sm:p-4 overscroll-none`}
  >
  <div
  onClick={(e) => e.stopPropagation()}
- className={`rounded-2xl max-w-md w-full shadow-2xl overflow-hidden border ${bgCard}`}
+ className={`rounded-2xl max-w-md w-full shadow-2xl overflow-hidden border ${modalCard}`}
  >
- <div className="px-4 sm:px-6 py-3.5 sm:py-4 bg-slate-900 text-white flex justify-between items-center border-b border-slate-800">
+ <div className={`px-4 sm:px-6 py-3.5 sm:py-4 flex justify-between items-center ${modalHeader}`}>
  <div className="flex items-center gap-2.5 min-w-0">
  <div className="w-8 h-8 rounded-lg bg-amber-400 text-slate-950 flex items-center justify-center shrink-0">
  <SlidersHorizontal className="w-4 h-4" />
  </div>
  <div className="min-w-0">
  <h2 className="font-extrabold text-sm sm:text-base leading-tight">Átsorolási küszöb beállítása</h2>
- <p className="text-[11px] text-slate-400 truncate">
+ <p className={`text-[11px] truncate ${modalHeaderSubtext}`}>
  Állami ösztöndíjas státusz megtartásához szükséges súlyozott átlag
  </p>
  </div>
@@ -12450,7 +12484,7 @@ export default function App() {
   data-no-glass="true"
  type="button"
  onClick={() => setIsThresholdModalOpen(false)}
- className="bg-transparent text-slate-400 hover:text-white p-1.5 cursor-pointer shrink-0"
+ className={`p-1.5 cursor-pointer shrink-0 ${modalCloseBtn}`}
  >
  <X className="w-5 h-5" />
  </button>
@@ -12535,13 +12569,13 @@ export default function App() {
  <div
  data-top-modal="true"
  onClick={handleCloseWelcome}
- className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-2.5 sm:p-4 overscroll-none"
+ className={`fixed inset-0 ${modalBackdrop} z-50 flex items-center justify-center p-2.5 sm:p-4 overscroll-none`}
  >
  <div
  onClick={(e) => e.stopPropagation()}
- className={`rounded-2xl max-w-lg w-full max-h-[92dvh] flex flex-col shadow-2xl overflow-hidden border ${bgCard}`}
+ className={`rounded-2xl max-w-lg w-full max-h-[92dvh] flex flex-col shadow-2xl overflow-hidden border ${modalCard}`}
  >
- <div className="px-4 sm:px-6 py-3.5 sm:py-4 bg-slate-900 text-white flex justify-between items-center border-b border-slate-800 shrink-0">
+ <div className={`px-4 sm:px-6 py-3.5 sm:py-4 flex justify-between items-center shrink-0 ${modalHeader}`}>
  <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
  <img
  src="/logo.png"
@@ -12551,7 +12585,7 @@ export default function App() {
  />
  <div className="min-w-0">
  <h2 className="font-extrabold text-sm sm:text-base leading-tight truncate">Üdvözöllek a BGE Progress-ben!</h2>
- <p className="text-[11px] text-amber-400 font-semibold truncate">
+ <p className={`text-[11px] font-semibold truncate ${modalHeaderAmber}`}>
  Cserkész Csongor • BGE PSZK — Gazdaságinformatika
  </p>
  </div>
@@ -12561,7 +12595,7 @@ export default function App() {
  type="button"
  onClick={handleCloseWelcome}
  title="Bezárás"
- className="bg-transparent text-slate-400 hover:text-white p-1.5 cursor-pointer shrink-0"
+ className={`p-1.5 cursor-pointer shrink-0 ${modalCloseBtn}`}
  >
  <X className="w-5 h-5" />
  </button>
@@ -12648,21 +12682,21 @@ export default function App() {
  <div
  data-top-modal="true"
  onClick={() => setIsFeedbackOpen(false)}
- className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-2.5 sm:p-4 overscroll-none"
+ className={`fixed inset-0 ${modalBackdrop} z-50 flex items-center justify-center p-2.5 sm:p-4 overscroll-none`}
  >
  <div
  onClick={(e) => e.stopPropagation()}
- className={`rounded-2xl max-w-md w-full max-h-[92dvh] flex flex-col shadow-2xl overflow-hidden border ${bgCard}`}
+ className={`rounded-2xl max-w-md w-full max-h-[92dvh] flex flex-col shadow-2xl overflow-hidden border ${modalCard}`}
  >
- <div className="px-4 sm:px-6 py-3.5 sm:py-4 bg-slate-900 text-white flex justify-between items-center border-b border-slate-800 shrink-0">
+ <div className={`px-4 sm:px-6 py-3.5 sm:py-4 flex justify-between items-center shrink-0 ${modalHeader}`}>
  <div className="flex items-center gap-2.5 min-w-0">
  <div className="w-8 h-8 rounded-lg bg-amber-400 text-slate-950 flex items-center justify-center shrink-0">
  <MessageSquare className="w-4 h-4" />
  </div>
  <div className="min-w-0">
  <h2 className="font-extrabold text-sm sm:text-base leading-tight">Visszajelzés küldése</h2>
- <p className="text-[11px] text-slate-400 truncate">
- Címzett: <strong className="text-amber-400">{CREATOR_EMAIL}</strong>
+ <p className={`text-[11px] truncate ${modalHeaderSubtext}`}>
+ Címzett: <strong className={modalHeaderAmber}>{CREATOR_EMAIL}</strong>
  </p>
  </div>
  </div>
@@ -12670,7 +12704,7 @@ export default function App() {
   data-no-glass="true"
  type="button"
  onClick={() => setIsFeedbackOpen(false)}
- className="bg-transparent text-slate-400 hover:text-white p-1.5 cursor-pointer shrink-0"
+ className={`p-1.5 cursor-pointer shrink-0 ${modalCloseBtn}`}
  >
  <X className="w-5 h-5" />
  </button>
@@ -12751,6 +12785,7 @@ export default function App() {
 
  <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
  <a
+ data-no-glass="true"
  href={gmailWebUrl}
  target="_blank"
  rel="noopener noreferrer"
@@ -12762,7 +12797,11 @@ export default function App() {
  <button
  type="button"
  onClick={() => setIsFeedbackOpen(false)}
- className={`px-3.5 py-2 text-sm rounded-lg cursor-pointer ${textMuted}`}
+ className={`px-3.5 py-2 text-sm font-semibold rounded-lg border transition cursor-pointer ${
+ darkMode
+ ? 'bg-slate-800/60 hover:bg-slate-700/75 text-slate-200 border-white/10'
+ : 'bg-white/75 hover:bg-slate-100 text-slate-700 border-slate-300/80'
+ }`}
  >
  Bezárás
  </button>
@@ -12788,20 +12827,20 @@ export default function App() {
  <div
  data-top-modal="true"
  onClick={handleCloseTutorial}
- className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-2 sm:p-4 overscroll-none"
+ className={`fixed inset-0 ${modalBackdrop} z-50 flex items-center justify-center p-2 sm:p-4 overscroll-none`}
  >
  <div
  onClick={(e) => e.stopPropagation()}
- className={`rounded-2xl max-w-2xl w-full max-h-[94dvh] flex flex-col shadow-2xl overflow-hidden border ${bgCard}`}
+ className={`rounded-2xl max-w-2xl w-full max-h-[94dvh] flex flex-col shadow-2xl overflow-hidden border ${modalCard}`}
  >
- <div className="px-4 sm:px-6 py-3.5 sm:py-4 bg-slate-900 text-white flex justify-between items-center border-b border-slate-800 shrink-0">
+ <div className={`px-4 sm:px-6 py-3.5 sm:py-4 flex justify-between items-center shrink-0 ${modalHeader}`}>
  <div className="flex items-center gap-2.5">
  <div className="w-8 h-8 rounded-lg bg-amber-400 text-slate-950 flex items-center justify-center shrink-0">
  <BookOpen className="w-4 h-4" />
  </div>
  <div>
  <h2 className="font-extrabold text-sm sm:text-base leading-tight">BGE Progress Részletes Útmutató</h2>
- <p className="text-[11px] text-slate-400">
+ <p className={`text-[11px] ${modalHeaderSubtext}`}>
  {tutorialStep + 1} / {TUTORIAL_SLIDES.length} témakör • Válassz alább vagy lépegess végig
  </p>
  </div>
@@ -12811,7 +12850,7 @@ export default function App() {
  type="button"
  onClick={handleCloseTutorial}
  title="Bemutató bezárása"
- className="bg-transparent text-slate-400 hover:text-white p-1.5 cursor-pointer"
+ className={`p-1.5 cursor-pointer ${modalCloseBtn}`}
  >
  <X className="w-5 h-5" />
  </button>
@@ -12947,21 +12986,21 @@ export default function App() {
  <div
  data-top-modal="true"
  onClick={handleCloseChangelog}
- className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-2.5 sm:p-4 overscroll-none"
+ className={`fixed inset-0 ${modalBackdrop} z-50 flex items-center justify-center p-2.5 sm:p-4 overscroll-none`}
  >
  <div
  onClick={(e) => e.stopPropagation()}
- className={`rounded-2xl max-w-xl w-full max-h-[90dvh] flex flex-col shadow-2xl overflow-hidden border ${bgCard}`}
+ className={`rounded-2xl max-w-xl w-full max-h-[90dvh] flex flex-col shadow-2xl overflow-hidden border ${modalCard}`}
  >
- <div className="px-4 sm:px-6 py-3.5 sm:py-4 bg-slate-900 text-white flex justify-between items-center border-b border-slate-800 shrink-0">
+ <div className={`px-4 sm:px-6 py-3.5 sm:py-4 flex justify-between items-center shrink-0 ${modalHeader}`}>
  <div className="flex items-center gap-2.5 min-w-0">
  <div className="w-8 h-8 rounded-lg bg-amber-400 text-slate-950 flex items-center justify-center shrink-0">
  <History className="w-4 h-4" />
  </div>
  <div className="min-w-0">
  <h2 className="font-extrabold text-sm sm:text-base leading-tight truncate">Verziókövetés & Újdonságok</h2>
- <p className="text-[11px] text-slate-400 truncate">
- BGE Progress • Jelenlegi verzió: <strong className="text-amber-400">{latestRelease?.version}</strong>
+ <p className={`text-[11px] truncate ${modalHeaderSubtext}`}>
+ BGE Progress • Jelenlegi verzió: <strong className={modalHeaderAmber}>{latestRelease?.version}</strong>
  </p>
  </div>
  </div>
@@ -12980,7 +13019,7 @@ export default function App() {
   data-no-glass="true"
  type="button"
  onClick={handleCloseChangelog}
- className="bg-transparent text-slate-400 hover:text-white p-1.5 cursor-pointer"
+ className={`p-1.5 cursor-pointer ${modalCloseBtn}`}
  >
  <X className="w-5 h-5" />
  </button>
@@ -13136,13 +13175,13 @@ export default function App() {
  <div
  data-top-modal="true"
  onClick={() => !isSavingJoker && setIsJokerModalOpen(false)}
- className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-2.5 sm:p-4 overscroll-none"
+ className={`fixed inset-0 ${modalBackdrop} z-50 flex items-center justify-center p-2.5 sm:p-4 overscroll-none`}
  >
  <div
  onClick={(e) => e.stopPropagation()}
- className={`rounded-2xl ${jokerModalStep === 'score' ? 'max-w-md' : 'max-w-2xl'} w-full max-h-[92dvh] flex flex-col shadow-2xl overflow-hidden border-2 border-violet-500 ${bgCard}`}
+ className={`rounded-2xl ${jokerModalStep === 'score' ? 'max-w-md' : 'max-w-2xl'} w-full max-h-[92dvh] flex flex-col shadow-2xl overflow-hidden border-2 border-violet-500 ${modalCard}`}
  >
- <div className="px-4 sm:px-6 py-3.5 sm:py-4 bg-violet-600 text-white flex justify-between items-center shrink-0">
+ <div className="px-4 sm:px-6 py-3.5 sm:py-4 bg-violet-600/88 backdrop-blur-xl text-white flex justify-between items-center shrink-0">
  <div className="flex items-center gap-2.5 min-w-0">
  <JokerIcon className="w-5 h-5 shrink-0" />
  <div className="min-w-0">
@@ -13522,13 +13561,13 @@ export default function App() {
  <div
  data-top-modal="true"
  onClick={() => !isDeletingSemester && setSemesterToDelete(null)}
- className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-2.5 sm:p-4 overscroll-none"
+ className={`fixed inset-0 ${modalBackdrop} z-50 flex items-center justify-center p-2.5 sm:p-4 overscroll-none`}
  >
  <div
  onClick={(e) => e.stopPropagation()}
- className={`rounded-2xl max-w-md w-full shadow-2xl overflow-hidden border-2 border-rose-500 ${bgCard}`}
+ className={`rounded-2xl max-w-md w-full shadow-2xl overflow-hidden border-2 border-rose-500 ${modalCard}`}
  >
- <div className="px-4 sm:px-6 py-3.5 sm:py-4 bg-rose-600 text-white flex justify-between items-center">
+ <div className="px-4 sm:px-6 py-3.5 sm:py-4 bg-rose-600/88 backdrop-blur-xl text-white flex justify-between items-center">
  <div className="flex items-center gap-2.5">
  <AlertTriangle className="w-5 h-5 shrink-0" />
  <h2 className="font-extrabold text-sm sm:text-base">Félév végleges törlése</h2>
@@ -13781,13 +13820,13 @@ export default function App() {
  <div
  data-top-modal={isActiveSubjectTopModal ? 'true' : undefined}
  onClick={() => setActiveSubjectId(null)}
- className="fixed inset-0 bg-black/65 backdrop-blur-sm z-40 flex items-center justify-center p-2 sm:p-4 overscroll-none"
+ className={`fixed inset-0 ${modalBackdrop} z-40 flex items-center justify-center p-2 sm:p-4 overscroll-none`}
  >
  <div
  onClick={(e) => e.stopPropagation()}
- className={`rounded-2xl max-w-3xl w-full max-h-[94dvh] sm:max-h-[92dvh] flex flex-col shadow-2xl overflow-hidden border ${bgCard}`}
+ className={`rounded-2xl max-w-3xl w-full max-h-[94dvh] sm:max-h-[92dvh] flex flex-col shadow-2xl overflow-hidden border ${modalCard}`}
  >
- <div className="px-4 sm:px-6 py-3 sm:py-4 bg-slate-900 text-white shrink-0 space-y-2.5">
+ <div className={`px-4 sm:px-6 py-3 sm:py-4 shrink-0 space-y-2.5 ${modalHeader}`}>
  <div className="flex items-start justify-between gap-2">
  <div className="min-w-0 flex-1">
  <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
@@ -13807,19 +13846,27 @@ export default function App() {
  title="Kattints a besorolás váltásához (Kötelező / Szabadon választott)"
  className={`px-2 py-0.5 text-[11px] font-bold rounded-full border transition cursor-pointer ${
  isElective
+ ? darkMode
  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-400/40 hover:bg-emerald-500/30'
- : 'bg-sky-500/20 text-sky-300 border-sky-400/40 hover:bg-sky-500/30'
+ : 'bg-emerald-500/15 text-emerald-700 border-emerald-500/35 hover:bg-emerald-500/25'
+ : darkMode
+ ? 'bg-sky-500/20 text-sky-300 border-sky-400/40 hover:bg-sky-500/30'
+ : 'bg-sky-500/15 text-sky-700 border-sky-500/35 hover:bg-sky-500/25'
  }`}
  >
  {isElective ? 'Szabadon választott' : 'Kötelező'}
  </button>
  {st.isExamCourse && (
- <span className="px-2 py-0.5 text-[11px] font-bold rounded-full bg-violet-500/25 text-violet-200 border border-violet-400/40">
+ <span className={`px-2 py-0.5 text-[11px] font-bold rounded-full border ${
+ darkMode
+ ? 'bg-violet-500/25 text-violet-200 border-violet-400/40'
+ : 'bg-violet-500/15 text-violet-700 border-violet-400/40'
+ }`}>
  Vizsgakurzus
  </span>
  )}
  </div>
- <p className="text-[11px] sm:text-xs text-slate-400 mt-1 leading-snug">
+ <p className={`text-[11px] sm:text-xs mt-1 leading-snug ${modalHeaderSubtext}`}>
  {st.disablePointCalc
  ? `${formatSemesterLabel(activeSubject.semester)} • ${activeSubject.credits} kredit • Pontszámítás kikapcsolva`
  : st.isExamCourse
@@ -13831,20 +13878,22 @@ export default function App() {
  <button
   data-no-glass="true"
  onClick={() => setActiveSubjectId(null)}
- className="bg-transparent p-2 text-slate-400 hover:text-white cursor-pointer shrink-0 -mr-1 -mt-1"
+ className={`p-2 cursor-pointer shrink-0 -mr-1 -mt-1 ${modalCloseBtn}`}
  >
  <X className="w-5 h-5" />
  </button>
  </div>
 
- <div className="flex items-center gap-2 pt-1 border-t border-slate-800/80 overflow-x-auto">
+ <div className={`flex items-center gap-2 pt-1 border-t overflow-x-auto ${darkMode ? 'border-white/10' : 'border-slate-200/80'}`}>
  {isAdmin && (
  <button
  onClick={() => handlePublishTemplate(activeSubject)}
  title="Közzététel a többiek számára sablonként"
  className={`px-3 py-1.5 text-xs font-bold rounded-lg flex items-center gap-1.5 transition cursor-pointer shrink-0 ${
  alreadyPublished
+ ? darkMode
  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-500/30'
+ : 'bg-emerald-500/15 text-emerald-700 border border-emerald-500/40 hover:bg-emerald-500/25'
  : 'bg-amber-400 text-slate-950 hover:bg-amber-300'
  }`}
  >
@@ -13870,13 +13919,21 @@ export default function App() {
  });
  setIsSubjectModalOpen(true);
  }}
- className="px-3 py-1.5 text-xs bg-slate-800 hover:bg-slate-700 rounded-lg flex items-center gap-1.5 cursor-pointer shrink-0"
+ className={`px-3 py-1.5 text-xs font-semibold rounded-lg flex items-center gap-1.5 cursor-pointer shrink-0 border transition ${
+ darkMode
+ ? 'bg-slate-800/75 hover:bg-slate-700 text-white border-white/10'
+ : 'bg-white/75 hover:bg-slate-100 text-slate-800 border-slate-300/80'
+ }`}
  >
  <Settings className="w-3.5 h-3.5" /> Beállítások
  </button>
  <button
  onClick={() => handleDeleteSubject(activeSubject.id)}
- className="px-3 py-1.5 text-xs bg-rose-500/20 text-rose-300 hover:bg-rose-500/30 rounded-lg flex items-center gap-1.5 cursor-pointer shrink-0 ml-auto"
+ className={`px-3 py-1.5 text-xs font-semibold rounded-lg flex items-center gap-1.5 cursor-pointer shrink-0 ml-auto border transition ${
+ darkMode
+ ? 'bg-rose-500/20 text-rose-300 border-rose-500/30 hover:bg-rose-500/30'
+ : 'bg-rose-500/12 text-rose-600 border-rose-300/70 hover:bg-rose-500/20'
+ }`}
  >
  <Trash2 className="w-3.5 h-3.5" /> Törlés
  </button>
@@ -14920,15 +14977,15 @@ export default function App() {
  <div
  data-top-modal="true"
  onClick={() => setBucketModal(null)}
- className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-2.5 sm:p-4 overscroll-none"
+ className={`fixed inset-0 ${modalBackdrop} z-50 flex items-center justify-center p-2.5 sm:p-4 overscroll-none`}
  >
  <div
  onClick={(e) => e.stopPropagation()}
- className={`rounded-2xl max-w-md w-full shadow-2xl overflow-hidden border ${bgCard}`}
+ className={`rounded-2xl max-w-md w-full shadow-2xl overflow-hidden border ${modalCard}`}
  >
- <div className="px-4 sm:px-6 py-3.5 sm:py-4 bg-slate-900 text-white flex justify-between items-center">
+ <div className={`px-4 sm:px-6 py-3.5 sm:py-4 flex justify-between items-center ${modalHeader}`}>
  <h2 className="font-bold text-sm sm:text-base">{bucketModal.id ? 'Gyűjtő szerkesztése' : 'Új egyéb gyűjtő létrehozása'}</h2>
- <button data-no-glass="true" onClick={() => setBucketModal(null)} className="bg-transparent text-slate-400 hover:text-white p-1 cursor-pointer"><X className="w-5 h-5" /></button>
+ <button data-no-glass="true" onClick={() => setBucketModal(null)} className={`p-1 cursor-pointer ${modalCloseBtn}`}><X className="w-5 h-5" /></button>
  </div>
  <form onSubmit={handleSaveBucketModal} className="p-4 sm:p-6 space-y-4">
  <div>
@@ -14974,13 +15031,13 @@ export default function App() {
  <div
  data-top-modal="true"
  onClick={() => setItemModal(null)}
- className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-2.5 sm:p-4 overscroll-none"
+ className={`fixed inset-0 ${modalBackdrop} z-50 flex items-center justify-center p-2.5 sm:p-4 overscroll-none`}
  >
  <div
  onClick={(e) => e.stopPropagation()}
- className={`rounded-2xl max-w-md w-full max-h-[92dvh] flex flex-col shadow-2xl overflow-hidden border ${bgCard}`}
+ className={`rounded-2xl max-w-md w-full max-h-[92dvh] flex flex-col shadow-2xl overflow-hidden border ${modalCard}`}
  >
- <div className="px-4 sm:px-6 py-3.5 sm:py-4 bg-slate-900 text-white flex justify-between items-center shrink-0">
+ <div className={`px-4 sm:px-6 py-3.5 sm:py-4 flex justify-between items-center shrink-0 ${modalHeader}`}>
  <h2 className="font-bold text-sm sm:text-base">
  {itemModal.isAutoExam
  ? 'Vizsgapontszám rögzítése (Max: 100 p)'
@@ -14988,7 +15045,7 @@ export default function App() {
  ? 'Vizsgapontszám rögzítése (Max: 100 p)'
  : `${itemModal.id ? 'Tétel szerkesztése' : 'Új tétel'} (${itemModal.category === 'Egyeb' ? 'Egyéb gyűjtő' : itemModal.category})`}
  </h2>
- <button data-no-glass="true" onClick={() => setItemModal(null)} className="bg-transparent text-slate-400 hover:text-white p-1 cursor-pointer"><X className="w-5 h-5" /></button>
+ <button data-no-glass="true" onClick={() => setItemModal(null)} className={`p-1 cursor-pointer ${modalCloseBtn}`}><X className="w-5 h-5" /></button>
  </div>
  <form noValidate onSubmit={handleSaveItemModal} className="p-4 sm:p-6 overflow-y-auto overscroll-contain space-y-4 flex-1 min-h-0">
  {!itemModal.isAutoExam && activeSubject?.courseKind !== 'exam' && (
@@ -15135,15 +15192,15 @@ export default function App() {
  <div
  data-top-modal="true"
  onClick={() => setIsSemesterModalOpen(false)}
- className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-2.5 sm:p-4 overscroll-none"
+ className={`fixed inset-0 ${modalBackdrop} z-50 flex items-center justify-center p-2.5 sm:p-4 overscroll-none`}
  >
  <div
  onClick={(e) => e.stopPropagation()}
- className={`rounded-2xl max-w-md w-full shadow-2xl overflow-hidden border ${bgCard}`}
+ className={`rounded-2xl max-w-md w-full shadow-2xl overflow-hidden border ${modalCard}`}
  >
- <div className="px-4 sm:px-6 py-3.5 sm:py-4 bg-slate-900 text-white flex justify-between items-center">
+ <div className={`px-4 sm:px-6 py-3.5 sm:py-4 flex justify-between items-center ${modalHeader}`}>
  <h2 className="font-bold text-sm sm:text-base">Új félév létrehozása</h2>
- <button data-no-glass="true" onClick={() => setIsSemesterModalOpen(false)} className="bg-transparent text-slate-400 hover:text-white p-1 cursor-pointer"><X className="w-5 h-5" /></button>
+ <button data-no-glass="true" onClick={() => setIsSemesterModalOpen(false)} className={`p-1 cursor-pointer ${modalCloseBtn}`}><X className="w-5 h-5" /></button>
  </div>
  <form onSubmit={handleAddSemester} className="p-4 sm:p-6 space-y-4">
  <div>
@@ -15244,23 +15301,23 @@ export default function App() {
  <div
  data-top-modal="true"
  onClick={() => !isUpdatingSemester && setEditingSemesterOldName(null)}
- className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-2.5 sm:p-4 overscroll-none"
+ className={`fixed inset-0 ${modalBackdrop} z-50 flex items-center justify-center p-2.5 sm:p-4 overscroll-none`}
  >
  <div
  onClick={(e) => e.stopPropagation()}
- className={`rounded-2xl max-w-md w-full shadow-2xl overflow-hidden border ${bgCard}`}
+ className={`rounded-2xl max-w-md w-full shadow-2xl overflow-hidden border ${modalCard}`}
  >
- <div className="px-4 sm:px-6 py-3.5 sm:py-4 bg-slate-900 text-white flex justify-between items-center">
+ <div className={`px-4 sm:px-6 py-3.5 sm:py-4 flex justify-between items-center ${modalHeader}`}>
  <div className="min-w-0">
  <h2 className="font-bold text-sm sm:text-base">Félév módosítása</h2>
- <p className="text-[11px] text-slate-400 truncate">Jelenlegi: {formatSemesterLabel(editingSemesterOldName)}</p>
+ <p className={`text-[11px] truncate ${modalHeaderSubtext}`}>Jelenlegi: {formatSemesterLabel(editingSemesterOldName)}</p>
  </div>
  <button
   data-no-glass="true"
  type="button"
  disabled={isUpdatingSemester}
  onClick={() => setEditingSemesterOldName(null)}
- className="bg-transparent text-slate-400 hover:text-white p-1 cursor-pointer disabled:opacity-50"
+ className={`p-1 cursor-pointer disabled:opacity-50 ${modalCloseBtn}`}
  >
  <X className="w-5 h-5" />
  </button>
@@ -15371,13 +15428,13 @@ export default function App() {
  <div
  data-top-modal="true"
  onClick={() => { setIsSubjectModalOpen(false); setSelectedSubjectMajorId(null); }}
- className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-2 sm:p-4 overscroll-none"
+ className={`fixed inset-0 ${modalBackdrop} z-50 flex items-center justify-center p-2 sm:p-4 overscroll-none`}
  >
  <div
  onClick={(e) => e.stopPropagation()}
- className={`rounded-2xl max-w-lg w-full max-h-[92dvh] flex flex-col shadow-2xl overflow-hidden border ${bgCard}`}
+ className={`rounded-2xl max-w-lg w-full max-h-[92dvh] flex flex-col shadow-2xl overflow-hidden border ${modalCard}`}
  >
- <div className="px-4 sm:px-6 py-3.5 sm:py-4 bg-slate-900 text-white flex justify-between items-center shrink-0">
+ <div className={`px-4 sm:px-6 py-3.5 sm:py-4 flex justify-between items-center shrink-0 ${modalHeader}`}>
  <div className="min-w-0">
  <h2 className="font-bold text-sm sm:text-base truncate">
  {editingSubject.id
@@ -15387,7 +15444,7 @@ export default function App() {
  : 'Új tantárgy felvétele'}
  </h2>
  {!editingSubject.id && activeMajorObject && (
- <p className="text-[11px] text-amber-400 font-semibold truncate">
+ <p className={`text-[11px] font-semibold truncate ${modalHeaderAmber}`}>
  Szak: {activeMajorObject.label}
  </p>
  )}
@@ -15395,7 +15452,7 @@ export default function App() {
  <button
   data-no-glass="true"
  onClick={() => { setIsSubjectModalOpen(false); setSelectedSubjectMajorId(null); }}
- className="bg-transparent text-slate-400 hover:text-white p-1.5 cursor-pointer shrink-0"
+ className={`p-1.5 cursor-pointer shrink-0 ${modalCloseBtn}`}
  >
  <X className="w-5 h-5" />
  </button>
@@ -16135,20 +16192,20 @@ export default function App() {
  setIsNoticeboardOpen(false);
  setIsAddingNotice(false);
  }}
- className="fixed inset-0 bg-black/75 backdrop-blur-sm z-[65] flex items-center justify-center p-2.5 sm:p-4 overscroll-none"
+ className={`fixed inset-0 ${modalBackdrop} z-[65] flex items-center justify-center p-2.5 sm:p-4 overscroll-none`}
  >
  <div
  onClick={(e) => e.stopPropagation()}
- className={`rounded-2xl max-w-lg w-full max-h-[90dvh] flex flex-col shadow-2xl overflow-hidden border-2 border-amber-400/70 ${bgCard}`}
+ className={`rounded-2xl max-w-lg w-full max-h-[90dvh] flex flex-col shadow-2xl overflow-hidden border-2 border-amber-400/70 ${modalCard}`}
  >
- <div className="px-4 sm:px-6 py-3.5 sm:py-4 bg-slate-900 text-white flex justify-between items-center border-b border-slate-800 shrink-0">
+ <div className={`px-4 sm:px-6 py-3.5 sm:py-4 flex justify-between items-center shrink-0 ${modalHeader}`}>
  <div className="flex items-center gap-2.5 min-w-0">
  <div className="w-9 h-9 rounded-xl bg-amber-400 text-slate-950 flex items-center justify-center shrink-0">
  <Bell className="w-5 h-5" />
  </div>
  <div className="min-w-0">
  <h2 className="font-extrabold text-sm sm:text-base leading-tight">Faliújság</h2>
- <p className="text-[11px] text-amber-400 font-semibold truncate">
+ <p className={`text-[11px] font-semibold truncate ${modalHeaderAmber}`}>
  Közérdekű információk és közlemények
  </p>
  </div>
@@ -16178,7 +16235,7 @@ export default function App() {
  setIsNoticeboardOpen(false);
  setIsAddingNotice(false);
  }}
- className="bg-transparent text-slate-400 hover:text-white p-1.5 cursor-pointer"
+ className={`p-1.5 cursor-pointer ${modalCloseBtn}`}
  >
  <X className="w-5 h-5" />
  </button>
@@ -16401,19 +16458,19 @@ export default function App() {
  <div
  data-top-modal="true"
  onClick={() => handleMarkNoticeAsRead(activeNoticePopup.id)}
- className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[75] flex items-center justify-center p-3 sm:p-4 overscroll-none"
+ className={`fixed inset-0 ${modalBackdrop} z-[75] flex items-center justify-center p-3 sm:p-4 overscroll-none`}
  >
  <div
  onClick={(e) => e.stopPropagation()}
- className={`rounded-2xl max-w-lg w-full max-h-[90dvh] flex flex-col shadow-2xl overflow-hidden border-2 border-amber-400 ${bgCard}`}
+ className={`rounded-2xl max-w-lg w-full max-h-[90dvh] flex flex-col shadow-2xl overflow-hidden border-2 border-amber-400 ${modalCard}`}
  >
- <div className="px-5 py-4 bg-slate-900 text-white flex items-center justify-between gap-3 border-b border-slate-800 shrink-0">
+ <div className={`px-5 py-4 flex items-center justify-between gap-3 shrink-0 ${modalHeader}`}>
  <div className="flex items-center gap-3 min-w-0">
  <div className="w-10 h-10 rounded-xl bg-amber-400 text-slate-950 flex items-center justify-center shrink-0">
  <Bell className="w-5 h-5" />
  </div>
  <div className="min-w-0">
- <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-amber-400/20 text-amber-300 border border-amber-400/35 mb-0.5">
+ <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider border mb-0.5 ${darkMode ? 'bg-amber-400/20 text-amber-300 border-amber-400/35' : 'bg-amber-400/25 text-amber-800 border-amber-500/40'}`}>
  {activeNoticePopup.targetAudience === 'gazdinfo'
  ? 'Faliújság • Gazdaságinformatikus közlemény'
  : 'Faliújság • Közérdekű információ'}
@@ -16428,7 +16485,7 @@ export default function App() {
  type="button"
  onClick={() => handleMarkNoticeAsRead(activeNoticePopup.id)}
  title="Bezárás"
- className="bg-transparent text-slate-400 hover:text-white p-1.5 cursor-pointer shrink-0"
+ className={`p-1.5 cursor-pointer shrink-0 ${modalCloseBtn}`}
  >
  <X className="w-5 h-5" />
  </button>

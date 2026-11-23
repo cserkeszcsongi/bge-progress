@@ -8314,25 +8314,45 @@ export default function App() {
  filter: blur(0px);
  }
  }
- @keyframes bgeMobileViewFade {
+ @keyframes bgeMobileSlideFromRight {
  0% {
  opacity: 0;
+ transform: translate3d(24px, 0, 0);
  }
  100% {
  opacity: 1;
+ transform: translate3d(0, 0, 0);
+ }
+ }
+ @keyframes bgeMobileSlideFromLeft {
+ 0% {
+ opacity: 0;
+ transform: translate3d(-24px, 0, 0);
+ }
+ 100% {
+ opacity: 1;
+ transform: translate3d(0, 0, 0);
  }
  }
  .bge-view-slide-left {
- animation: bgeSlideFromRight 300ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+ animation: bgeSlideFromRight 300ms cubic-bezier(0.22, 1, 0.36, 1) both;
+ will-change: transform, opacity;
  }
  .bge-view-slide-right {
- animation: bgeSlideFromLeft 300ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+ animation: bgeSlideFromLeft 300ms cubic-bezier(0.22, 1, 0.36, 1) both;
+ will-change: transform, opacity;
  }
  @media (max-width: 767px) {
- .bge-view-slide-left,
- .bge-view-slide-right {
- animation: bgeMobileViewFade 200ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+ .bge-view-slide-left {
+ animation: bgeMobileSlideFromRight 280ms cubic-bezier(0.22, 1, 0.36, 1) both;
  }
+ .bge-view-slide-right {
+ animation: bgeMobileSlideFromLeft 280ms cubic-bezier(0.22, 1, 0.36, 1) both;
+ }
+ }
+ .bge-nav-sliding-pill {
+ transition: transform 340ms cubic-bezier(0.34, 1.32, 0.64, 1), box-shadow 260ms cubic-bezier(0.22, 1, 0.36, 1);
+ will-change: transform;
  }
  .bge-view-slide-left section,
  .bge-view-slide-left article,
@@ -8634,6 +8654,9 @@ export default function App() {
  )}
  </AnimatedPresence>
 
+ {(() => {
+ const activeNavIndex = isBottomMenuOpen ? 2 : activeView === 'semester' ? 1 : 0;
+ return (
  <div
  className={`bge-bottom-nav-capsule pointer-events-auto relative w-full rounded-full border p-1.5 shadow-2xl grid grid-cols-3 items-stretch gap-1 ${
  darkMode
@@ -8641,20 +8664,33 @@ export default function App() {
  : 'bg-white/50 border-white/85 ring-1 ring-slate-900/10 shadow-slate-900/12'
  }`}
  >
+ <div
+ aria-hidden="true"
+ className="pointer-events-none absolute inset-1.5 grid grid-cols-3 gap-1 z-0"
+ >
+ <div
+ className="bge-nav-sliding-pill h-full w-full rounded-full bg-amber-400 shadow-md shadow-amber-400/35"
+ style={{
+ transform: `translate3d(calc(${activeNavIndex * 100}% + ${activeNavIndex * 0.25}rem), 0, 0)`
+ }}
+ />
+ </div>
+
  <button
  type="button"
+ data-no-glass="true"
  onClick={() => {
  setIsBottomMenuOpen(false);
  navigateWithSlide('home');
  }}
  data-nav-pill="true"
  aria-current={activeView === 'home' && !isBottomMenuOpen ? 'page' : undefined}
- className={`relative z-10 min-w-0 py-2 px-2 rounded-full flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 text-[11px] sm:text-xs font-extrabold touch-manipulation select-none transition-colors duration-200 cursor-pointer ${
- activeView === 'home' && !isBottomMenuOpen
- ? 'bg-amber-400 text-slate-950 shadow-md shadow-amber-400/30'
+ className={`relative z-10 min-w-0 py-2 px-2 rounded-full flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 text-[11px] sm:text-xs font-extrabold touch-manipulation select-none transition-colors duration-200 cursor-pointer bg-transparent ${
+ activeNavIndex === 0
+ ? 'text-slate-950'
  : darkMode
- ? 'text-slate-300 hover:text-white hover:bg-white/10'
- : 'text-slate-700 hover:text-slate-950 hover:bg-slate-900/5'
+ ? 'text-slate-300 hover:text-white'
+ : 'text-slate-700 hover:text-slate-950'
  }`}
  >
  <Home className="w-4 h-4 shrink-0" />
@@ -8663,6 +8699,7 @@ export default function App() {
 
  <button
  type="button"
+ data-no-glass="true"
  onClick={() => {
  setIsBottomMenuOpen(false);
  navigateWithSlide('semester', currentTargetSemester);
@@ -8670,12 +8707,12 @@ export default function App() {
  data-nav-pill="true"
  aria-current={activeView === 'semester' && !isBottomMenuOpen ? 'page' : undefined}
  title={`Jelenlegi félév megnyitása (${formatSemesterLabel(currentTargetSemester)})`}
- className={`relative z-10 min-w-0 py-2 px-2 rounded-full flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 text-[11px] sm:text-xs font-extrabold touch-manipulation select-none transition-colors duration-200 cursor-pointer ${
- activeView === 'semester' && !isBottomMenuOpen
- ? 'bg-amber-400 text-slate-950 shadow-md shadow-amber-400/30'
+ className={`relative z-10 min-w-0 py-2 px-2 rounded-full flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 text-[11px] sm:text-xs font-extrabold touch-manipulation select-none transition-colors duration-200 cursor-pointer bg-transparent ${
+ activeNavIndex === 1
+ ? 'text-slate-950'
  : darkMode
- ? 'text-slate-300 hover:text-white hover:bg-white/10'
- : 'text-slate-700 hover:text-slate-950 hover:bg-slate-900/5'
+ ? 'text-slate-300 hover:text-white'
+ : 'text-slate-700 hover:text-slate-950'
  }`}
  >
  <Calendar className="w-4 h-4 shrink-0" />
@@ -8684,6 +8721,7 @@ export default function App() {
 
  <button
  type="button"
+ data-no-glass="true"
  onClick={() => {
  setIsMenuOpen(false);
  closeHomePlusMenuAnimated();
@@ -8695,12 +8733,12 @@ export default function App() {
  }}
  data-nav-pill="true"
  aria-expanded={isBottomMenuOpen}
- className={`relative z-10 min-w-0 py-2 px-2 rounded-full flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 text-[11px] sm:text-xs font-extrabold touch-manipulation select-none transition-colors duration-200 cursor-pointer ${
- isBottomMenuOpen
- ? 'bg-amber-400 text-slate-950 shadow-md shadow-amber-400/30'
+ className={`relative z-10 min-w-0 py-2 px-2 rounded-full flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 text-[11px] sm:text-xs font-extrabold touch-manipulation select-none transition-colors duration-200 cursor-pointer bg-transparent ${
+ activeNavIndex === 2
+ ? 'text-slate-950'
  : darkMode
- ? 'text-slate-300 hover:text-white hover:bg-white/10'
- : 'text-slate-700 hover:text-slate-950 hover:bg-slate-900/5'
+ ? 'text-slate-300 hover:text-white'
+ : 'text-slate-700 hover:text-slate-950'
  }`}
  >
  <Menu className="w-4 h-4 shrink-0" />
@@ -8710,6 +8748,8 @@ export default function App() {
  )}
  </button>
  </div>
+ );
+ })()}
  </nav>
  </>
  )}

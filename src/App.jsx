@@ -13,7 +13,7 @@ import {
  Menu, Palette, ChevronDown, SlidersHorizontal, RefreshCw, Lightbulb, CheckCircle2,
  LayoutList, ArrowUpDown, GripVertical, ArrowUp, ArrowDown, Calculator,
  BarChart3, Users, FastForward, FileSpreadsheet, HelpCircle, Upload,
- Download, Smartphone, Share, ShieldCheck, Lock, Database, Bell, Wrench
+ Download, Smartphone, Share, ShieldCheck, Lock, Database, Bell, Wrench, Home
 } from 'lucide-react';
 import { auth, googleProvider, db } from './firebase';
 
@@ -6907,10 +6907,10 @@ export default function App() {
 
  const renderDropdownMenu = (isDarkHeader = false) => {
  const triggerClass = isDarkHeader
- ? 'px-3 py-2 sm:py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 text-xs sm:text-sm font-bold flex items-center gap-1.5 transition cursor-pointer'
+ ? 'px-3 py-2 sm:py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 text-xs sm:text-sm font-bold flex items-center gap-1.5 transition cursor-pointer relative'
  : darkMode
- ? 'px-3 py-2 sm:py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-100 border border-slate-800 text-xs font-bold flex items-center gap-1.5 transition cursor-pointer'
- : 'px-3 py-2 sm:py-1.5 rounded-lg bg-white hover:bg-slate-100 text-slate-800 border border-slate-200 shadow-2xs text-xs font-bold flex items-center gap-1.5 transition cursor-pointer';
+ ? 'px-3 py-2 sm:py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-100 border border-slate-800 text-xs font-bold flex items-center gap-1.5 transition cursor-pointer relative'
+ : 'px-3 py-2 sm:py-1.5 rounded-lg bg-white hover:bg-slate-100 text-slate-800 border border-slate-200 shadow-2xs text-xs font-bold flex items-center gap-1.5 transition cursor-pointer relative';
 
  return (
  <div data-dropdown-menu="true" className="relative">
@@ -6922,14 +6922,14 @@ export default function App() {
  >
  <Menu className="w-4 h-4 text-amber-400 shrink-0" />
  <span>Menü</span>
- {isSim && (
- <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" title="Szimulátor mód aktív" />
+ {(isSim || canShowMobileInstall) && (
+ <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" title={isSim ? 'Szimulátor mód aktív' : 'Alkalmazás telepíthető'} />
  )}
  <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-150 ${isMenuOpen ? 'rotate-180' : ''}`} />
  </button>
 
  {isMenuOpen && (
- <div className={`absolute right-0 mt-2 w-72 sm:w-80 rounded-2xl border shadow-2xl p-3.5 space-y-3.5 z-50 ${
+ <div className={`absolute right-0 mt-2 w-72 sm:w-80 max-h-[85dvh] overflow-y-auto rounded-2xl border shadow-2xl p-3.5 space-y-3.5 z-50 ${
  darkMode
  ? 'bg-slate-900 border-slate-700 text-slate-100'
  : 'bg-white border-slate-200 text-slate-800'
@@ -7116,6 +7116,149 @@ export default function App() {
  </button>
  </div>
 
+ <div className={`pt-2.5 border-t space-y-2 ${darkMode ? 'border-slate-800' : 'border-slate-200'}`}>
+ <p className={`text-[10px] font-bold uppercase tracking-wider px-1 ${textMuted}`}>
+ Információk & Eszközök
+ </p>
+
+ {canShowMobileInstall && (
+ <button
+ type="button"
+ onClick={() => {
+ setIsMenuOpen(false);
+ handleTriggerMobileInstall();
+ }}
+ className={`w-full px-3 py-2.5 rounded-xl text-xs font-extrabold border flex items-center justify-between transition cursor-pointer ${
+ darkMode
+ ? 'bg-amber-400/15 hover:bg-amber-400/25 text-amber-300 border-amber-400/40'
+ : 'bg-amber-50 hover:bg-amber-100 text-amber-900 border-amber-300'
+ }`}
+ >
+ <span className="flex items-center gap-2">
+ <Download className="w-4 h-4 text-amber-500" />
+ Letöltés parancsikonként
+ </span>
+ <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+ </button>
+ )}
+
+ <button
+ type="button"
+ onClick={() => {
+ setIsMenuOpen(false);
+ setIsStatsModalOpen(true);
+ }}
+ className={`w-full px-3 py-2.5 rounded-xl text-xs font-bold border flex items-center justify-between transition cursor-pointer ${
+ darkMode
+ ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
+ : 'bg-slate-50 hover:bg-slate-100 text-slate-800 border-slate-200'
+ }`}
+ >
+ <span className="flex items-center gap-2">
+ <BarChart3 className="w-4 h-4 text-violet-500" />
+ App statisztika
+ </span>
+ </button>
+
+ <button
+ type="button"
+ onClick={() => {
+ setIsMenuOpen(false);
+ handleOpenTutorial();
+ }}
+ className={`w-full px-3 py-2.5 rounded-xl text-xs font-bold border flex items-center justify-between transition cursor-pointer ${
+ darkMode
+ ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
+ : 'bg-slate-50 hover:bg-slate-100 text-slate-800 border-slate-200'
+ }`}
+ >
+ <span className="flex items-center gap-2">
+ <BookOpen className="w-4 h-4 text-sky-500" />
+ Bemutató
+ </span>
+ </button>
+
+ <button
+ type="button"
+ onClick={() => {
+ setIsMenuOpen(false);
+ setIsWelcomeOpen(true);
+ }}
+ className={`w-full px-3 py-2.5 rounded-xl text-xs font-bold border flex items-center justify-between transition cursor-pointer ${
+ darkMode
+ ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
+ : 'bg-slate-50 hover:bg-slate-100 text-slate-800 border-slate-200'
+ }`}
+ >
+ <span className="flex items-center gap-2">
+ <User className="w-4 h-4 text-emerald-500" />
+ Köszöntő
+ </span>
+ </button>
+
+ {latestRelease && (
+ <button
+ type="button"
+ onClick={() => {
+ setIsMenuOpen(false);
+ setIsChangelogOpen(true);
+ }}
+ className={`w-full px-3 py-2.5 rounded-xl text-xs font-bold border flex items-center justify-between transition cursor-pointer ${
+ darkMode
+ ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
+ : 'bg-slate-50 hover:bg-slate-100 text-slate-800 border-slate-200'
+ }`}
+ >
+ <span className="flex items-center gap-2">
+ <History className="w-4 h-4 text-amber-500" />
+ Verziótörténet & Újdonságok
+ </span>
+ <span className="px-2 py-0.5 rounded-full text-[11px] font-extrabold bg-amber-400/20 text-amber-500 border border-amber-400/30">
+ {latestRelease.version}
+ </span>
+ </button>
+ )}
+
+ {isAdmin && (
+ <button
+ type="button"
+ role="switch"
+ aria-checked={isMaintenanceMode}
+ disabled={isTogglingMaintenance}
+ onClick={() => {
+ handleToggleMaintenanceMode();
+ }}
+ className={`w-full px-3 py-2.5 rounded-xl text-xs font-extrabold border flex items-center justify-between transition cursor-pointer ${
+ isMaintenanceMode
+ ? 'bg-amber-400 text-slate-950 border-amber-500'
+ : darkMode
+ ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
+ : 'bg-slate-50 hover:bg-slate-100 text-slate-800 border-slate-200'
+ }`}
+ >
+ <span className="flex items-center gap-2">
+ <Wrench className={`w-4 h-4 ${isMaintenanceMode ? 'text-slate-950' : 'text-amber-500'}`} />
+ Maintenance mód
+ </span>
+ <span
+ className={`relative inline-flex h-4 w-7 items-center rounded-full transition-colors ${
+ isMaintenanceMode
+ ? 'bg-slate-950'
+ : darkMode ? 'bg-slate-700' : 'bg-slate-300'
+ }`}
+ >
+ <span
+ className={`inline-block h-3 w-3 transform rounded-full transition-transform ${
+ isMaintenanceMode
+ ? 'translate-x-3.5 bg-amber-400'
+ : 'translate-x-0.5 bg-white'
+ }`}
+ />
+ </span>
+ </button>
+ )}
+ </div>
+
  <div className={`pt-2.5 border-t ${darkMode ? 'border-slate-800' : 'border-slate-200'}`}>
  <button
  type="button"
@@ -7125,8 +7268,7 @@ export default function App() {
  }}
  className="w-full px-3 py-2.5 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-500 text-white flex items-center justify-center gap-2 transition cursor-pointer"
  >
- <LogOut className="w-4 h-4" />
- Kijelentkezés
+ <LogOut className="w-4 h-4" /> Kijelentkezés
  </button>
  </div>
  </div>
@@ -7609,128 +7751,16 @@ export default function App() {
  </div>
  )}
 
- <div className="max-w-6xl mx-auto px-3 sm:px-4 pt-3 sm:pt-4 flex flex-wrap items-center justify-between gap-2">
- <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 max-w-full flex-wrap">
- <span className={`text-[11px] sm:text-xs truncate max-w-[155px] sm:max-w-xs ${textMuted}`}>{user.email}</span>
+ <div className="max-w-6xl mx-auto px-3 sm:px-4 pt-3 sm:pt-4 flex items-center justify-between gap-2">
+ <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+ <span className={`text-[11px] sm:text-xs truncate max-w-[175px] sm:max-w-xs ${textMuted}`}>{user.email}</span>
  {isAdmin && (
- <>
  <span className="px-2 py-0.5 text-[10px] font-bold uppercase rounded-full bg-amber-400/20 text-amber-500 border border-amber-400/30 shrink-0">
  Admin
  </span>
- <button
- type="button"
- role="switch"
- aria-checked={isMaintenanceMode}
- disabled={isTogglingMaintenance}
- onClick={handleToggleMaintenanceMode}
- title="Maintenance mód be- vagy kikapcsolása"
- className={`px-2.5 py-1 rounded-full border text-[11px] font-extrabold inline-flex items-center gap-2 transition cursor-pointer shrink-0 ${
- isMaintenanceMode
- ? 'bg-amber-400 text-slate-950 border-amber-500 shadow-sm'
- : darkMode
- ? 'bg-slate-900 hover:bg-slate-800 text-slate-200 border-slate-700'
- : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200 shadow-2xs'
- }`}
- >
- <Wrench className={`w-3.5 h-3.5 ${isMaintenanceMode ? 'text-slate-950' : 'text-amber-500'}`} />
- <span>Maintenance</span>
- <span
- className={`relative inline-flex h-4 w-7 items-center rounded-full transition-colors ${
- isMaintenanceMode
- ? 'bg-slate-950'
- : darkMode ? 'bg-slate-700' : 'bg-slate-300'
- }`}
- >
- <span
- className={`inline-block h-3 w-3 transform rounded-full transition-transform ${
- isMaintenanceMode
- ? 'translate-x-3.5 bg-amber-400'
- : 'translate-x-0.5 bg-white'
- }`}
- />
- </span>
- </button>
- </>
  )}
  </div>
- <div className="flex items-center gap-1.5 sm:gap-2 ml-auto flex-wrap justify-end">
- {canShowMobileInstall && (
- <button
- type="button"
- onClick={handleTriggerMobileInstall}
- title="Alkalmazás letöltése parancsikonként a főképernyőre"
- aria-label="Alkalmazás letöltése parancsikonként"
- className={`px-2.5 sm:px-3 py-2 sm:py-1.5 rounded-lg border text-xs font-extrabold flex items-center gap-1.5 transition cursor-pointer relative ${
- darkMode
- ? 'bg-amber-400/15 hover:bg-amber-400/25 text-amber-400 border-amber-400/50'
- : 'bg-amber-50 hover:bg-amber-100 text-amber-800 border-amber-400 shadow-2xs'
- }`}
- >
- <Download className="w-3.5 h-3.5 text-amber-500 shrink-0" />
- <span>Letöltés</span>
- <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse shrink-0" />
- </button>
- )}
-
- <button
- type="button"
- onClick={() => setIsStatsModalOpen(true)}
- title="Alkalmazás statisztika megtekintése"
- className={`px-2.5 sm:px-3 py-2 sm:py-1.5 rounded-lg border text-xs font-bold flex items-center gap-1.5 transition cursor-pointer ${
- darkMode
- ? 'bg-slate-900 hover:bg-slate-800 text-violet-400 border-slate-800'
- : 'bg-white hover:bg-violet-50 text-violet-700 border-slate-200 shadow-2xs'
- }`}
- >
- <BarChart3 className="w-3.5 h-3.5 text-violet-500" />
- <span className="hidden sm:inline">App statisztika</span>
- </button>
-
- <button
- type="button"
- onClick={() => setIsWelcomeOpen(true)}
- title="Köszöntő és bemutatkozás"
- className={`px-2.5 sm:px-3 py-2 sm:py-1.5 rounded-lg border text-xs font-bold flex items-center gap-1.5 transition cursor-pointer ${
- darkMode
- ? 'bg-slate-900 hover:bg-slate-800 text-emerald-400 border-slate-800'
- : 'bg-white hover:bg-emerald-50 text-emerald-700 border-slate-200 shadow-2xs'
- }`}
- >
- <User className="w-3.5 h-3.5 text-emerald-500" />
- <span className="hidden sm:inline">Köszöntő</span>
- </button>
-
- <button
- type="button"
- onClick={handleOpenTutorial}
- title="Alkalmazás részletes bemutatója lépésről lépésre"
- className={`px-2.5 sm:px-3 py-2 sm:py-1.5 rounded-lg border text-xs font-bold flex items-center gap-1.5 transition cursor-pointer ${
- darkMode
- ? 'bg-slate-900 hover:bg-slate-800 text-sky-400 border-slate-800'
- : 'bg-white hover:bg-sky-50 text-sky-700 border-slate-200 shadow-2xs'
- }`}
- >
- <BookOpen className="w-3.5 h-3.5 text-sky-500" />
- <span>Bemutató</span>
- </button>
-
- {latestRelease && (
- <button
- type="button"
- onClick={() => setIsChangelogOpen(true)}
- title="Verziótörténet és újdonságok megtekintése"
- className={`px-2.5 sm:px-3 py-2 sm:py-1.5 rounded-lg border text-xs font-bold flex items-center gap-1.5 transition cursor-pointer ${
- darkMode
- ? 'bg-slate-900 hover:bg-slate-800 text-amber-400 border-slate-800'
- : 'bg-white hover:bg-amber-50 text-slate-800 border-slate-200 shadow-2xs'
- }`}
- >
- <History className="w-3.5 h-3.5 text-amber-500" />
- <span>{latestRelease.version}</span>
- <span className={`hidden sm:inline font-normal ${textMuted}`}>• Újdonságok</span>
- </button>
- )}
-
+ <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
  {renderNoticeboardBellButton(false)}
  {renderDropdownMenu(false)}
  </div>
@@ -8367,21 +8397,11 @@ export default function App() {
  ) : (
  <>
  <header className="bg-slate-900 text-white sticky top-0 z-30 shadow-md border-b border-slate-800">
- <div className="max-w-7xl mx-auto px-3 sm:px-4 py-2.5 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-2.5">
- <div className="flex items-center justify-between gap-2">
- <div className="flex items-center gap-2 sm:gap-3 min-w-0">
- <button
- onClick={() => setActiveView('home')}
- title="Vissza a főoldalra"
- className="px-2.5 py-2 sm:py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs sm:text-sm font-medium flex items-center gap-1.5 transition cursor-pointer shrink-0"
- >
- <ArrowLeft className="w-4 h-4" />
- <span>Főoldal</span>
- </button>
+ <div className="max-w-7xl mx-auto px-3 sm:px-4 py-2.5 flex items-center justify-between gap-2">
  <button
  type="button"
  onClick={() => setActiveView('home')}
- className="flex items-center gap-2 text-left cursor-pointer group min-w-0"
+ className="flex items-center gap-2 sm:gap-2.5 text-left cursor-pointer group min-w-0"
  >
  <img
  src="/logo.png"
@@ -8393,127 +8413,24 @@ export default function App() {
  <h1 className="font-bold text-sm sm:text-lg leading-tight group-hover:text-amber-400 transition truncate">
  BGE Progress
  </h1>
- <p className="text-[11px] sm:text-xs text-slate-400 truncate max-w-[140px] sm:max-w-[220px]">
- {user.email}
+ <p className="text-[11px] sm:text-xs text-slate-300 font-semibold truncate max-w-[180px] sm:max-w-xs">
+ {formatSemesterLabel(selectedSemester)}
  </p>
  </div>
  </button>
- </div>
 
- <div className="flex items-center gap-1.5 lg:hidden shrink-0">
- {canShowMobileInstall && (
- <button
- type="button"
- onClick={handleTriggerMobileInstall}
- title="Alkalmazás letöltése parancsikonként"
- aria-label="Alkalmazás letöltése parancsikonként"
- className="p-2 rounded-lg bg-amber-400/20 hover:bg-amber-400/30 text-amber-400 border border-amber-400/50 transition cursor-pointer relative"
- >
- <Download className="w-4 h-4" />
- <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
- </button>
- )}
- <button
- type="button"
- onClick={() => setIsStatsModalOpen(true)}
- title="App statisztika"
- className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-violet-400 border border-slate-700 transition cursor-pointer"
- >
- <BarChart3 className="w-4 h-4" />
- </button>
- <button
- type="button"
- onClick={handleOpenTutorial}
- title="Bemutató"
- className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-sky-400 border border-slate-700 transition cursor-pointer"
- >
- <BookOpen className="w-4 h-4" />
- </button>
+ <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
  {renderNoticeboardBellButton(true)}
+ <button
+ type="button"
+ onClick={() => setActiveView('home')}
+ title="Főoldal"
+ aria-label="Főoldal"
+ className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-amber-400 border border-slate-700 transition cursor-pointer shrink-0"
+ >
+ <Home className="w-4 h-4" />
+ </button>
  {renderDropdownMenu(true)}
- </div>
- </div>
-
- <div className="flex flex-wrap items-center gap-2">
- <div className="flex items-center gap-1 flex-1 sm:flex-initial min-w-[185px]">
- <select
- value={selectedSemester}
- onChange={(e) => setSelectedSemester(e.target.value)}
- className={`flex-1 sm:flex-initial bg-slate-800 border text-xs sm:text-sm rounded-lg px-2.5 sm:px-3 py-2 sm:py-1.5 text-white focus:outline-none focus:border-amber-400 ${
- isCurrentSemester(selectedSemester) ? 'border-amber-400 font-bold' : 'border-slate-700'
- }`}
- >
- {semesters.map(sem => (
- <option key={sem} value={sem}>
- {formatSemesterLabel(sem)}{isCurrentSemester(sem) ? ' • Aktuális' : ''}
- </option>
- ))}
- </select>
-
- {selectedSemester && (
- <>
- <button
- type="button"
- onClick={() => handleOpenEditSemester(selectedSemester)}
- title="Aktuális félév évének / időszakának módosítása"
- className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-amber-400 border border-slate-700 transition cursor-pointer shrink-0"
- >
- <Pencil className="w-4 h-4" />
- </button>
-
- <button
- type="button"
- onClick={() => setSemesterToDelete(selectedSemester)}
- title="Aktuális félév törlése"
- className="p-2 rounded-lg bg-slate-800 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 border border-slate-700 transition cursor-pointer shrink-0"
- >
- <Trash2 className="w-4 h-4" />
- </button>
- </>
- )}
- </div>
-
- {isCurrentSemester(selectedSemester) && (
- <span className="hidden sm:inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-extrabold bg-amber-400 text-slate-950">
- <Sparkles className="w-3 h-3" /> Aktuális félév
- </span>
- )}
-
- <div className="hidden lg:flex items-center gap-2">
- {canShowMobileInstall && (
- <button
- type="button"
- onClick={handleTriggerMobileInstall}
- title="Alkalmazás letöltése parancsikonként"
- className="px-3 py-1.5 rounded-lg text-xs sm:text-sm font-bold bg-amber-400/20 hover:bg-amber-400/30 text-amber-400 border border-amber-400/50 flex items-center gap-1.5 transition cursor-pointer"
- >
- <Download className="w-4 h-4" />
- <span>Letöltés</span>
- </button>
- )}
- <button
- type="button"
- onClick={() => setIsStatsModalOpen(true)}
- title="Alkalmazás statisztika megtekintése"
- className="px-3 py-1.5 rounded-lg text-xs sm:text-sm font-semibold bg-slate-800 hover:bg-slate-700 text-violet-400 border border-slate-700 flex items-center gap-1.5 transition cursor-pointer"
- >
- <BarChart3 className="w-4 h-4" />
- <span>App statisztika</span>
- </button>
-
- <button
- type="button"
- onClick={handleOpenTutorial}
- title="Alkalmazás részletes bemutatója lépésről lépésre"
- className="px-3 py-1.5 rounded-lg text-xs sm:text-sm font-semibold bg-slate-800 hover:bg-slate-700 text-sky-400 border border-slate-700 flex items-center gap-1.5 transition cursor-pointer"
- >
- <BookOpen className="w-4 h-4" />
- <span>Bemutató</span>
- </button>
-
- {renderNoticeboardBellButton(true)}
- {renderDropdownMenu(true)}
- </div>
  </div>
  </div>
 

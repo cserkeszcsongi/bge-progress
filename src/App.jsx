@@ -638,6 +638,21 @@ function buildTemplatesForMajor(majorId) {
 
 const APP_RELEASES = [
  {
+ version: 'v2.5.1',
+ date: '2026. 11. 23.',
+ changes: [
+ 'Görgetési hiba javítása: a főoldali és féléves nézetekben újra akadálymentesen működik a lefelé görgetés (eltávolítva a scrollt gátló transform/animation szabályok a görgetett konténerekről)'
+ ]
+ },
+ {
+ version: 'v2.5.0',
+ date: '2026. 11. 23.',
+ changes: [
+ 'Alkalmazásszintű Liquid Glass design language: áttetsző üveges kártyák, felső sávok, menük, gombok és modális ablakok háttérmosással (backdrop-filter blur & saturate) és finom fénytörés-kiemeléssel',
+ 'Világos/sötét módhoz, monokróm palettához és mobil olvashatósághoz igazított kontraszt, valamint sima fluid animációk minden megnyitáskor és becsukáskor'
+ ]
+ },
+ {
  version: 'v2.4.2',
  date: '2026. 11. 23.',
  changes: [
@@ -7248,90 +7263,117 @@ export default function App() {
  @keyframes bgeFluidEnter {
  from {
  opacity: 0;
- transform: translateY(10px) scale(0.988);
+ transform: translateY(8px);
  }
  to {
  opacity: 1;
- transform: translateY(0) scale(1);
+ transform: translateY(0);
  }
  }
  @keyframes bgeCollapseReveal {
  from {
  opacity: 0;
- transform: translateY(-8px) scale(0.985);
+ transform: translateY(-6px);
  }
  to {
  opacity: 1;
- transform: translateY(0) scale(1);
+ transform: translateY(0);
  }
  }
  @keyframes bgeLiquidGlassOpen {
  0% {
  opacity: 0;
- transform: translateY(16px) scale(0.72);
- filter: blur(10px) saturate(135%);
+ transform: translateY(14px) scale(0.84);
  }
- 62% {
+ 65% {
  opacity: 1;
- transform: translateY(-3px) scale(1.025);
- filter: blur(0px) saturate(165%);
+ transform: translateY(-2px) scale(1.015);
  }
  100% {
  opacity: 1;
  transform: translateY(0) scale(1);
- filter: blur(0px) saturate(145%);
  }
  }
  @keyframes bgeLiquidGlassClose {
  0% {
  opacity: 1;
  transform: translateY(0) scale(1);
- filter: blur(0px) saturate(145%);
  }
  100% {
  opacity: 0;
- transform: translateY(12px) scale(0.78);
- filter: blur(8px) saturate(110%);
+ transform: translateY(10px) scale(0.86);
  }
  }
  @keyframes bgeLiquidItemIn {
  0% {
  opacity: 0;
- transform: translateY(8px) scale(0.94);
+ transform: translateY(6px);
  }
  100% {
  opacity: 1;
- transform: translateY(0) scale(1);
+ transform: translateY(0);
  }
  }
  @keyframes bgeBackdropFadeIn {
  from {
  opacity: 0;
- backdrop-filter: blur(0px);
  }
  to {
  opacity: 1;
- backdrop-filter: blur(4px);
  }
+ }
+ .bge-fluid-app {
+ position: relative;
+ overflow-x: clip;
+ }
+ .bge-fluid-app::before {
+ content: "";
+ position: fixed;
+ inset: 0;
+ pointer-events: none;
+ z-index: 0;
+ background:
+ radial-gradient(circle at 12% 10%, rgba(251, 191, 36, 0.14), transparent 42%),
+ radial-gradient(circle at 88% 18%, rgba(56, 189, 248, 0.12), transparent 44%),
+ radial-gradient(circle at 50% 92%, rgba(16, 185, 129, 0.10), transparent 48%);
+ }
+ .bge-fluid-app > *:not(style) {
+ position: relative;
+ z-index: 1;
+ }
+ .bge-fluid-app .bg-white,
+ .bge-fluid-app .bg-slate-900,
+ .bge-fluid-app .bg-slate-800\/80,
+ .bge-fluid-app .bg-slate-800\/70,
+ .bge-fluid-app .bg-slate-50 {
+ backdrop-filter: blur(16px) saturate(155%);
+ -webkit-backdrop-filter: blur(16px) saturate(155%);
+ box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.22), 0 8px 24px -8px rgba(15, 23, 42, 0.10);
+ }
+ .bge-fluid-app header.sticky {
+ backdrop-filter: blur(20px) saturate(165%);
+ -webkit-backdrop-filter: blur(20px) saturate(165%);
+ background-color: rgba(15, 23, 42, 0.82);
+ border-bottom-color: rgba(255, 255, 255, 0.12);
+ box-shadow: inset 0 -1px 0 0 rgba(255, 255, 255, 0.06), 0 10px 28px -10px rgba(2, 6, 23, 0.45);
  }
  .bge-fluid-app button,
  .bge-fluid-app [role="button"],
  .bge-fluid-app a[href] {
- transition: transform 220ms cubic-bezier(0.34, 1.38, 0.64, 1), background-color 240ms cubic-bezier(0.22, 1, 0.36, 1), border-color 240ms cubic-bezier(0.22, 1, 0.36, 1), color 200ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 260ms cubic-bezier(0.22, 1, 0.36, 1), opacity 220ms cubic-bezier(0.22, 1, 0.36, 1);
- will-change: transform;
+ transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1), background-color 220ms cubic-bezier(0.22, 1, 0.36, 1), border-color 220ms cubic-bezier(0.22, 1, 0.36, 1), color 200ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 240ms cubic-bezier(0.22, 1, 0.36, 1), opacity 200ms ease;
  }
  .bge-fluid-app button:active:not(:disabled),
  .bge-fluid-app [role="button"]:active:not([aria-disabled="true"]),
  .bge-fluid-app a[href]:active {
- transform: scale(0.955);
+ transform: scale(0.96);
  transition-duration: 110ms;
  }
  .bge-fluid-app section,
  .bge-fluid-app article {
- animation: bgeFluidEnter 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
+ animation: bgeFluidEnter 280ms cubic-bezier(0.22, 1, 0.36, 1) both;
  }
  .bge-fluid-reveal {
- animation: bgeCollapseReveal 300ms cubic-bezier(0.34, 1.25, 0.64, 1) both;
+ animation: bgeCollapseReveal 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
  transform-origin: top center;
  }
  .bge-liquid-glass-panel {
@@ -7350,26 +7392,26 @@ export default function App() {
  background: linear-gradient(135deg, rgba(255, 255, 255, 0.34) 0%, rgba(255, 255, 255, 0.08) 38%, rgba(255, 255, 255, 0.02) 70%, rgba(251, 191, 36, 0.14) 100%);
  }
  .bge-liquid-glass-open {
- animation: bgeLiquidGlassOpen 380ms cubic-bezier(0.34, 1.38, 0.64, 1) both;
+ animation: bgeLiquidGlassOpen 360ms cubic-bezier(0.34, 1.32, 0.64, 1) both;
  }
  .bge-liquid-glass-closing {
- animation: bgeLiquidGlassClose 210ms cubic-bezier(0.32, 0.72, 0, 1) forwards;
+ animation: bgeLiquidGlassClose 200ms cubic-bezier(0.32, 0.72, 0, 1) forwards;
  pointer-events: none;
  }
  .bge-liquid-item-1 {
- animation: bgeLiquidItemIn 300ms cubic-bezier(0.34, 1.32, 0.64, 1) 45ms both;
+ animation: bgeLiquidItemIn 280ms cubic-bezier(0.22, 1, 0.36, 1) 40ms both;
  }
  .bge-liquid-item-2 {
- animation: bgeLiquidItemIn 320ms cubic-bezier(0.34, 1.32, 0.64, 1) 90ms both;
+ animation: bgeLiquidItemIn 300ms cubic-bezier(0.22, 1, 0.36, 1) 80ms both;
  }
  .bge-liquid-item-3 {
- animation: bgeLiquidItemIn 340ms cubic-bezier(0.34, 1.32, 0.64, 1) 135ms both;
+ animation: bgeLiquidItemIn 320ms cubic-bezier(0.22, 1, 0.36, 1) 120ms both;
  }
  .bge-fluid-app .fixed.inset-0 {
- animation: bgeBackdropFadeIn 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+ animation: bgeBackdropFadeIn 200ms cubic-bezier(0.22, 1, 0.36, 1) both;
  }
  .bge-fluid-app .fixed.inset-0 > div {
- animation: bgeFluidEnter 320ms cubic-bezier(0.34, 1.24, 0.64, 1) both;
+ animation: bgeFluidEnter 280ms cubic-bezier(0.22, 1, 0.36, 1) both;
  }
  @media (prefers-reduced-motion: reduce) {
  .bge-fluid-app *,

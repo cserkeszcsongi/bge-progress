@@ -638,6 +638,13 @@ function buildTemplatesForMajor(majorId) {
 
 const APP_RELEASES = [
  {
+ version: 'v2.5.2',
+ date: '2026. 11. 23.',
+ changes: [
+ 'Görgetés feloldása minden böngészőben és mobilon: az overflow-x: clip eltávolítva a belső wrapperről, a html és body elemek függőleges görgetése és érintéses görgetése (-webkit-overflow-scrolling: touch) kényszerítve engedélyezve'
+ ]
+ },
+ {
  version: 'v2.5.1',
  date: '2026. 11. 23.',
  changes: [
@@ -7322,9 +7329,20 @@ export default function App() {
  opacity: 1;
  }
  }
+ html,
+ body {
+ overflow-x: clip !important;
+ overflow-y: auto !important;
+ height: auto !important;
+ min-height: 100% !important;
+ position: static !important;
+ -webkit-overflow-scrolling: touch;
+ }
  .bge-fluid-app {
  position: relative;
- overflow-x: clip;
+ overflow-x: visible !important;
+ overflow-y: visible !important;
+ height: auto !important;
  }
  .bge-fluid-app::before {
  content: "";

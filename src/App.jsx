@@ -8420,19 +8420,17 @@ export default function App() {
  }
  }
  .bge-view-slide-left {
- animation: bgeSlideFromRight 300ms cubic-bezier(0.22, 1, 0.36, 1) both;
- will-change: transform, opacity;
+ animation: bgeSlideFromRight 300ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
  }
  .bge-view-slide-right {
- animation: bgeSlideFromLeft 300ms cubic-bezier(0.22, 1, 0.36, 1) both;
- will-change: transform, opacity;
+ animation: bgeSlideFromLeft 300ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
  }
  @media (max-width: 767px) {
  .bge-view-slide-left {
- animation: bgeMobileSlideFromRight 280ms cubic-bezier(0.22, 1, 0.36, 1) both;
+ animation: bgeMobileSlideFromRight 280ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
  }
  .bge-view-slide-right {
- animation: bgeMobileSlideFromLeft 280ms cubic-bezier(0.22, 1, 0.36, 1) both;
+ animation: bgeMobileSlideFromLeft 280ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
  }
  }
  .bge-nav-sliding-pill {
@@ -9000,7 +8998,12 @@ export default function App() {
  </div>
  )}
 
- <div className="max-w-6xl mx-auto px-3 sm:px-4 pt-3 sm:pt-4 flex items-center justify-between gap-2">
+ <header className={`bge-dashboard-header sticky top-0 z-30 shadow-md border-b backdrop-blur-2xl transition-colors duration-200 ${
+ darkMode
+ ? 'bg-slate-900/48 text-white border-white/15'
+ : 'bg-white/44 text-slate-900 border-white/75'
+ }`}>
+ <div className="max-w-6xl mx-auto px-3 sm:px-4 py-2.5 flex items-center justify-between gap-2">
  <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
  <div className="min-w-0 flex items-center gap-1.5">
  {userNickname && (
@@ -9019,10 +9022,11 @@ export default function App() {
  )}
  </div>
  <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
- {renderTopFeedbackButton(false)}
- {renderNoticeboardBellButton(false)}
+ {renderTopFeedbackButton(darkMode)}
+ {renderNoticeboardBellButton(darkMode)}
  </div>
  </div>
+ </header>
 
  {isSim && (
  <div className="mt-3 bg-amber-400 text-slate-950 text-xs font-medium px-3 sm:px-4 py-1.5 text-center">

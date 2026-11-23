@@ -624,6 +624,7 @@ function buildTemplatesForMajor(majorId) {
  minAttendanceAlairas,
  minAttendanceMegajanlott,
  attendanceSessions: [],
+ hasLectures: true,
  totalLectures: totalClasses,
  lectureAttendanceSessions: [],
  customBuckets: [],
@@ -641,7 +642,8 @@ const APP_RELEASES = [
  date: '2026. 11. 23.',
  changes: [
  'Előadás jelenlét adminisztráció minden tárgynál: a Jelenlét fülön külön-külön felületen követhető a gyakorlati jelenlét és az előadásokon való részvétel (az előadásoknál nincs kötelező minimum, így nem veszélyezteti az aláírást)',
- 'Bővebb tanulmányi statisztika: tárgyankénti előadás/gyakorlat jelenlét-eloszlás',
+ 'Új lebegő „Gyűjtő” menügomb a féléves dashboard jobb alsó sarkában: megnyitásakor előugrik a Statisztika, a JOKER ZH, az Átlagszámoló és az Új tantárgy (+) gomb',
+ 'Új Tanulmányi Statisztika ablak (saját ikonnal, az App statisztikától elkülönítve): tárgyankénti előadás/gyakorlat jelenlét-eloszlás, ZH-teljesítések áttekintése, legrosszabb és legjobb ZH kiemelése, valamint közvetlen összehasonlítás bármely másik félévvel',
  'Frissített Adatvédelmi tájékoztató (GDPR v2.3.0) és 9 lépéses interaktív Bemutató az új funkciókkal'
  ]
  },
@@ -4013,13 +4015,16 @@ export default function App() {
  status: null
  }));
 
- const totalLectures = totalClasses;
- const newLectureSessions = Array.from({ length: totalLectures }, (_, lIdx) => ({
+ const hasLectures = tpl.hasLectures !== false;
+ const totalLectures = hasLectures ? totalClasses : 0;
+ const newLectureSessions = hasLectures
+ ? Array.from({ length: totalLectures }, (_, lIdx) => ({
  id: `lec_${lIdx + 1}_${now + idx}_${rand()}`,
  index: lIdx + 1,
  date: tpl.lectureAttendanceSessions?.[lIdx]?.date || '',
  status: null
- }));
+ }))
+ : [];
 
  const payload = {
  id: newSubjId,
@@ -4039,6 +4044,7 @@ export default function App() {
  minAttendanceAlairas: Number(tpl.minAttendanceAlairas) || 0,
  minAttendanceMegajanlott: Number(tpl.minAttendanceMegajanlott) || 0,
  attendanceSessions: newSessions,
+ hasLectures,
  totalLectures,
  lectureAttendanceSessions: newLectureSessions,
  manualGrade: '',
@@ -4439,6 +4445,9 @@ export default function App() {
  minAttendanceAlairas: 0,
  minAttendanceMegajanlott: 0,
  attendanceSessions: [],
+ hasLectures: false,
+ totalLectures: 0,
+ lectureAttendanceSessions: [],
  manualGrade: isFailedGrade ? '' : String(gradeNum),
  customBuckets: [],
  assessments: []
@@ -4719,13 +4728,16 @@ export default function App() {
  status: null
  }));
 
- const totalLectures = totalClasses;
- const sanitizedLectureSessions = Array.from({ length: totalLectures }, (_, idx) => ({
+ const hasLectures = subj.hasLectures !== false;
+ const totalLectures = hasLectures ? totalClasses : 0;
+ const sanitizedLectureSessions = hasLectures
+ ? Array.from({ length: totalLectures }, (_, idx) => ({
  id: `lec_${idx + 1}`,
  index: idx + 1,
  date: subj.lectureAttendanceSessions?.[idx]?.date || '',
  status: null
- }));
+ }))
+ : [];
 
  const rawSem = subj.semester || '';
  const ord = semesterOrdinalMap[rawSem] ?? parseExplicitSemesterOrdinal(rawSem);
@@ -4747,6 +4759,7 @@ export default function App() {
  minAttendanceAlairas: Number(subj.minAttendanceAlairas) || 0,
  minAttendanceMegajanlott: Number(subj.minAttendanceMegajanlott) || 0,
  attendanceSessions: sanitizedSessions,
+ hasLectures,
  totalLectures,
  lectureAttendanceSessions: sanitizedLectureSessions,
  customBuckets: sanitizedBuckets,
@@ -4832,13 +4845,16 @@ export default function App() {
  status: null
  }));
 
- const totalLectures = totalClasses;
- const newLectureSessions = Array.from({ length: totalLectures }, (_, idx) => ({
+ const hasLectures = tpl.hasLectures !== false;
+ const totalLectures = hasLectures ? totalClasses : 0;
+ const newLectureSessions = hasLectures
+ ? Array.from({ length: totalLectures }, (_, idx) => ({
  id: `lec_${idx + 1}_${now}_${rand()}`,
  index: idx + 1,
  date: tpl.lectureAttendanceSessions?.[idx]?.date || '',
  status: null
- }));
+ }))
+ : [];
 
  const payload = {
  id: newSubjId,
@@ -4858,6 +4874,7 @@ export default function App() {
  minAttendanceAlairas: Number(tpl.minAttendanceAlairas) || 0,
  minAttendanceMegajanlott: Number(tpl.minAttendanceMegajanlott) || 0,
  attendanceSessions: newSessions,
+ hasLectures,
  totalLectures,
  lectureAttendanceSessions: newLectureSessions,
  manualGrade: '',
@@ -4958,17 +4975,20 @@ export default function App() {
  const regularOsszElert = +(zhElert + pluszElert + egyebElert).toFixed(2);
  const regularOsszMax = +(zhMax + pluszMax + egyebMax).toFixed(2);
 
- const sessions = toArraySafe(subj.attendanceSessions);
- const totalClasses = isExamCourse ? 0 : (Number(subj.totalClasses ?? sessions.length) || 0);
- const presentCount = sessions.filter(s => s.status === 'present').length;
- const absentCount = sessions.filter(s => s.status === 'absent').length;
- const minAttAlairas = isExamCourse ? 0 : (Number(subj.minAttendanceAlairas) || 0);
- const minAttMegajanlott = isExamCourse ? 0 : (Number(subj.minAttendanceMegajanlott) || 0);
+ const noAttendance = isExamCourse || disablePointCalc;
+ const hasLectures = !noAttendance && subj.hasLectures !== false;
 
- const lectureSessions = toArraySafe(subj.lectureAttendanceSessions);
- const totalLectures = isExamCourse ? 0 : totalClasses;
- const lecturePresentCount = lectureSessions.filter(s => s.status === 'present').length;
- const lectureAbsentCount = lectureSessions.filter(s => s.status === 'absent').length;
+ const sessions = noAttendance ? [] : toArraySafe(subj.attendanceSessions);
+ const totalClasses = noAttendance ? 0 : (Number(subj.totalClasses ?? sessions.length) || 0);
+ const presentCount = noAttendance ? 0 : sessions.filter(s => s.status === 'present').length;
+ const absentCount = noAttendance ? 0 : sessions.filter(s => s.status === 'absent').length;
+ const minAttAlairas = noAttendance ? 0 : (Number(subj.minAttendanceAlairas) || 0);
+ const minAttMegajanlott = noAttendance ? 0 : (Number(subj.minAttendanceMegajanlott) || 0);
+
+ const lectureSessions = hasLectures ? toArraySafe(subj.lectureAttendanceSessions) : [];
+ const totalLectures = hasLectures ? totalClasses : 0;
+ const lecturePresentCount = hasLectures ? lectureSessions.filter(s => s.status === 'present').length : 0;
+ const lectureAbsentCount = hasLectures ? lectureSessions.filter(s => s.status === 'absent').length : 0;
 
  const hasRecordedAttendance = sessions.some(s => s.status !== null);
  const maxAllowedAbsencesAlairas = totalClasses - minAttAlairas;
@@ -5164,6 +5184,7 @@ export default function App() {
  regularOsszElert,
  regularOsszMax,
  osszElert, osszMax,
+ hasLectures,
  totalClasses, presentCount, absentCount,
  totalLectures, lecturePresentCount, lectureAbsentCount,
  minAttAlairas, minAttMegajanlott,
@@ -5685,6 +5706,7 @@ export default function App() {
  minAttendanceAlairas: '',
  minAttendanceMegajanlott: '',
  attendanceSessions: [],
+ hasLectures: true,
  totalLectures: '',
  lectureAttendanceSessions: [],
  manualGrade: '',
@@ -5707,6 +5729,7 @@ export default function App() {
  }
  const trimmed = String(rawCredits).trim();
  const num = Number(trimmed);
+ const hasLec = prev.hasLectures !== false;
  if (trimmed !== '' && num === 3) {
  return {
  ...prev,
@@ -5714,7 +5737,7 @@ export default function App() {
  totalClasses: 6,
  minAttendanceAlairas: 3,
  minAttendanceMegajanlott: 4,
- totalLectures: 6
+ totalLectures: hasLec ? 6 : 0
  };
  }
  if (trimmed !== '' && num === 6) {
@@ -5724,7 +5747,7 @@ export default function App() {
  totalClasses: 12,
  minAttendanceAlairas: 6,
  minAttendanceMegajanlott: 9,
- totalLectures: 12
+ totalLectures: hasLec ? 12 : 0
  };
  }
  return {
@@ -5925,10 +5948,12 @@ export default function App() {
 
  const isExam = editingSubject.courseKind === 'exam';
  const disablePointCalc = Boolean(editingSubject.disablePointCalc);
- const totalClasses = isExam ? 0 : Math.max(0, Number(editingSubject.totalClasses) || 0);
- const sessions = isExam ? [] : createDefaultSessions(totalClasses, editingSubject.attendanceSessions || []);
- const totalLectures = totalClasses;
- const lectureSessions = isExam ? [] : createDefaultSessions(totalLectures, editingSubject.lectureAttendanceSessions || []);
+ const noAttendance = isExam || disablePointCalc;
+ const hasLectures = !noAttendance && editingSubject.hasLectures !== false;
+ const totalClasses = noAttendance ? 0 : Math.max(0, Number(editingSubject.totalClasses) || 0);
+ const sessions = noAttendance ? [] : createDefaultSessions(totalClasses, editingSubject.attendanceSessions || []);
+ const totalLectures = hasLectures ? totalClasses : 0;
+ const lectureSessions = hasLectures ? createDefaultSessions(totalLectures, editingSubject.lectureAttendanceSessions || []) : [];
  const targetSem = (editingSubject.semester || '').trim() || semesters[0] || getCurrentSemesterCode();
 
  let finalBuckets = editingSubject.customBuckets || [];
@@ -5966,9 +5991,10 @@ export default function App() {
  : Number(editingSubject.megajanlottMin)),
  megajanlottMinZH: isExam ? 0 : (Number(editingSubject.megajanlottMinZH) || 0),
  totalClasses,
- minAttendanceAlairas: isExam ? 0 : (Number(editingSubject.minAttendanceAlairas) || 0),
- minAttendanceMegajanlott: isExam ? 0 : (Number(editingSubject.minAttendanceMegajanlott) || 0),
+ minAttendanceAlairas: noAttendance ? 0 : (Number(editingSubject.minAttendanceAlairas) || 0),
+ minAttendanceMegajanlott: noAttendance ? 0 : (Number(editingSubject.minAttendanceMegajanlott) || 0),
  attendanceSessions: sessions,
+ hasLectures,
  totalLectures,
  lectureAttendanceSessions: lectureSessions,
  manualGrade: editingSubject.manualGrade || '',
@@ -6379,30 +6405,22 @@ export default function App() {
  let totalLecturePresent = 0;
  let totalLectureAbsent = 0;
  let totalLectureClasses = 0;
- const rows = [];
+ const practiceRows = [];
+ const lectureRows = [];
 
  semesterSubjects.forEach((subj) => {
- if (!subj || subj.courseKind === 'exam') return;
+ if (!subj || subj.courseKind === 'exam' || subj.disablePointCalc) return;
  const st = subjectStatsMap[subj.id] || calcStats(subj);
  const pPres = Number(st.presentCount) || 0;
  const pAbs = Number(st.absentCount) || 0;
  const pTot = Math.max(Number(st.totalClasses) || 0, toArraySafe(subj.attendanceSessions).length);
  const pRem = Math.max(0, pTot - pPres - pAbs);
 
- const lPres = Number(st.lecturePresentCount) || 0;
- const lAbs = Number(st.lectureAbsentCount) || 0;
- const lTot = Math.max(Number(st.totalLectures) || 0, pTot, toArraySafe(subj.lectureAttendanceSessions).length);
- const lRem = Math.max(0, lTot - lPres - lAbs);
-
  totalPracticePresent += pPres;
  totalPracticeAbsent += pAbs;
  totalPracticeClasses += pTot;
 
- totalLecturePresent += lPres;
- totalLectureAbsent += lAbs;
- totalLectureClasses += lTot;
-
- rows.push({
+ practiceRows.push({
  id: subj.id,
  name: subj.name || 'Névtelen tárgy',
  practicePresent: pPres,
@@ -6412,7 +6430,22 @@ export default function App() {
  practicePresentPct: pTot > 0 ? Math.min(100, Math.max(0, Math.round((pPres / pTot) * 100))) : null,
  practiceAbsentPct: pTot > 0 ? Math.min(100, Math.max(0, Math.round((pAbs / pTot) * 100))) : 0,
  minAttAlairas: Number(st.minAttAlairas) || 0,
- attendanceAlairasPossible: Boolean(st.attendanceAlairasPossible),
+ attendanceAlairasPossible: Boolean(st.attendanceAlairasPossible)
+ });
+
+ if (st.hasLectures) {
+ const lPres = Number(st.lecturePresentCount) || 0;
+ const lAbs = Number(st.lectureAbsentCount) || 0;
+ const lTot = Math.max(Number(st.totalLectures) || 0, pTot, toArraySafe(subj.lectureAttendanceSessions).length);
+ const lRem = Math.max(0, lTot - lPres - lAbs);
+
+ totalLecturePresent += lPres;
+ totalLectureAbsent += lAbs;
+ totalLectureClasses += lTot;
+
+ lectureRows.push({
+ id: subj.id,
+ name: subj.name || 'Névtelen tárgy',
  lecturePresent: lPres,
  lectureAbsent: lAbs,
  lectureRemaining: lRem,
@@ -6420,13 +6453,15 @@ export default function App() {
  lecturePresentPct: lTot > 0 ? Math.min(100, Math.max(0, Math.round((lPres / lTot) * 100))) : null,
  lectureAbsentPct: lTot > 0 ? Math.min(100, Math.max(0, Math.round((lAbs / lTot) * 100))) : 0
  });
+ }
  });
 
  const practiceRemaining = Math.max(0, totalPracticeClasses - totalPracticePresent - totalPracticeAbsent);
  const lectureRemaining = Math.max(0, totalLectureClasses - totalLecturePresent - totalLectureAbsent);
 
  return {
- rows,
+ practiceRows,
+ lectureRows,
  totalPracticePresent,
  totalPracticeAbsent,
  practiceRemaining,
@@ -8300,9 +8335,9 @@ export default function App() {
  </div>
  </div>
 
- {semesterAttendanceSummary.rows.length > 0 ? (
+ {semesterAttendanceSummary.practiceRows.length > 0 ? (
  <div className={`pt-2 border-t space-y-1.5 max-h-36 overflow-y-auto pr-0.5 ${darkMode ? 'border-slate-800' : 'border-slate-100'}`}>
- {semesterAttendanceSummary.rows.map((row) => (
+ {semesterAttendanceSummary.practiceRows.map((row) => (
  <button
  key={`prac_${row.id}`}
  type="button"
@@ -8402,9 +8437,9 @@ export default function App() {
  </div>
  </div>
 
- {semesterAttendanceSummary.rows.length > 0 ? (
+ {semesterAttendanceSummary.lectureRows.length > 0 ? (
  <div className={`pt-2 border-t space-y-1.5 max-h-36 overflow-y-auto pr-0.5 ${darkMode ? 'border-slate-800' : 'border-slate-100'}`}>
- {semesterAttendanceSummary.rows.map((row) => (
+ {semesterAttendanceSummary.lectureRows.map((row) => (
  <button
  key={`lec_${row.id}`}
  type="button"
@@ -8979,7 +9014,7 @@ export default function App() {
  <div className="text-xs">
  {st.isGradeOnlyCard ? (
  <span className={`text-xs font-medium ${textMuted}`}>
- {st.disablePointCalc ? 'Pontszámítás kikapcsolva' : 'Kézzel rögzített jegy'}
+ {st.disablePointCalc ? 'Intenzív heti kurzus (nincs jelenlét)' : 'Kézzel rögzített jegy'}
  </span>
  ) : st.isExamCourse ? (
  <span className={`px-2.5 py-1 rounded-lg font-medium ${
@@ -11992,10 +12027,12 @@ export default function App() {
  activeSubject.totalClasses ?? (activeSubject.attendanceSessions || []).length,
  activeSubject.attendanceSessions || []
  );
- const lectureSessions = createDefaultSessions(
+ const lectureSessions = st.hasLectures
+ ? createDefaultSessions(
  activeSubject.totalClasses ?? (activeSubject.attendanceSessions || []).length,
  activeSubject.lectureAttendanceSessions || []
- );
+ )
+ : [];
  const alreadyPublished = templates.some(t => t.id === activeSubject.id);
  const isElective = (activeSubject.courseType || 'mandatory') === 'elective';
 
@@ -12248,6 +12285,7 @@ export default function App() {
  isFailed: Boolean(activeSubject.isFailed),
  manualGrade: getEffectiveManualGrade(activeSubject),
  customBuckets: activeSubject.customBuckets || [],
+ hasLectures: activeSubject.hasLectures !== false,
  totalClasses: activeSubject.totalClasses ?? (activeSubject.attendanceSessions || []).length,
  minAttendanceAlairas: activeSubject.minAttendanceAlairas ?? 0,
  minAttendanceMegajanlott: activeSubject.minAttendanceMegajanlott ?? 0,
@@ -12372,6 +12410,7 @@ export default function App() {
  isFailed: Boolean(activeSubject.isFailed),
  manualGrade: getEffectiveManualGrade(activeSubject),
  customBuckets: activeSubject.customBuckets || [],
+ hasLectures: activeSubject.hasLectures !== false,
  totalClasses: activeSubject.totalClasses ?? (activeSubject.attendanceSessions || []).length,
  minAttendanceAlairas: activeSubject.minAttendanceAlairas ?? 0,
  minAttendanceMegajanlott: activeSubject.minAttendanceMegajanlott ?? 0,
@@ -12858,7 +12897,8 @@ export default function App() {
  </>
  ) : (
  <div className="space-y-4">
- {/* KÜLÖN FELÜLET VÁLASZTÓ: GYAKORLATOK vs. ELŐADÁSOK */}
+ {st.hasLectures && (
+ /* KÜLÖN FELÜLET VÁLASZTÓ: GYAKORLATOK vs. ELŐADÁSOK */
  <div className={`grid grid-cols-2 gap-1.5 p-1.5 rounded-2xl border ${
  darkMode ? 'bg-slate-800/80 border-slate-700' : 'bg-slate-100 border-slate-200'
  }`}>
@@ -12904,8 +12944,9 @@ export default function App() {
  </span>
  </button>
  </div>
+ )}
 
- {attendanceSubTab === 'practice' ? (
+ {(!st.hasLectures || attendanceSubTab === 'practice') ? (
  <>
  <div className={`p-4 rounded-xl border space-y-3 ${bgSubCard}`}>
  <div className="flex flex-wrap items-center justify-between gap-2">
@@ -14170,7 +14211,7 @@ export default function App() {
  Intenzív heti kurzus?
  </p>
  <p className={`text-[11px] mt-0.5 ${textMuted}`}>
- Ha intenzív heti kurzust veszel fel, csak kapcsold be ezt az opciót, és ha megkaptad a jegyedet belőle, csak írd be.
+ Ha intenzív heti kurzust veszel fel, kapcsold be ezt az opciót: nem lesz pontszámítás, sem gyakorlati, sem előadás jelenlét — csak írd be a jegyedet.
  </p>
  </div>
  <button
@@ -14359,10 +14400,43 @@ export default function App() {
  </div>
  </div>
 
+ <label className={`flex items-start gap-2.5 p-3 rounded-xl border cursor-pointer select-none transition ${
+ editingSubject.hasLectures !== false
+ ? darkMode
+ ? 'bg-sky-950/25 border-sky-500/45'
+ : 'bg-sky-50/75 border-sky-300'
+ : bgSubCard
+ }`}>
+ <input
+ type="checkbox"
+ checked={editingSubject.hasLectures !== false}
+ onChange={e =>
+ setEditingSubject(prev => ({
+ ...prev,
+ hasLectures: e.target.checked
+ }))
+ }
+ className="mt-0.5 w-4 h-4 accent-sky-500 rounded cursor-pointer shrink-0"
+ />
+ <div className="min-w-0">
+ <span className={`block text-xs sm:text-sm font-bold ${textStrong}`}>
+ Van előadás a tárgyhoz
+ </span>
+ <span className={`block text-[11px] mt-0.5 ${textMuted}`}>
+ {editingSubject.hasLectures !== false
+ ? 'Bekapcsolva: a gyakorlatok mellett az előadások jelenléte is követhető (kötelező minimum nélkül).'
+ : 'Kikapcsolva: csak gyakorlati jelenlét lesz a tárgynál, előadás nem.'}
+ </span>
+ </div>
+ </label>
+
  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
  <div>
- <label className={`block text-[11px] font-semibold mb-1 ${textMuted}`} title="Ugyanennyi előadás alkalom is létrejön automatikusan">
- Összes gyakorlat / előadás
+ <label
+ className={`block text-[11px] font-semibold mb-1 ${textMuted}`}
+ title={editingSubject.hasLectures !== false ? 'Ugyanennyi előadás alkalom is létrejön automatikusan' : 'Csak gyakorlati alkalmak száma'}
+ >
+ {editingSubject.hasLectures !== false ? 'Összes gyakorlat / előadás' : 'Összes gyakorlat'}
  </label>
  <input
  type="number"

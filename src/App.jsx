@@ -7022,12 +7022,9 @@ export default function App() {
  {linkCopied ? (
  <>
  <Check className="w-4 h-4" /> Link másolva! Illeszd be Safariba / Chrome-ba
- </div>
+ </>
  ) : (
- <div
- key={`view-semester-${selectedSemester}`}
- className={viewSlideDir === 'left' ? 'bge-view-slide-left' : viewSlideDir === 'right' ? 'bge-view-slide-right' : ''}
- >
+ <>
  <Copy className="w-4 h-4" /> Link másolása
  </>
  )}
@@ -8921,9 +8918,12 @@ export default function App() {
  <Plus className={`w-8 h-8 stroke-[2.75] transition-transform duration-200 ${isHomePlusMenuOpen ? 'rotate-45' : ''}`} />
  </button>
  </div>
- </>
+ </div>
  ) : (
- <>
+ <div
+ key={`view-semester-${selectedSemester}`}
+ className={viewSlideDir === 'left' ? 'bge-view-slide-left' : viewSlideDir === 'right' ? 'bge-view-slide-right' : ''}
+ >
  <header className="bg-slate-900 text-white sticky top-0 z-30 shadow-md border-b border-slate-800">
  <div className="max-w-7xl mx-auto px-3 sm:px-4 py-2.5 flex items-center justify-between gap-2">
  <button

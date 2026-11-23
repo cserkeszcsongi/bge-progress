@@ -638,6 +638,13 @@ function buildTemplatesForMajor(majorId) {
 
 const APP_RELEASES = [
   {
+    version: 'v2.5.3',
+    date: '2026. 11. 23.',
+    changes: [
+      'Mobil vízszintes túlcsordulás (overflow-x: clip) és iOS Safari viewport-szélesedés javítása: a „Jelenlegi félév” nézetre váltáskor az alsó navigációs kapszula és a jobb oldali lebegő gyűjtő gomb többé nem nagyítódik/csúszik ki oldalra, és pontosan ugyanúgy viselkedik, mint a Főoldal gomb'
+    ]
+  },
+  {
     version: 'v2.5.2',
     date: '2026. 11. 23.',
     changes: [
@@ -7727,6 +7734,15 @@ export default function App() {
  return (
  <div className={`bge-fluid-app min-h-screen pb-32 sm:pb-28 transition-colors duration-300 ${bgPage}`}>
  <style>{`
+ html, body {
+ overflow-x: clip;
+ max-width: 100%;
+ }
+ .bge-fluid-app {
+ overflow-x: clip;
+ max-width: 100%;
+ width: 100%;
+ }
  @keyframes bgeFluidEnter {
  from {
  opacity: 0;
@@ -7856,7 +7872,7 @@ export default function App() {
  @keyframes bgeSlideFromRight {
  0% {
  opacity: 0;
- transform: translate3d(38px, 0, 0);
+ transform: translate3d(20px, 0, 0);
  }
  100% {
  opacity: 1;
@@ -7866,7 +7882,7 @@ export default function App() {
  @keyframes bgeSlideFromLeft {
  0% {
  opacity: 0;
- transform: translate3d(-38px, 0, 0);
+ transform: translate3d(-20px, 0, 0);
  }
  100% {
  opacity: 1;
@@ -7977,7 +7993,7 @@ export default function App() {
  <nav
  data-bottom-nav-root="true"
  aria-label="Alsó navigációs sáv"
- className="fixed bottom-3 left-3 right-3 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 sm:w-full sm:max-w-md z-40 pointer-events-none"
+ className="fixed bottom-3 left-3 right-3 max-w-[calc(100vw-24px)] sm:left-1/2 sm:right-auto sm:-translate-x-1/2 sm:w-full sm:max-w-md z-40 pointer-events-none"
  >
  {isBottomMenuOpen && (
  <div
@@ -8290,7 +8306,7 @@ export default function App() {
  </div>
  )}
 
- <main className="max-w-6xl mx-auto px-3 sm:px-4 pt-4">
+ <main className="max-w-6xl w-full min-w-0 mx-auto px-3 sm:px-4 pt-4 overflow-x-clip">
  <div className={`mb-5 sm:mb-6 rounded-2xl border px-4 py-3 sm:px-5 sm:py-3.5 flex items-center justify-between gap-3 shadow-xs transition-all ${
  darkMode
  ? 'bg-gradient-to-r from-slate-900 via-slate-900 to-amber-950/25 border-amber-400/35 text-slate-100'
@@ -8926,7 +8942,7 @@ export default function App() {
  )}
  </header>
 
- <main className="max-w-7xl mx-auto px-3 sm:px-4 pt-5 sm:pt-6 relative z-0">
+ <main className="max-w-7xl w-full min-w-0 mx-auto px-3 sm:px-4 pt-5 sm:pt-6 relative z-0 overflow-x-clip">
  {isAdmin && semesterSubjects.length > 0 && (
  <div className={`mb-5 px-3.5 sm:px-4 py-3 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
  darkMode
@@ -9501,7 +9517,7 @@ export default function App() {
  <div
  key={subj.id}
  onClick={() => { setActiveSubjectId(subj.id); setDetailTab('points'); }}
- className={`rounded-2xl border p-3.5 sm:p-4 shadow-sm hover:shadow-md transition flex flex-col justify-between cursor-pointer relative overflow-hidden ${cardSurfaceClass}`}
+ className={`min-w-0 rounded-2xl border p-3.5 sm:p-4 shadow-sm hover:shadow-md transition flex flex-col justify-between cursor-pointer relative overflow-hidden ${cardSurfaceClass}`}
  >
  <div className="flex items-start justify-between gap-2.5">
  <div className="min-w-0">
@@ -9607,7 +9623,7 @@ export default function App() {
  <div
  key={subj.id}
  onClick={() => { setActiveSubjectId(subj.id); setDetailTab('points'); }}
- className={`rounded-2xl border p-4 sm:p-5 shadow-sm hover:shadow-md transition flex flex-col justify-between cursor-pointer relative overflow-hidden ${cardSurfaceClass}`}
+ className={`min-w-0 rounded-2xl border p-4 sm:p-5 shadow-sm hover:shadow-md transition flex flex-col justify-between cursor-pointer relative overflow-hidden ${cardSurfaceClass}`}
  >
  <div>
  <div className="flex justify-between items-start gap-3 mb-3">

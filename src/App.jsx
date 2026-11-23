@@ -638,6 +638,14 @@ function buildTemplatesForMajor(majorId) {
 
 const APP_RELEASES = [
   {
+    version: 'v2.4.4',
+    date: '2026. 11. 23.',
+    changes: [
+      'Bővített Hallgatói profil a Menüben: megjelenik a bejelentkezett e-mail cím és a Teljes név (Google-fiókból), valamint szabadon beállítható vagy törölhető egyéni becenév is',
+      'Az elmentett becenév megjelenik a hallgatói profilban és a felső sávban is, és felhőben szinkronizálódik a fiókodhoz'
+    ]
+  },
+  {
     version: 'v2.4.3',
     date: '2026. 11. 23.',
     changes: [
@@ -2633,6 +2641,11 @@ export default function App() {
  const [majorDraftId, setMajorDraftId] = useState('');
  const [isSavingMajor, setIsSavingMajor] = useState(false);
 
+ const [userNickname, setUserNickname] = useState('');
+ const [isEditingNickname, setIsEditingNickname] = useState(false);
+ const [nicknameDraft, setNicknameDraft] = useState('');
+ const [isSavingNickname, setIsSavingNickname] = useState(false);
+
  const isAdmin = useMemo(
  () => Boolean(user?.email && ADMIN_EMAILS.includes(user.email.toLowerCase())),
  [user]
@@ -3620,6 +3633,9 @@ export default function App() {
  setUserMajorId('');
  setMajorDraftId('');
  setIsMajorSelectModalOpen(false);
+ setUserNickname('');
+ setIsEditingNickname(false);
+ setNicknameDraft('');
  return;
  }
 
@@ -3742,6 +3758,28 @@ export default function App() {
  } else {
  setUserMajorId('');
  }
+ const cachedLocalNickname = (() => {
+ try {
+ return localStorage.getItem(`bge_user_nickname_${user.uid}`) || '';
+ } catch {
+ return '';
+ }
+ })();
+ const resolvedNickname =
+ typeof data.nickname === 'string'
+ ? data.nickname.trim()
+ : cachedLocalNickname;
+ setUserNickname(resolvedNickname);
+ try {
+ if (resolvedNickname) {
+ localStorage.setItem(`bge_user_nickname_${user.uid}`, resolvedNickname);
+ } else {
+ localStorage.removeItem(`bge_user_nickname_${user.uid}`);
+ }
+ } catch {
+ // ignore
+ }
+
  if (data.gdprAcceptedVersion === GDPR_POLICY_VERSION) {
  setHasAcceptedGdpr(true);
  try {
@@ -3785,6 +3823,11 @@ export default function App() {
  } else {
  setUserMajorId('');
  }
+ try {
+ setUserNickname(localStorage.getItem(`bge_user_nickname_${user.uid}`) || '');
+ } catch {
+ setUserNickname('');
+ }
  setHasAcceptedGdpr(false);
  }
  prefsReady = true;
@@ -3798,6 +3841,7 @@ export default function App() {
  } catch {
  setHasAcceptedGdpr(false);
  setUserMajorId('');
+ setUserNickname('');
  }
  prefsReady = true;
  checkAllReady();
@@ -3966,6 +4010,47 @@ export default function App() {
  alert('Hiba a szak mentésekor: ' + err.message);
  } finally {
  setIsSavingMajor(false);
+ }
+ };
+
+ const handleSaveUserNickname = async (e) => {
+ if (e && e.preventDefault) e.preventDefault();
+ if (!user || isSavingNickname) return;
+ const cleaned = String(nicknameDraft || '').trim().slice(0, 40);
+ setIsSavingNickname(true);
+ try {
+ await setDoc(
+ doc(db, 'users', user.uid, 'settings', 'preferences'),
+ {
+ nickname: cleaned,
+ nicknameUpdatedAt: serverTimestamp()
+ },
+ { merge: true }
+ );
+ setDoc(
+ doc(db, 'appUsers', user.uid),
+ {
+ uid: user.uid,
+ nickname: cleaned
+ },
+ { merge: true }
+ ).catch(() => {});
+ try {
+ if (cleaned) {
+ localStorage.setItem(`bge_user_nickname_${user.uid}`, cleaned);
+ } else {
+ localStorage.removeItem(`bge_user_nickname_${user.uid}`);
+ }
+ } catch {
+ // ignore
+ }
+ setUserNickname(cleaned);
+ setIsEditingNickname(false);
+ showToast(cleaned ? `Becenév elmentve: ${cleaned}` : 'Becenév törölve.');
+ } catch (err) {
+ alert('Hiba a becenév mentésekor: ' + err.message);
+ } finally {
+ setIsSavingNickname(false);
  }
  };
 
@@ -6926,7 +7011,7 @@ export default function App() {
  <div data-dropdown-menu="true" className="relative">
  <button
  type="button"
- onClick={() => setIsMenuOpen(prev => !prev)}
+ onClick={() => setIsMenuOpen(prev => { if (prev) setIsEditingNickname(false); return !prev; })}
  aria-expanded={isMenuOpen}
  className={triggerClass}
  >
@@ -6944,14 +7029,129 @@ export default function App() {
  ? 'bg-slate-900 border-slate-700 text-slate-100'
  : 'bg-white border-slate-200 text-slate-800'
  }`}>
- <div className="space-y-1.5">
+ <div className="space-y-2">
  <p className={`text-[10px] font-bold uppercase tracking-wider px-1 ${textMuted}`}>
- Hallgatói profil • Szakod
+ Hallgatói profil
  </p>
+
+ <div className={`p-3 rounded-xl border space-y-2.5 ${
+ darkMode
+ ? 'bg-slate-800/75 border-slate-700/90'
+ : 'bg-slate-50/95 border-slate-200'
+ }`}>
+ <div className="flex items-start gap-2.5 min-w-0">
+ <div className="w-8 h-8 rounded-xl bg-amber-400/20 border border-amber-400/40 text-amber-500 flex items-center justify-center shrink-0 mt-0.5">
+ <User className="w-4 h-4" />
+ </div>
+ <div className="min-w-0 flex-1">
+ <div className="flex items-center gap-1.5 flex-wrap">
+ <p className={`text-xs sm:text-sm font-extrabold truncate ${textStrong}`}>
+ {userNickname || user.displayName || 'Hallgató'}
+ </p>
+ {userNickname && (
+ <span className="px-1.5 py-0.2 rounded-md text-[10px] font-extrabold bg-amber-400/20 text-amber-500 border border-amber-400/35 shrink-0">
+ Becenév
+ </span>
+ )}
+ </div>
+ {user.displayName && (
+ <p className={`text-[11px] truncate mt-0.5 ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>
+ <span className={textMuted}>Teljes név:</span>{' '}
+ <strong className="font-semibold">{user.displayName}</strong>
+ </p>
+ )}
+ <p className={`text-[11px] truncate mt-0.5 flex items-center gap-1 ${textMuted}`} title={user.email || ''}>
+ <Mail className="w-3 h-3 shrink-0 text-amber-500/80" />
+ <span className="truncate">{user.email}</span>
+ </p>
+ </div>
+ </div>
+
+ <div className={`pt-2 border-t ${darkMode ? 'border-slate-700/80' : 'border-slate-200/90'}`}>
+ {!isEditingNickname ? (
+ <div className="flex items-center justify-between gap-2">
+ <div className="min-w-0">
+ <span className={`text-[10px] font-bold uppercase tracking-wider block ${textMuted}`}>
+ Becenév
+ </span>
+ <span className={`text-xs font-bold truncate block ${userNickname ? textStrong : textMuted}`}>
+ {userNickname || 'Nincs megadva'}
+ </span>
+ </div>
+ <button
+ type="button"
+ onClick={() => {
+ setNicknameDraft(userNickname || '');
+ setIsEditingNickname(true);
+ }}
+ className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border inline-flex items-center gap-1 transition cursor-pointer shrink-0 ${
+ darkMode
+ ? 'bg-slate-900 hover:bg-slate-700 text-amber-300 border-slate-700'
+ : 'bg-white hover:bg-amber-50 text-slate-800 border-slate-300 shadow-2xs'
+ }`}
+ >
+ <Pencil className="w-3 h-3 text-amber-500" />
+ <span>{userNickname ? 'Módosítás' : 'Becenév adása'}</span>
+ </button>
+ </div>
+ ) : (
+ <form onSubmit={handleSaveUserNickname} className="space-y-2">
+ <label className={`block text-[10px] font-bold uppercase tracking-wider ${textMuted}`}>
+ Saját becenév megadása
+ </label>
+ <input
+ type="text"
+ maxLength={40}
+ autoFocus
+ placeholder="Pl. Csongi"
+ value={nicknameDraft}
+ onChange={(e) => setNicknameDraft(e.target.value)}
+ className={`w-full border rounded-lg px-2.5 py-1.5 text-xs font-bold focus:outline-none ${inputStyle}`}
+ />
+ <div className="flex items-center justify-between gap-1.5">
+ {userNickname ? (
+ <button
+ type="button"
+ disabled={isSavingNickname}
+ onClick={() => {
+ setNicknameDraft('');
+ }}
+ className="text-[11px] font-semibold text-rose-500 hover:underline cursor-pointer"
+ >
+ Törlés
+ </button>
+ ) : (
+ <span />
+ )}
+ <div className="flex items-center gap-1.5">
+ <button
+ type="button"
+ disabled={isSavingNickname}
+ onClick={() => setIsEditingNickname(false)}
+ className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold cursor-pointer ${textMuted}`}
+ >
+ Mégse
+ </button>
+ <button
+ type="submit"
+ disabled={isSavingNickname}
+ className="px-3 py-1 rounded-lg text-[11px] font-extrabold bg-amber-400 hover:bg-amber-300 text-slate-950 inline-flex items-center gap-1 transition cursor-pointer disabled:opacity-50"
+ >
+ <Check className="w-3 h-3" />
+ <span>{isSavingNickname ? 'Mentés...' : 'Mentés'}</span>
+ </button>
+ </div>
+ </div>
+ </form>
+ )}
+ </div>
+ </div>
+
  <button
  type="button"
  onClick={() => {
  setIsMenuOpen(false);
+ setIsEditingNickname(false);
  handleOpenMajorSelectModal();
  }}
  title="Kattints a szakod módosításához (pl. szakváltás esetén)"
@@ -6968,7 +7168,7 @@ export default function App() {
  </span>
  </span>
  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-extrabold bg-amber-400 text-slate-950 shrink-0">
- <Pencil className="w-2.5 h-2.5" /> Módosítás
+ <Pencil className="w-2.5 h-2.5" /> Szak váltása
  </span>
  </button>
  </div>
@@ -7763,7 +7963,16 @@ export default function App() {
 
  <div className="max-w-6xl mx-auto px-3 sm:px-4 pt-3 sm:pt-4 flex items-center justify-between gap-2">
  <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
- <span className={`text-[11px] sm:text-xs truncate max-w-[175px] sm:max-w-xs ${textMuted}`}>{user.email}</span>
+ <div className="min-w-0 flex items-center gap-1.5">
+ {userNickname && (
+ <span className={`text-xs sm:text-sm font-extrabold truncate max-w-[110px] sm:max-w-[160px] ${textStrong}`}>
+ {userNickname}
+ </span>
+ )}
+ <span className={`text-[11px] sm:text-xs truncate max-w-[155px] sm:max-w-xs ${textMuted}`}>
+ {userNickname ? `(${user.email})` : user.email}
+ </span>
+ </div>
  {isAdmin && (
  <span className="px-2 py-0.5 text-[10px] font-bold uppercase rounded-full bg-amber-400/20 text-amber-500 border border-amber-400/30 shrink-0">
  Admin

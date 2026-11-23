@@ -6840,20 +6840,32 @@ export default function App() {
 
  useEffect(() => {
  if (!shouldLockBackgroundScroll) return;
- const scrollY = window.scrollY || window.pageYOffset || 0;
  const body = document.body;
  const html = document.documentElement;
 
+ const prevBodyOverflow = body.style.overflow;
+ const prevHtmlOverflow = html.style.overflow;
+ const prevBodyOverscroll = body.style.overscrollBehavior;
+
+ html.style.overflow = 'hidden';
+ body.style.overflow = 'hidden';
+ body.style.overscrollBehavior = 'none';
+
+ if (!isAnyModalOpen) {
+ return () => {
+ html.style.overflow = prevHtmlOverflow;
+ body.style.overflow = prevBodyOverflow;
+ body.style.overscrollBehavior = prevBodyOverscroll;
+ };
+ }
+
+ const scrollY = window.scrollY || window.pageYOffset || 0;
  const prevBodyPosition = body.style.position;
  const prevBodyTop = body.style.top;
  const prevBodyLeft = body.style.left;
  const prevBodyRight = body.style.right;
  const prevBodyWidth = body.style.width;
- const prevBodyOverflow = body.style.overflow;
- const prevHtmlOverflow = html.style.overflow;
 
- html.style.overflow = 'hidden';
- body.style.overflow = 'hidden';
  body.style.position = 'fixed';
  body.style.top = `-${scrollY}px`;
  body.style.left = '0';
@@ -6863,6 +6875,7 @@ export default function App() {
  return () => {
  html.style.overflow = prevHtmlOverflow;
  body.style.overflow = prevBodyOverflow;
+ body.style.overscrollBehavior = prevBodyOverscroll;
  body.style.position = prevBodyPosition;
  body.style.top = prevBodyTop;
  body.style.left = prevBodyLeft;
@@ -6870,7 +6883,7 @@ export default function App() {
  body.style.width = prevBodyWidth;
  window.scrollTo(0, scrollY);
  };
- }, [shouldLockBackgroundScroll]);
+ }, [shouldLockBackgroundScroll, isAnyModalOpen]);
 
  const handleSaveBucketModal = async (e) => {
  if (e && e.preventDefault) e.preventDefault();
@@ -8305,13 +8318,11 @@ export default function App() {
  @keyframes bgeBottomSheetSlideUp {
  0% {
  opacity: 0;
- transform: translate3d(0, 18px, 0) scale(0.96);
- filter: blur(8px);
+ transform: translate3d(0, 14px, 0) scale(0.97);
  }
  100% {
  opacity: 1;
  transform: translate3d(0, 0, 0) scale(1);
- filter: blur(0px);
  }
  }
  @keyframes bgeMobileSlideFromRight {
@@ -8373,9 +8384,16 @@ export default function App() {
  background: linear-gradient(135deg, rgba(255, 255, 255, 0.36) 0%, rgba(255, 255, 255, 0.08) 45%, rgba(251, 191, 36, 0.14) 100%);
  }
  .bge-bottom-menu-sheet {
- animation: bgeBottomSheetSlideUp 280ms cubic-bezier(0.34, 1.32, 0.64, 1) both;
- backdrop-filter: blur(24px) saturate(180%);
- -webkit-backdrop-filter: blur(24px) saturate(180%);
+ animation: bgeBottomSheetSlideUp 240ms cubic-bezier(0.22, 1, 0.36, 1) both;
+ backdrop-filter: blur(20px) saturate(170%);
+ -webkit-backdrop-filter: blur(20px) saturate(170%);
+ will-change: transform, opacity;
+ contain: layout style paint;
+ }
+ .bge-bottom-menu-sheet button,
+ .bge-bottom-menu-sheet .rounded-xl {
+ backdrop-filter: none !important;
+ -webkit-backdrop-filter: none !important;
  }
  /* === TELJES APPLIKÁCIÓS FROSTED GLASS RENDSZER === */
  .bge-fluid-app header,
@@ -8447,8 +8465,8 @@ export default function App() {
  to { opacity: 0; transform: translate3d(0, 16px, 0) scale(0.94); filter: blur(8px); }
  }
  @keyframes bgeSheetOut {
- from { opacity: 1; transform: translate3d(0, 0, 0) scale(1); filter: blur(0px); }
- to { opacity: 0; transform: translate3d(0, 22px, 0) scale(0.95); filter: blur(10px); }
+ from { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+ to { opacity: 0; transform: translate3d(0, 14px, 0) scale(0.97); }
  }
  @keyframes bgeDropdownIn {
  from { opacity: 0; transform: translate3d(0, -8px, 0) scale(0.95); filter: blur(6px); }
@@ -8617,7 +8635,7 @@ export default function App() {
  {/* ALSÓ FROSTED GLASS NAVIGÁCIÓS KAPSZULA (FŐOLDAL • JELENLEGI FÉLÉV • MENÜ) */}
  {!isAnyModalOpen && (
  <>
- <AnimatedPresence show={Boolean(isBottomMenuOpen)} variant="backdrop" duration={220}>
+ <AnimatedPresence show={Boolean(isBottomMenuOpen)} variant="backdrop" duration={200}>
  {isBottomMenuOpen && (
  <div
  aria-hidden="true"
@@ -8625,8 +8643,8 @@ export default function App() {
  setIsBottomMenuOpen(false);
  setIsEditingNickname(false);
  }}
- className={`fixed inset-0 z-35 backdrop-blur-md transition-opacity duration-200 touch-none ${
- darkMode ? 'bg-slate-950/55' : 'bg-slate-900/35'
+ className={`fixed inset-0 z-35 transition-opacity duration-200 touch-none ${
+ darkMode ? 'bg-slate-950/60' : 'bg-slate-900/35'
  }`}
  />
  )}

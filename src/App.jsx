@@ -637,47 +637,57 @@ function buildTemplatesForMajor(majorId) {
 }
 
 const APP_RELEASES = [
- {
- version: 'v2.4.2',
- date: '2026. 11. 23.',
- changes: [
- 'iOS Liquid Glass animáció a dashboard alsó gyűjtő kapszulájához: rugalmas (spring) kibontás, finom üveges fénytörés/blur és lépcsőzetes (staggered) gombmegjelenés nyitáskor és becsukáskor',
- 'Minden megnyitásra és becsukásra kiterjedő animáció: modális ablakok, legördülő menük, lenyitható szekciók és gombnyomások sima, fluid átmenettel'
- ]
- },
- {
- version: 'v2.4.1',
- date: '2026. 11. 23.',
- changes: [
- 'ZH statisztika táblázat margó és oszlopigazítás: a Pont és Arány oszlopok közelebb kerültek az első oszlophoz, jobb oldali margóval, hogy ne fussanak ki a kártyából / scrollbar alá',
- 'Alkalmazásszintű fluid animációk: sima átmenetek gombnyomásra (active press), kártyákra és lenyitható szekciókra (tiszteletben tartva a prefers-reduced-motion beállítást)'
- ]
- },
- {
- version: 'v2.4.0',
- date: '2026. 11. 23.',
- changes: [
- 'Lenyitható „Jelenlét és ZH statisztika” blokk a féléves dashboardon (alapértelmezettként becsukva a mobil helytakarékosság érdekében)',
- '3., táblázatos ZH statisztika nézet tárgyankénti és ZH-nkénti pontokkal, valamint a teljes ZH-teljesítés %-os arányával'
- ]
- },
- {
- version: 'v2.3.1',
- date: '2026. 11. 23.',
- changes: [
- 'Lenyitható részletes jelenlét statisztika a féléves dashboardon alapértelmezetten becsukott állapotban'
- ]
- },
- {
- version: 'v2.3.0',
- date: '2026. 11. 23.',
- changes: [
- 'Előadás jelenlét adminisztráció minden tárgynál: a Jelenlét fülön külön-külön felületen követhető a gyakorlati jelenlét és az előadásokon való részvétel (az előadásoknál nincs kötelező minimum, így nem veszélyezteti az aláírást)',
- 'Új lebegő menügomb, ami csoportosítja a gombokat a féléves dashboard jobb alsó sarkában: megnyitásakor előugrik a JOKER ZH, az Átlagszámoló és az Új tantárgy (+) gomb',
- 'Új Tanulmányi Statisztika ablak (saját ikonnal, az App statisztikától elkülönítve): tárgyankénti előadás/gyakorlat jelenlét-eloszlás, ZH-teljesítések áttekintése, legrosszabb és legjobb ZH kiemelése, valamint közvetlen összehasonlítás bármely másik félévvel',
- 'Frissített Adatvédelmi tájékoztató (GDPR v2.3.0) és 9 lépéses interaktív Bemutató az új funkciókkal'
- ]
- },
+  {
+    version: 'v2.4.3',
+    date: '2026. 11. 23.',
+    changes: [
+      'Minden gomb a felső sávban bekerült a menű gomb alá',
+      'A Faliújság értesítési csengő gombja már a főoldal felső sávjában is közvetlenül elérhető a Menü gomb mellett',
+      'Féléves dashboard felső sáv finomhangolása: külön Főoldal (ház) ikon gomb a gyors visszalépéshez',
+      'Jelenlét statisztikák bővítése: a Gyakorlatok és Előadások kártyákon a jelenlétek mellett külön jelvény mutatja a hiányzások és a még hátralévő alkalmak számát is',
+      'ZH statisztika táblázat átalakítása: tárgyankénti és ZH-nkénti részletes sorok pontszámokkal és százalékos aránnyal'
+    ]
+  },
+  {
+    version: 'v2.4.2',
+    date: '2026. 11. 23.',
+    changes: [
+      'iOS Liquid Glass animáció a dashboard alsó gyűjtő kapszulájához: rugalmas (spring) kibontás, finom üveges fénytörés/blur és lépcsőzetes (staggered) gombmegjelenés nyitáskor és becsukáskor',
+      'Minden megnyitásra és becsukásra kiterjedő animáció: modális ablakok, legördülő menük, lenyitható szekciók és gombnyomások sima, fluid átmenettel'
+    ]
+  },
+  {
+    version: 'v2.4.1',
+    date: '2026. 11. 23.',
+    changes: [
+      'ZH statisztika táblázat margó és oszlopigazítás: a Pont és Arány oszlopok közelebb kerültek az első oszlophoz, jobb oldali margóval, hogy ne fussanak ki a kártyából / scrollbar alá',
+      'Alkalmazásszintű fluid animációk: sima átmenetek gombnyomásra (active press), kártyákra és lenyitható szekciókra (tiszteletben tartva a prefers-reduced-motion beállítást)'
+    ]
+  },
+  {
+    version: 'v2.4.0',
+    date: '2026. 11. 23.',
+    changes: [
+      'Lenyitható „Jelenlét és ZH statisztika” blokk a féléves dashboardon (alapértelmezettként becsukva a mobil helytakarékosság érdekében)',
+      '3., táblázatos ZH statisztika nézet tárgyankénti és ZH-nkénti pontokkal, valamint a teljes ZH-teljesítés %-os arányával'
+    ]
+  },
+  {
+    version: 'v2.3.1',
+    date: '2026. 11. 23.',
+    changes: [
+      'Lenyitható részletes jelenlét statisztika a féléves dashboardon alapértelmezetten becsukott állapotban'
+    ]
+  },
+  {
+    version: 'v2.3.0',
+    date: '2026. 11. 23.',
+    changes: [
+      'Előadás jelenlét adminisztráció minden tárgynál: a Jelenlét fülön külön-külön felületen követhető a gyakorlati jelenlét és az előadásokon való részvétel (az előadásoknál nincs kötelező minimum, így nem veszélyezteti az aláírást)',
+      'Új lebegő menügomb, ami csoportosítja a gombokat a féléves dashboard jobb alsó sarkában: megnyitásakor előugrik a JOKER ZH, az Átlagszámoló és az Új tantárgy (+) gomb',
+      'Frissített Adatvédelmi tájékoztató (GDPR v2.3.0) és 9 lépéses interaktív Bemutató az új funkciókkal'
+    ]
+  },
  {
  version: 'v2.2.4',
  date: '2026. 11. 20.',

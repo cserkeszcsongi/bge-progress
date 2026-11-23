@@ -9145,13 +9145,13 @@ export default function App() {
  ) : (
  <>
  <span className="w-6 h-6 rounded-full bg-slate-950/12 flex items-center justify-center">
- <Plus className="w-3.5 h-3.5 stroke-[2.75]" />
+ <JokerIcon className="w-3.5 h-3.5" />
  </span>
  <span className="w-6 h-6 rounded-full bg-slate-950/12 flex items-center justify-center">
  <Calculator className="w-3.5 h-3.5 stroke-[2.3]" />
  </span>
  <span className="w-6 h-6 rounded-full bg-slate-950/12 flex items-center justify-center">
- <JokerIcon className="w-3.5 h-3.5" />
+ <Plus className="w-3.5 h-3.5 stroke-[2.75]" />
  </span>
  </>
  )}

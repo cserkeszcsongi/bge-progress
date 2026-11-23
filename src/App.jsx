@@ -3256,6 +3256,52 @@ export default function App() {
  const [templateToast, setTemplateToast] = useState('');
 
  const [isHomePlusMenuOpen, setIsHomePlusMenuOpen] = useState(false);
+ const [isHomePlusMenuClosing, setIsHomePlusMenuClosing] = useState(false);
+ const homePlusCloseTimerRef = useRef(null);
+
+ const toggleHomePlusMenu = () => {
+ if (homePlusCloseTimerRef.current) {
+ clearTimeout(homePlusCloseTimerRef.current);
+ homePlusCloseTimerRef.current = null;
+ }
+ if (isHomePlusMenuOpen) {
+ setIsHomePlusMenuClosing(true);
+ homePlusCloseTimerRef.current = setTimeout(() => {
+ setIsHomePlusMenuOpen(false);
+ setIsHomePlusMenuClosing(false);
+ homePlusCloseTimerRef.current = null;
+ }, 205);
+ } else {
+ setIsHomePlusMenuClosing(false);
+ setIsHomePlusMenuOpen(true);
+ }
+ };
+
+ const closeHomePlusMenuAnimated = (afterClose = null) => {
+ if (!isHomePlusMenuOpen && !isHomePlusMenuClosing) {
+ if (afterClose) afterClose();
+ return;
+ }
+ if (homePlusCloseTimerRef.current) {
+ clearTimeout(homePlusCloseTimerRef.current);
+ homePlusCloseTimerRef.current = null;
+ }
+ setIsHomePlusMenuClosing(true);
+ homePlusCloseTimerRef.current = setTimeout(() => {
+ setIsHomePlusMenuOpen(false);
+ setIsHomePlusMenuClosing(false);
+ homePlusCloseTimerRef.current = null;
+ if (afterClose) afterClose();
+ }, 205);
+ };
+
+ useEffect(() => {
+ return () => {
+ if (homePlusCloseTimerRef.current) {
+ clearTimeout(homePlusCloseTimerRef.current);
+ }
+ };
+ }, []);
  const [isPastSemestersWizardOpen, setIsPastSemestersWizardOpen] = useState(false);
  const [wizardCurrentOrdinal, setWizardCurrentOrdinal] = useState(2);
  const [wizardStepIndex, setWizardStepIndex] = useState(0);
@@ -3390,7 +3436,7 @@ export default function App() {
  ) {
  return;
  }
- setIsHomePlusMenuOpen(false);
+ closeHomePlusMenuAnimated();
  };
  document.addEventListener('mousedown', handleOutsideClick);
  document.addEventListener('touchstart', handleOutsideClick);
@@ -4780,7 +4826,7 @@ export default function App() {
  const navigateWithSlide = (targetView, targetSem = null) => {
  setIsMenuOpen(false);
  setIsEditingNickname(false);
- setIsHomePlusMenuOpen(false);
+ closeHomePlusMenuAnimated();
  closeCollectorMenuAnimated();
 
  if (targetView === 'home') {
@@ -4820,6 +4866,7 @@ export default function App() {
 
  const handleOpenPastSemestersWizard = () => {
  setIsHomePlusMenuOpen(false);
+ setIsHomePlusMenuClosing(false);
  const currentCode = getCurrentSemesterCode();
  const detectedOrd = semesterOrdinalMap[currentCode];
  const initialOrd = detectedOrd && detectedOrd >= 2 ? Math.min(8, detectedOrd) : 2;
@@ -7913,7 +7960,7 @@ export default function App() {
  };
 
  const appFooter = (
- <footer className={`mt-12 sm:mt-14 pt-6 border-t space-y-4 ${
+ <footer className={`mt-12 sm:mt-14 pt-6 border-t space-y-4 bg-transparent ${
  darkMode ? 'border-slate-800/80 text-slate-500' : 'border-slate-200/80 text-slate-400'
  }`}>
  <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-2.5">
@@ -7996,8 +8043,9 @@ export default function App() {
  Az alkalmazás koncepcióját megalkotta:{' '}
  <button
  type="button"
+ data-no-glass="true"
  onClick={() => setIsWelcomeOpen(true)}
- className="font-medium underline decoration-dotted underline-offset-2 hover:text-amber-500 transition cursor-pointer"
+ className="font-medium underline decoration-dotted underline-offset-2 hover:text-amber-500 transition cursor-pointer bg-transparent"
  >
  Cserkész Csongor
  </button>{' '}
@@ -8222,22 +8270,33 @@ export default function App() {
  }
  /* === TELJES APPLIKÁCIÓS FROSTED GLASS RENDSZER === */
  .bge-fluid-app header,
- .bge-fluid-app footer,
  .bge-fluid-app section > div,
  .bge-fluid-app .rounded-2xl,
  .bge-fluid-app .rounded-3xl {
  backdrop-filter: blur(18px) saturate(165%);
  -webkit-backdrop-filter: blur(18px) saturate(165%);
  }
+ .bge-fluid-app footer {
+ background-color: transparent !important;
+ backdrop-filter: none !important;
+ -webkit-backdrop-filter: none !important;
+ }
  .bge-fluid-app header {
  background-color: rgba(15, 23, 42, 0.72) !important;
  border-color: rgba(255, 255, 255, 0.14) !important;
  }
- .bge-fluid-app button,
- .bge-fluid-app a[href] {
+ .bge-fluid-app button:not([data-no-glass="true"]),
+ .bge-fluid-app a[href]:not([data-no-glass="true"]) {
  backdrop-filter: blur(14px) saturate(160%);
  -webkit-backdrop-filter: blur(14px) saturate(160%);
  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.24);
+ }
+ .bge-fluid-app button[data-no-glass="true"],
+ .bge-fluid-app a[href][data-no-glass="true"] {
+ background-color: transparent !important;
+ backdrop-filter: none !important;
+ -webkit-backdrop-filter: none !important;
+ box-shadow: none !important;
  }
  .bge-fluid-app svg,
  .bge-fluid-app canvas {
@@ -8514,7 +8573,7 @@ export default function App() {
  type="button"
  onClick={() => {
  setIsMenuOpen(false);
- setIsHomePlusMenuOpen(false);
+ closeHomePlusMenuAnimated();
  closeCollectorMenuAnimated();
  setIsBottomMenuOpen(prev => {
  if (prev) setIsEditingNickname(false);
@@ -9359,8 +9418,9 @@ export default function App() {
  <div className="max-w-7xl mx-auto px-3 sm:px-4 py-2.5 flex items-center justify-between gap-2">
  <button
  type="button"
+ data-no-glass="true"
  onClick={() => navigateWithSlide('home')}
- className="flex items-center gap-2 sm:gap-2.5 text-left cursor-pointer group min-w-0"
+ className="flex items-center gap-2 sm:gap-2.5 text-left cursor-pointer group min-w-0 bg-transparent border-0 shadow-none"
  >
  <img
  src="/logo.png"
@@ -10371,17 +10431,18 @@ export default function App() {
  {/* FIX POZÍCIÓJÚ LEBEGŐ GYŰJTŐ GOMBOK AZ ALSÓ NAVIGÁCIÓS SÁV FELETT */}
  {activeView === 'home' ? (
  <div data-home-plus-menu="true" className="fixed bottom-[82px] right-4 sm:bottom-[86px] sm:right-7 z-30 flex flex-col items-end gap-3">
- <AnimatedPresence show={Boolean(isHomePlusMenuOpen)} variant="dropdown" duration={190}>
- {isHomePlusMenuOpen && (
- <div className={`w-72 sm:w-80 rounded-2xl border-2 p-2.5 shadow-2xl space-y-2 transition-all ${
+ {(isHomePlusMenuOpen || isHomePlusMenuClosing) && (
+ <div className={`bge-liquid-glass-panel ${isHomePlusMenuClosing ? 'bge-liquid-glass-closing' : 'bge-liquid-glass-open'} w-72 sm:w-80 rounded-3xl border p-2.5 sm:p-3 shadow-2xl flex flex-col items-stretch gap-2 ${
  darkMode
- ? 'bg-slate-900 border-amber-400/60 text-slate-100'
- : 'bg-white border-amber-400 text-slate-900'
+ ? 'bg-slate-900/68 border-white/20 ring-1 ring-amber-400/35 text-slate-100 shadow-black/75'
+ : 'bg-white/68 border-white/75 ring-1 ring-amber-400/40 text-slate-900 shadow-slate-900/20'
  }`}>
  <button
  type="button"
- onClick={handleOpenPastSemestersWizard}
- className={`w-full p-3 rounded-xl border text-left flex items-start gap-3 transition cursor-pointer ${
+ onClick={() => {
+ closeHomePlusMenuAnimated(() => handleOpenPastSemestersWizard());
+ }}
+ className={`bge-liquid-item-1 w-full p-3 rounded-2xl border text-left flex items-start gap-3 transition cursor-pointer ${
  darkMode
  ? 'bg-emerald-950/35 hover:bg-emerald-900/45 border-emerald-500/45'
  : 'bg-emerald-50/90 hover:bg-emerald-100/80 border-emerald-300'
@@ -10403,12 +10464,13 @@ export default function App() {
  <button
  type="button"
  onClick={() => {
- setIsHomePlusMenuOpen(false);
+ closeHomePlusMenuAnimated(() => {
  setNewSemesterStartYear(String(new Date().getFullYear()));
  setNewSemesterSeason('osz');
  setIsSemesterModalOpen(true);
+ });
  }}
- className={`w-full p-3 rounded-xl border text-left flex items-start gap-3 transition cursor-pointer ${
+ className={`bge-liquid-item-2 w-full p-3 rounded-2xl border text-left flex items-start gap-3 transition cursor-pointer ${
  darkMode
  ? 'bg-slate-800/80 hover:bg-slate-800 border-slate-700'
  : 'bg-slate-50 hover:bg-amber-50/80 border-slate-200'
@@ -10428,15 +10490,18 @@ export default function App() {
  </button>
  </div>
  )}
- </AnimatedPresence>
 
  <button
  type="button"
- onClick={() => setIsHomePlusMenuOpen(prev => !prev)}
- aria-expanded={isHomePlusMenuOpen}
+ onClick={toggleHomePlusMenu}
+ aria-expanded={isHomePlusMenuOpen && !isHomePlusMenuClosing}
  title="Félév hozzáadása vagy múltbéli félévek feltöltése"
  aria-label="Félév hozzáadása vagy múltbéli félévek feltöltése"
- className="w-[60px] h-[60px] sm:w-16 sm:h-16 rounded-full bg-amber-400 hover:bg-amber-300 text-slate-950 shadow-[0_0_26px_rgba(251,191,36,0.75)] hover:shadow-[0_0_34px_rgba(251,191,36,0.95)] flex items-center justify-center transition transform hover:scale-105 active:scale-95 cursor-pointer"
+ className={`w-[60px] h-[60px] sm:w-16 sm:h-16 rounded-full flex items-center justify-center transition transform hover:scale-105 active:scale-95 cursor-pointer ${
+ isHomePlusMenuOpen
+ ? 'bg-slate-900 text-amber-400 border-2 border-amber-400 shadow-[0_0_28px_rgba(251,191,36,0.75)]'
+ : 'bg-amber-400 hover:bg-amber-300 text-slate-950 shadow-[0_0_26px_rgba(251,191,36,0.75)] hover:shadow-[0_0_34px_rgba(251,191,36,0.95)]'
+ }`}
  >
  <Plus className={`w-8 h-8 stroke-[2.75] transition-transform duration-200 ${isHomePlusMenuOpen ? 'rotate-45' : ''}`} />
  </button>

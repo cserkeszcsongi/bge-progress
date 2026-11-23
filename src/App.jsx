@@ -641,8 +641,7 @@ const APP_RELEASES = [
  date: '2026. 11. 23.',
  changes: [
  'Előadás jelenlét adminisztráció minden tárgynál: a Jelenlét fülön külön-külön felületen követhető a gyakorlati jelenlét és az előadásokon való részvétel (az előadásoknál nincs kötelező minimum, így nem veszélyezteti az aláírást)',
- 'Új lebegő „Gyűjtő” menügomb a féléves dashboard jobb alsó sarkában: megnyitásakor előugrik a Statisztika, a JOKER ZH, az Átlagszámoló és az Új tantárgy (+) gomb',
- 'Új Tanulmányi Statisztika ablak (saját ikonnal, az App statisztikától elkülönítve): tárgyankénti előadás/gyakorlat jelenlét-eloszlás, ZH-teljesítések áttekintése, legrosszabb és legjobb ZH kiemelése, valamint közvetlen összehasonlítás bármely másik félévvel',
+ 'Bővebb tanulmányi statisztika: tárgyankénti előadás/gyakorlat jelenlét-eloszlás',
  'Frissített Adatvédelmi tájékoztató (GDPR v2.3.0) és 9 lépéses interaktív Bemutató az új funkciókkal'
  ]
  },

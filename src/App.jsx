@@ -638,6 +638,14 @@ function buildTemplatesForMajor(majorId) {
 
 const APP_RELEASES = [
  {
+ version: 'v2.4.1',
+ date: '2026. 11. 23.',
+ changes: [
+ 'ZH statisztika táblázat margó és oszlopigazítás: a Pont és Arány oszlopok közelebb kerültek az első oszlophoz, jobb oldali margóval, hogy ne fussanak ki a kártyából / scrollbar alá',
+ 'Alkalmazásszintű fluid animációk: sima átmenetek gombnyomásra (active press), kártyákra és lenyitható szekciókra (tiszteletben tartva a prefers-reduced-motion beállítást)'
+ ]
+ },
+ {
  version: 'v2.4.0',
  date: '2026. 11. 23.',
  changes: [
@@ -7181,7 +7189,57 @@ export default function App() {
  isNewVersionAvailable && Date.now() - updateBannerDismissedAt > 60 * 1000;
 
  return (
- <div className={`min-h-screen pb-24 transition-colors duration-200 ${bgPage}`}>
+ <div className={`bge-fluid-app min-h-screen pb-24 transition-colors duration-300 ${bgPage}`}>
+ <style>{`
+ @keyframes bgeFluidEnter {
+ from {
+ opacity: 0;
+ transform: translateY(8px) scale(0.992);
+ }
+ to {
+ opacity: 1;
+ transform: translateY(0) scale(1);
+ }
+ }
+ @keyframes bgeCollapseReveal {
+ from {
+ opacity: 0;
+ transform: translateY(-6px) scale(0.99);
+ }
+ to {
+ opacity: 1;
+ transform: translateY(0) scale(1);
+ }
+ }
+ .bge-fluid-app button,
+ .bge-fluid-app [role="button"],
+ .bge-fluid-app a[href] {
+ transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1), background-color 220ms cubic-bezier(0.22, 1, 0.36, 1), border-color 220ms cubic-bezier(0.22, 1, 0.36, 1), color 200ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 240ms cubic-bezier(0.22, 1, 0.36, 1), opacity 200ms ease;
+ }
+ .bge-fluid-app button:active:not(:disabled),
+ .bge-fluid-app [role="button"]:active:not([aria-disabled="true"]),
+ .bge-fluid-app a[href]:active {
+ transform: scale(0.972);
+ }
+ .bge-fluid-app section,
+ .bge-fluid-app article {
+ animation: bgeFluidEnter 280ms cubic-bezier(0.22, 1, 0.36, 1) both;
+ }
+ .bge-fluid-reveal {
+ animation: bgeCollapseReveal 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
+ transform-origin: top center;
+ }
+ @media (prefers-reduced-motion: reduce) {
+ .bge-fluid-app *,
+ .bge-fluid-app *::before,
+ .bge-fluid-app *::after {
+ animation-duration: 0.01ms !important;
+ animation-iteration-count: 1 !important;
+ transition-duration: 0.01ms !important;
+ }
+ }
+ `}</style>
+
  <input
  ref={neptunExcelInputRef}
  type="file"
@@ -8429,7 +8487,7 @@ export default function App() {
  </button>
 
  {isAttendanceDashboardExpanded && (
- <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2.5 sm:gap-4 mt-2.5 sm:mt-3">
+ <section className="bge-fluid-reveal grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2.5 sm:gap-4 mt-2.5 sm:mt-3">
  {/* MINI KÁRTYA 1: GYAKORLATOK JELENLÉTE */}
  <div className={`p-3.5 sm:p-4 rounded-xl border shadow-sm flex flex-col justify-between gap-2.5 ${bgCard}`}>
  <div className="space-y-2">
@@ -8664,13 +8722,13 @@ export default function App() {
  </div>
 
  {semesterZhSummary.rows.length > 0 ? (
- <div className={`pt-2 border-t max-h-44 overflow-y-auto overflow-x-auto ${darkMode ? 'border-slate-800' : 'border-slate-100'}`}>
- <table className="w-full text-left border-collapse text-[11px]">
+ <div className={`pt-2 mx-0.5 mr-2.5 border-t max-h-44 overflow-y-auto overflow-x-auto ${darkMode ? 'border-slate-800' : 'border-slate-100'}`}>
+ <table className="w-full text-left border-collapse text-[11px] tabular-nums">
  <thead>
  <tr className={`border-b text-[10px] uppercase ${darkMode ? 'border-slate-800 text-slate-400' : 'border-slate-200 text-slate-500'}`}>
- <th className="py-1.5 pr-2 font-bold">Tárgy / ZH</th>
- <th className="py-1.5 px-1.5 font-bold text-right">Pont</th>
- <th className="py-1.5 pl-1.5 font-bold text-right">Arány</th>
+ <th className="py-1.5 pr-1.5 font-bold">Tárgy / ZH</th>
+ <th className="py-1.5 px-1 font-bold text-right">Pont</th>
+ <th className="py-1.5 pl-1.5 pr-2 font-bold text-right">Arány</th>
  </tr>
  </thead>
  <tbody className="divide-y divide-slate-800/20">
@@ -8682,17 +8740,17 @@ export default function App() {
  setDetailTab('points');
  }}
  title={`${sRow.name} — Részletek megnyitása`}
- className={`cursor-pointer transition ${
+ className={`cursor-pointer transition-colors duration-150 ${
  darkMode ? 'bg-slate-800/45 hover:bg-slate-800/80' : 'bg-slate-50/90 hover:bg-amber-50/60'
  }`}
  >
- <td className={`py-1.5 pr-2 font-extrabold truncate max-w-[140px] ${textStrong}`}>
+ <td className={`py-1.5 pr-1.5 font-extrabold truncate max-w-[130px] ${textStrong}`}>
  {sRow.name}
  </td>
- <td className={`py-1.5 px-1.5 text-right font-bold whitespace-nowrap ${textStrong}`}>
+ <td className={`py-1.5 px-1 text-right font-bold whitespace-nowrap ${textStrong}`}>
  {formatHu(sRow.subjEarned)}{sRow.subjMax > 0 ? `/${formatHu(sRow.subjMax)} p` : ' p'}
  </td>
- <td className="py-1.5 pl-1.5 text-right font-extrabold whitespace-nowrap text-emerald-500">
+ <td className="py-1.5 pl-1.5 pr-2 text-right font-extrabold whitespace-nowrap text-emerald-500">
  {sRow.subjPct !== null ? `${formatHu(sRow.subjPct, 1)}%` : '—'}
  </td>
  </tr>
@@ -8703,20 +8761,20 @@ export default function App() {
  setActiveSubjectId(sRow.id);
  setDetailTab('points');
  }}
- className={`cursor-pointer transition ${
+ className={`cursor-pointer transition-colors duration-150 ${
  darkMode ? 'hover:bg-slate-800/50' : 'hover:bg-slate-50'
  }`}
  >
- <td className={`py-1 pl-3 pr-2 font-medium ${textMuted}`}>
+ <td className={`py-1 pl-2.5 pr-1.5 font-medium ${textMuted}`}>
  {zhItem.title}
  </td>
- <td className={`py-1 px-1.5 text-right font-semibold whitespace-nowrap ${zhItem.hasScore ? textStrong : textMuted}`}>
+ <td className={`py-1 px-1 text-right font-semibold whitespace-nowrap ${zhItem.hasScore ? textStrong : textMuted}`}>
  {zhItem.hasScore
  ? `${formatHu(zhItem.earned)}${zhItem.maxPts && zhItem.maxPts > 0 ? ` / ${formatHu(zhItem.maxPts)} p` : ' p'}`
  : `—${zhItem.maxPts && zhItem.maxPts > 0 ? ` / ${formatHu(zhItem.maxPts)} p` : ''}`
  }
  </td>
- <td className={`py-1 pl-1.5 text-right font-bold whitespace-nowrap ${
+ <td className={`py-1 pl-1.5 pr-2 text-right font-bold whitespace-nowrap ${
  zhItem.pct !== null ? 'text-emerald-500' : textMuted
  }`}>
  {zhItem.pct !== null ? `${formatHu(zhItem.pct, 1)}%` : '—'}

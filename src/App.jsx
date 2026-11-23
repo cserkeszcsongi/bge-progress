@@ -7359,6 +7359,7 @@ export default function App() {
  <div className="pt-1 flex flex-col items-center gap-2">
  {!user ? (
  <button
+ data-no-glass="true"
  type="button"
  onClick={handleLogin}
  className={`text-[11px] underline decoration-dotted underline-offset-4 hover:text-amber-500 transition cursor-pointer ${textMuted}`}
@@ -7369,6 +7370,7 @@ export default function App() {
  <div className="flex items-center gap-3 text-[11px]">
  <span className={textMuted}>Bejelentkezve: {user.email}</span>
  <button
+ data-no-glass="true"
  type="button"
  onClick={() => signOut(auth)}
  className="text-rose-500 hover:underline font-semibold cursor-pointer"
@@ -7643,7 +7645,7 @@ export default function App() {
  {isSim && (
  <div className="bg-amber-400 text-slate-950 text-xs font-medium px-3 sm:px-4 py-1.5 text-center">
  <strong>„Mi lenne, ha?” szimulációs mód aktív:</strong> Tervezett pontszámokkal és szimulált jegyekkel számol az app (nem ment az adatbázisba).
- <button onClick={handleResetAndExitSimulator} className="underline ml-2 font-bold cursor-pointer">
+ <button data-no-glass="true" onClick={handleResetAndExitSimulator} className="underline ml-2 font-bold cursor-pointer">
  Visszaállítás
  </button>
  </div>
@@ -7740,6 +7742,7 @@ export default function App() {
  <div className="flex items-center justify-between gap-2">
  {userNickname ? (
  <button
+ data-no-glass="true"
  type="button"
  disabled={isSavingNickname}
  onClick={() => setNicknameDraft('')}
@@ -7752,6 +7755,7 @@ export default function App() {
  )}
  <div className="flex items-center gap-2">
  <button
+ data-no-glass="true"
  type="button"
  disabled={isSavingNickname}
  onClick={() => setIsEditingNickname(false)}
@@ -7824,6 +7828,7 @@ export default function App() {
  darkMode ? 'bg-slate-800/75 border-white/10' : 'bg-slate-100/80 border-slate-200'
  }`}>
  <button
+ data-no-glass="ghost"
  type="button"
  onClick={() => setDarkMode(false)}
  className={`py-2.5 px-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${
@@ -7835,6 +7840,7 @@ export default function App() {
  <Sun className="w-3.5 h-3.5" /> Világos
  </button>
  <button
+ data-no-glass="ghost"
  type="button"
  onClick={() => setDarkMode(true)}
  className={`py-2.5 px-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${
@@ -7856,6 +7862,7 @@ export default function App() {
  darkMode ? 'bg-slate-800/75 border-white/10' : 'bg-slate-100/80 border-slate-200'
  }`}>
  <button
+ data-no-glass="ghost"
  type="button"
  onClick={() => setMonochrome(false)}
  className={`py-2.5 px-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${
@@ -7867,6 +7874,7 @@ export default function App() {
  <Palette className="w-3.5 h-3.5" /> Színes
  </button>
  <button
+ data-no-glass="ghost"
  type="button"
  onClick={() => setMonochrome(true)}
  className={`py-2.5 px-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${
@@ -7891,6 +7899,7 @@ export default function App() {
  darkMode ? 'bg-slate-800/75 border-white/10' : 'bg-slate-100/80 border-slate-200'
  }`}>
  <button
+ data-no-glass="ghost"
  type="button"
  onClick={() => setSimpleView(true)}
  className={`py-2.5 px-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${
@@ -7902,6 +7911,7 @@ export default function App() {
  <LayoutList className="w-3.5 h-3.5" /> Egyszerű
  </button>
  <button
+ data-no-glass="ghost"
  type="button"
  onClick={() => setSimpleView(false)}
  className={`py-2.5 px-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${
@@ -8573,8 +8583,8 @@ export default function App() {
  border-bottom: 1px solid rgba(255, 255, 255, 0.72) !important;
  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.07), inset 0 -1px 0 rgba(255, 255, 255, 0.55) !important;
  }
- .bge-fluid-app button:not([data-no-glass="true"]),
- .bge-fluid-app a[href]:not([data-no-glass="true"]) {
+ .bge-fluid-app button:not([data-no-glass="true"]):not([data-no-glass="ghost"]),
+ .bge-fluid-app a[href]:not([data-no-glass="true"]):not([data-no-glass="ghost"]) {
  backdrop-filter: blur(14px) saturate(160%);
  -webkit-backdrop-filter: blur(14px) saturate(160%);
  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.24);
@@ -8582,6 +8592,12 @@ export default function App() {
  .bge-fluid-app button[data-no-glass="true"],
  .bge-fluid-app a[href][data-no-glass="true"] {
  background-color: transparent !important;
+ backdrop-filter: none !important;
+ -webkit-backdrop-filter: none !important;
+ box-shadow: none !important;
+ }
+ .bge-fluid-app button[data-no-glass="ghost"],
+ .bge-fluid-app a[href][data-no-glass="ghost"] {
  backdrop-filter: none !important;
  -webkit-backdrop-filter: none !important;
  box-shadow: none !important;
@@ -8928,6 +8944,7 @@ export default function App() {
  <Download className="w-3 h-3" /> Letöltés
  </button>
  <button
+ data-no-glass="true"
  type="button"
  onClick={() => {
  setIsInstallMiniPopupVisible(false);
@@ -9025,6 +9042,7 @@ export default function App() {
 
  <div className="flex flex-col sm:flex-row justify-end gap-2 pt-1">
  <button
+ data-no-glass="true"
  type="button"
  onClick={() => setIsInstallGuideOpen(false)}
  className={`px-4 py-2 text-xs sm:text-sm rounded-xl cursor-pointer ${textMuted}`}
@@ -9100,7 +9118,7 @@ export default function App() {
  {isSim && (
  <div className="mt-3 bg-amber-400 text-slate-950 text-xs font-medium px-3 sm:px-4 py-1.5 text-center">
  <strong>„Mi lenne, ha?” szimulációs mód aktív:</strong> Tervezett pontszámokkal és szimulált jegyekkel számol az app (nem ment az adatbázisba).
- <button onClick={handleResetAndExitSimulator} className="underline ml-2 font-bold cursor-pointer">
+ <button data-no-glass="true" onClick={handleResetAndExitSimulator} className="underline ml-2 font-bold cursor-pointer">
  Visszaállítás
  </button>
  </div>
@@ -9457,10 +9475,11 @@ export default function App() {
  </div>
  </div>
  <button
+ data-no-glass="true"
  type="button"
  onClick={handleOpenThresholdModal}
  title="Kattints az átsorolási határ módosításához"
- className="text-right shrink-0 group/th cursor-pointer"
+ className="bg-transparent text-right shrink-0 group/th cursor-pointer"
  >
  <p className={`text-[10px] sm:text-[11px] font-medium uppercase flex items-center justify-end gap-1 ${textMuted}`}>
  Minimum határ <Pencil className="w-2.5 h-2.5" />
@@ -9618,6 +9637,7 @@ export default function App() {
  {semStats.osszesTargy} tárgy
  </span>
  <button
+ data-no-glass="ghost"
  type="button"
  onClick={(e) => {
  e.stopPropagation();
@@ -9633,6 +9653,7 @@ export default function App() {
  <Pencil className="w-4 h-4" />
  </button>
  <button
+ data-no-glass="ghost"
  type="button"
  onClick={(e) => {
  e.stopPropagation();
@@ -9738,7 +9759,7 @@ export default function App() {
  {isSim && (
  <div className="bg-amber-400 text-slate-950 text-xs font-medium px-3 sm:px-4 py-1.5 text-center">
  <strong>„Mi lenne, ha?” szimulációs mód aktív:</strong> Módosítsd a pontszámokat vagy válassz előre meghatározott jegyet a tárgyak Beállításaiban (nem ment az adatbázisba).
- <button onClick={handleResetAndExitSimulator} className="underline ml-2 font-bold cursor-pointer">
+ <button data-no-glass="true" onClick={handleResetAndExitSimulator} className="underline ml-2 font-bold cursor-pointer">
  Visszaállítás
  </button>
  </div>
@@ -9895,6 +9916,7 @@ export default function App() {
  <div className={`pt-2 border-t space-y-1.5 max-h-36 overflow-y-auto pr-0.5 ${darkMode ? 'border-slate-800' : 'border-slate-100'}`}>
  {semesterAttendanceSummary.practiceRows.map((row) => (
  <button
+ data-no-glass="ghost"
  key={`prac_${row.id}`}
  type="button"
  onClick={() => {
@@ -9997,6 +10019,7 @@ export default function App() {
  <div className={`pt-2 border-t space-y-1.5 max-h-36 overflow-y-auto pr-0.5 ${darkMode ? 'border-slate-800' : 'border-slate-100'}`}>
  {semesterAttendanceSummary.lectureRows.map((row) => (
  <button
+ data-no-glass="ghost"
  key={`lec_${row.id}`}
  type="button"
  onClick={() => {
@@ -10196,6 +10219,7 @@ export default function App() {
  const active = sortMode === opt.id;
  return (
  <button
+ data-no-glass="ghost"
  key={opt.id}
  type="button"
  onClick={() => handleSelectSortMode(opt.id)}
@@ -10216,6 +10240,7 @@ export default function App() {
  <div className={`my-1 border-t ${darkMode ? 'border-slate-800' : 'border-slate-200'}`} />
 
  <button
+ data-no-glass="ghost"
  type="button"
  onClick={handleOpenCustomSortModal}
  className={`w-full px-3 py-2.5 sm:py-2 rounded-xl text-xs font-bold flex items-center justify-between gap-2 text-left transition cursor-pointer ${
@@ -11216,6 +11241,7 @@ export default function App() {
  {row.courseType === 'elective' ? 'Szab. választott' : 'Kötelező'}
  </button>
  <button
+ data-no-glass="true"
  type="button"
  onClick={() => handleRemoveWizardSubjectRow(activePastSem.code, row.rowId)}
  title="Sor törlése"
@@ -11316,6 +11342,7 @@ export default function App() {
  {wizardStepIndex === 0 ? (
  <>
  <button
+ data-no-glass="true"
  type="button"
  onClick={() => setIsPastSemestersWizardOpen(false)}
  className={`px-4 py-2 text-xs sm:text-sm rounded-xl cursor-pointer ${textMuted}`}
@@ -11496,6 +11523,7 @@ export default function App() {
  darkMode ? 'border-slate-800 bg-slate-900/75' : 'border-slate-200 bg-slate-50'
  }`}>
  <button
+ data-no-glass="true"
  type="button"
  disabled={isParsingExcel}
  onClick={() => setExcelImportTargetSemCode(null)}
@@ -12108,6 +12136,7 @@ export default function App() {
  darkMode ? 'border-slate-800 bg-slate-900/70' : 'border-slate-200 bg-slate-50'
  }`}>
  <button
+ data-no-glass="true"
  type="button"
  onClick={() => setIsCustomSortModalOpen(false)}
  className={`px-4 py-2 text-sm rounded-lg cursor-pointer ${textMuted}`}
@@ -12234,6 +12263,7 @@ export default function App() {
  <p className={`text-xs ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>
  A kiválasztott szakodat bármikor módosíthatod a jobb felső <strong>Menü</strong> gomb alatt, a féléveidet és tantárgyaidat pedig szabadon szerkesztheted vagy törölheted az alkalmazáson belül. Teljes fiók- és minden kapcsolódó felhőadat végleges törléséhez, illetve bármilyen adatvédelmi kérdés esetén írj közvetlenül a fejlesztőnek a(z){' '}
  <a
+ data-no-glass="true"
  href={`mailto:${CREATOR_EMAIL}?subject=${encodeURIComponent('BGE Progress — Adatvédelem / Adattörlési kérelem')}`}
  className="font-bold text-amber-500 underline underline-offset-2"
  >
@@ -12400,6 +12430,7 @@ export default function App() {
  }`}>
  {!mustSelectMajor && (
  <button
+ data-no-glass="true"
  type="button"
  disabled={isSavingMajor}
  onClick={() => setIsMajorSelectModalOpen(false)}
@@ -12592,6 +12623,7 @@ export default function App() {
 
  <div className="flex justify-end gap-2 pt-1">
  <button
+ data-no-glass="true"
  type="button"
  onClick={() => setIsDegreeCreditsModalOpen(false)}
  className={`px-4 py-2 text-sm rounded-lg cursor-pointer ${textMuted}`}
@@ -12697,6 +12729,7 @@ export default function App() {
 
  <div className="flex justify-end gap-2 pt-1">
  <button
+ data-no-glass="true"
  type="button"
  onClick={() => setIsThresholdModalOpen(false)}
  className={`px-4 py-2 text-sm rounded-lg cursor-pointer ${textMuted}`}
@@ -13233,6 +13266,7 @@ export default function App() {
  </div>
  <div className="flex justify-end gap-2">
  <button
+ data-no-glass="true"
  type="button"
  onClick={() => setIsAddingRelease(false)}
  className={`px-3 py-1.5 text-xs rounded-lg cursor-pointer ${textMuted}`}
@@ -13287,6 +13321,7 @@ export default function App() {
  </span>
  {isAdmin && rel.isFirestore && (
  <button
+ data-no-glass="true"
  type="button"
  onClick={() => handleDeleteRelease(rel)}
  title="Verzióbejegyzés törlése"
@@ -13375,6 +13410,7 @@ export default function App() {
  Kiválasztott Joker ZH
  </span>
  <button
+ data-no-glass="true"
  type="button"
  disabled={isSavingJoker}
  onClick={() => setJokerModalStep('select')}
@@ -13428,6 +13464,7 @@ export default function App() {
 
  <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-700/20">
  <button
+ data-no-glass="true"
  type="button"
  disabled={isSavingJoker}
  onClick={handleClearPendingJokerSelection}
@@ -13437,6 +13474,7 @@ export default function App() {
  </button>
  <div className="flex items-center gap-2 ml-auto">
  <button
+ data-no-glass="true"
  type="button"
  disabled={isSavingJoker}
  onClick={() => setIsJokerModalOpen(false)}
@@ -13689,6 +13727,7 @@ export default function App() {
 
  <div className="flex justify-end gap-2 pt-1">
  <button
+ data-no-glass="true"
  type="button"
  disabled={isSavingJoker}
  onClick={() => setIsJokerModalOpen(false)}
@@ -13890,6 +13929,7 @@ export default function App() {
  </strong>
  </span>
  <button
+ data-no-glass="true"
  type="button"
  onClick={(e) => {
  e.stopPropagation();
@@ -14645,6 +14685,7 @@ export default function App() {
  <Plus className="w-3 h-3" /> Tétel hozzáadása
  </button>
  <button
+ data-no-glass="true"
  onClick={() => setBucketModal({ id: bucket.id, title: bucket.title, maxPoints: bucket.maxPoints ?? '' })}
  title="Gyűjtő szerkesztése"
  className="p-2 sm:p-1.5 text-slate-400 hover:text-amber-500 cursor-pointer"
@@ -14652,6 +14693,7 @@ export default function App() {
  <Pencil className="w-3.5 h-3.5" />
  </button>
  <button
+ data-no-glass="true"
  onClick={() => handleDeleteBucket(bucket.id)}
  title="Gyűjtő törlése"
  className="p-2 sm:p-1.5 text-slate-400 hover:text-rose-500 cursor-pointer"
@@ -14705,6 +14747,7 @@ export default function App() {
  darkMode ? 'bg-slate-800/80 border-slate-700' : 'bg-slate-100 border-slate-200'
  }`}>
  <button
+ data-no-glass="ghost"
  type="button"
  onClick={() => setAttendanceSubTab('practice')}
  className={`py-2.5 px-3 rounded-xl text-xs sm:text-sm font-extrabold flex items-center justify-center gap-2 transition cursor-pointer ${
@@ -14726,6 +14769,7 @@ export default function App() {
  </button>
 
  <button
+ data-no-glass="ghost"
  type="button"
  onClick={() => setAttendanceSubTab('lecture')}
  className={`py-2.5 px-3 rounded-xl text-xs sm:text-sm font-extrabold flex items-center justify-center gap-2 transition cursor-pointer ${
@@ -15173,7 +15217,7 @@ export default function App() {
  </p>
  </div>
  <div className="flex justify-end gap-2 pt-2">
- <button type="button" onClick={() => setBucketModal(null)} className={`px-4 py-2 text-sm rounded-lg cursor-pointer ${textMuted}`}>Mégse</button>
+ <button data-no-glass="true" type="button" onClick={() => setBucketModal(null)} className={`px-4 py-2 text-sm rounded-lg cursor-pointer ${textMuted}`}>Mégse</button>
  <button type="submit" className="px-4 py-2 text-sm font-bold bg-amber-400 hover:bg-amber-300 text-slate-950 rounded-lg cursor-pointer">Mentés</button>
  </div>
  </form>
@@ -15281,7 +15325,7 @@ export default function App() {
  )}
 
  <div className="flex justify-end gap-2 pt-2">
- <button type="button" onClick={() => setItemModal(null)} className={`px-4 py-2 text-sm rounded-lg cursor-pointer ${textMuted}`}>Mégse</button>
+ <button data-no-glass="true" type="button" onClick={() => setItemModal(null)} className={`px-4 py-2 text-sm rounded-lg cursor-pointer ${textMuted}`}>Mégse</button>
  <button type="submit" className="px-4 py-2 text-sm font-bold bg-amber-400 hover:bg-amber-300 text-slate-950 rounded-lg cursor-pointer">Mentés</button>
  </div>
 
@@ -15437,7 +15481,7 @@ export default function App() {
  )}
 
  <div className="flex justify-end gap-2 pt-2">
- <button type="button" onClick={() => setIsSemesterModalOpen(false)} className={`px-4 py-2 text-sm rounded-lg cursor-pointer ${textMuted}`}>Mégse</button>
+ <button data-no-glass="true" type="button" onClick={() => setIsSemesterModalOpen(false)} className={`px-4 py-2 text-sm rounded-lg cursor-pointer ${textMuted}`}>Mégse</button>
  <button
  type="submit"
  disabled={!generatedSemesterPreview || isGeneratedSemesterDuplicate}
@@ -15558,6 +15602,7 @@ export default function App() {
 
  <div className="flex justify-end gap-2 pt-2">
  <button
+ data-no-glass="true"
  type="button"
  disabled={isUpdatingSemester}
  onClick={() => setEditingSemesterOldName(null)}
@@ -15689,6 +15734,7 @@ export default function App() {
  </button>
 
  <button
+ data-no-glass="true"
  type="button"
  onClick={() => { setIsSubjectModalOpen(false); setSelectedSubjectMajorId(null); }}
  className={`px-4 py-2 text-xs sm:text-sm rounded-lg cursor-pointer ${textMuted}`}
@@ -15706,6 +15752,7 @@ export default function App() {
  Szak: <strong className={textStrong}>{activeMajorObject?.label || 'Egyedi'}</strong>
  </span>
  <button
+ data-no-glass="true"
  type="button"
  onClick={() => setSelectedSubjectMajorId(null)}
  className="text-xs font-bold text-amber-500 hover:underline cursor-pointer shrink-0"
@@ -15889,6 +15936,7 @@ export default function App() {
  <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-center">
  {isAdmin && !tpl.isWebScrapedMajor && (
  <button
+ data-no-glass="true"
  type="button"
  onClick={() => handleDeleteTemplate(tpl.id, tpl.name)}
  title="Sablon törlése (Admin)"
@@ -16323,6 +16371,7 @@ export default function App() {
 
  <div className="flex justify-end gap-2 pt-2">
  <button
+ data-no-glass="true"
  type="button"
  onClick={() => { setIsSubjectModalOpen(false); setSelectedSubjectMajorId(null); }}
  className={`px-4 py-2 text-sm rounded-lg cursor-pointer ${textMuted}`}
@@ -16490,6 +16539,7 @@ export default function App() {
 
  <div className="flex justify-end gap-2 pt-1">
  <button
+ data-no-glass="true"
  type="button"
  onClick={() => setIsAddingNotice(false)}
  className={`px-3.5 py-2 text-xs font-semibold rounded-xl cursor-pointer ${textMuted}`}
@@ -16567,6 +16617,7 @@ export default function App() {
 
  {isAdmin && (
  <button
+ data-no-glass="ghost"
  type="button"
  onClick={() => handleDeleteNotice(notice)}
  title="Bejegyzés törlése"

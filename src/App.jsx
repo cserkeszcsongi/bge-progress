@@ -13,8 +13,7 @@ import {
  Menu, Palette, ChevronDown, SlidersHorizontal, RefreshCw, Lightbulb, CheckCircle2,
  LayoutList, ArrowUpDown, GripVertical, ArrowUp, ArrowDown, Calculator,
  BarChart3, Users, FastForward, FileSpreadsheet, HelpCircle, Upload,
- Download, Smartphone, Share, ShieldCheck, Lock, Database, Bell, Wrench,
- PieChart, TrendingUp, Grid
+ Download, Smartphone, Share, ShieldCheck, Lock, Database, Bell, Wrench
 } from 'lucide-react';
 import { auth, googleProvider, db } from './firebase';
 
@@ -1527,6 +1526,24 @@ function JokerIcon({ className = 'w-4 h-4' }) {
  </svg>
  );
 }
+
+function AcademicStatsIcon({ className = 'w-4 h-4' }) {
+ return (
+ <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+ <path d="M21.21 15.89A10 10 0 1 1 8 2.83" />
+ <path d="M22 12A10 10 0 0 0 12 2v10z" />
+ </svg>
+ );
+}
+
+function TrendMiniIcon({ className = 'w-3.5 h-3.5' }) {
+ return (
+ <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+ <polyline points="22 7 13.5 15.5 8.5 10.5 2 17" />
+ <polyline points="16 7 22 7 22 13" />
+ </svg>
+ );
+}
 function TutorialSlidePreview({ slideId, darkMode }) {
  const cardBg = darkMode ? 'bg-slate-900 border-slate-700/90' : 'bg-white border-slate-200';
  const subBg = darkMode ? 'bg-slate-800/80 border-slate-700' : 'bg-slate-50 border-slate-200/80';
@@ -1719,10 +1736,10 @@ function TutorialSlidePreview({ slideId, darkMode }) {
  <div className={`rounded-2xl border p-3.5 sm:p-4 shadow-md space-y-3 ${cardBg}`}>
  <div className="flex flex-wrap items-center gap-2">
  <span className="px-3 py-1 rounded-full text-xs font-extrabold bg-amber-400 text-slate-950 inline-flex items-center gap-1.5 shadow-md">
- <Grid className="w-3.5 h-3.5" /> Gyűjtő
+ <Plus className="w-3.5 h-3.5" /> Gyűjtő kapszula
  </span>
  <span className="px-3 py-1 rounded-full text-xs font-bold bg-indigo-600 text-white inline-flex items-center gap-1.5 shadow-md">
- <PieChart className="w-3.5 h-3.5" /> Statisztika
+ <AcademicStatsIcon className="w-3.5 h-3.5" /> Statisztika
  </span>
  <span className="px-3 py-1 rounded-full text-xs font-bold bg-violet-600 text-white inline-flex items-center gap-1.5 shadow-md">
  <JokerIcon className="w-3.5 h-3.5" /> JOKER ZH
@@ -6381,7 +6398,10 @@ export default function App() {
  };
 
  const handleOpenAcademicStatsModal = () => {
- const primary = selectedSemester || semesters[0] || '';
+ const fallbackPrimary = semesters[0] || (subjects[0]?.semester ?? '');
+ const primary = (selectedSemester && semesters.includes(selectedSemester))
+ ? selectedSemester
+ : fallbackPrimary;
  const otherSemesters = semesters.filter(s => s !== primary);
  const defaultCompare = otherSemesters.length > 0 ? otherSemesters[otherSemesters.length - 1] : '';
  setStatsPrimarySemester(primary);
@@ -8887,15 +8907,15 @@ export default function App() {
  setIsCollectorMenuOpen(false);
  handleOpenAcademicStatsModal();
  }}
- disabled={subjects.length === 0}
+ disabled={semesters.length === 0 && subjects.length === 0}
  title="Tanulmányi statisztika: jelenlét-eloszlás, ZH-teljesítések, legjobb/legrosszabb ZH"
  className="w-full px-3.5 py-2.5 rounded-2xl text-xs sm:text-sm font-extrabold bg-indigo-600 hover:bg-indigo-500 disabled:opacity-45 disabled:cursor-not-allowed text-white shadow-md flex items-center justify-between gap-2.5 transition cursor-pointer"
  >
  <span className="flex items-center gap-2">
- <PieChart className="w-4 h-4 shrink-0" />
+ <AcademicStatsIcon className="w-4 h-4 shrink-0" />
  <span>Statisztika</span>
  </span>
- <TrendingUp className="w-3.5 h-3.5 opacity-80 shrink-0" />
+ <TrendMiniIcon className="w-3.5 h-3.5 opacity-80 shrink-0" />
  </button>
 
  <button
@@ -8964,22 +8984,34 @@ export default function App() {
  type="button"
  onClick={() => setIsCollectorMenuOpen(prev => !prev)}
  aria-expanded={isCollectorMenuOpen}
- title="Gyűjtő menü (Új tantárgy, Átlagszámoló, Joker ZH, Statisztika)"
- aria-label="Gyűjtő menü"
- className={`px-4 sm:px-5 h-14 sm:h-[60px] rounded-full font-extrabold text-xs sm:text-sm flex items-center justify-center gap-2 transition transform hover:scale-105 active:scale-95 cursor-pointer relative ${
+ title="Eszközök (Statisztika, JOKER ZH, Átlagszámoló, Új tantárgy)"
+ aria-label="Eszközök kapszula"
+ className={`w-12 sm:w-14 py-2.5 sm:py-3 rounded-full flex flex-col items-center justify-center gap-1.5 transition transform hover:scale-105 active:scale-95 cursor-pointer relative ${
  isCollectorMenuOpen
  ? 'bg-slate-900 text-amber-400 border-2 border-amber-400 shadow-[0_0_28px_rgba(251,191,36,0.75)]'
  : 'bg-amber-400 hover:bg-amber-300 text-slate-950 shadow-[0_0_26px_rgba(251,191,36,0.75)] hover:shadow-[0_0_34px_rgba(251,191,36,0.95)]'
  }`}
  >
  {isCollectorMenuOpen ? (
- <X className="w-5 h-5 stroke-[2.75]" />
+ <X className="w-6 h-6 stroke-[2.75] my-3" />
  ) : (
- <Grid className="w-5 h-5 stroke-[2.5]" />
+ <>
+ <span className="w-6 h-6 rounded-full bg-slate-950/12 flex items-center justify-center">
+ <Plus className="w-3.5 h-3.5 stroke-[2.75]" />
+ </span>
+ <span className="w-6 h-6 rounded-full bg-slate-950/12 flex items-center justify-center">
+ <Calculator className="w-3.5 h-3.5 stroke-[2.3]" />
+ </span>
+ <span className="w-6 h-6 rounded-full bg-slate-950/12 flex items-center justify-center">
+ <JokerIcon className="w-3.5 h-3.5" />
+ </span>
+ <span className="w-6 h-6 rounded-full bg-slate-950/12 flex items-center justify-center">
+ <AcademicStatsIcon className="w-3.5 h-3.5" />
+ </span>
+ </>
  )}
- <span>Gyűjtő</span>
  {!isCollectorMenuOpen && pendingJokerInfo && (
- <span className="absolute -top-1 -right-1 flex h-3.5 w-3.5">
+ <span className="absolute -top-0.5 -right-0.5 flex h-3.5 w-3.5">
  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-violet-400 opacity-85" />
  <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-violet-600 border-2 border-white" />
  </span>
@@ -10033,8 +10065,11 @@ export default function App() {
  
  {/* TANULMÁNYI STATISZTIKA MODAL (JELENLÉT ELOSZLÁS, ZH TELJESÍTÉSEK, LEGJOBB/LEGROSSZABB ZH, FÉLÉV ÖSSZEHASONLÍTÁS) */}
  {isAcademicStatsOpen && (() => {
- const primaryStats = computeAcademicSemesterAnalytics(statsPrimarySemester);
- const compareStats = statsCompareSemester ? computeAcademicSemesterAnalytics(statsCompareSemester) : null;
+ const effectivePrimarySem = statsPrimarySemester || selectedSemester || semesters[0] || '';
+ const primaryStats = computeAcademicSemesterAnalytics(effectivePrimarySem);
+ const compareStats = (statsCompareSemester && statsCompareSemester !== effectivePrimarySem)
+ ? computeAcademicSemesterAnalytics(statsCompareSemester)
+ : null;
 
  const renderDeltaBadge = (currVal, prevVal, unit = '%', higherIsBetter = true) => {
  if (currVal === null || currVal === undefined || prevVal === null || prevVal === undefined) return null;
@@ -10073,7 +10108,7 @@ export default function App() {
  <div className="px-4 sm:px-6 py-3.5 sm:py-4 bg-slate-900 text-white flex justify-between items-center border-b border-slate-800 shrink-0">
  <div className="flex items-center gap-2.5 min-w-0">
  <div className="w-9 h-9 rounded-xl bg-indigo-500 text-white flex items-center justify-center shrink-0">
- <PieChart className="w-5 h-5" />
+ <AcademicStatsIcon className="w-5 h-5" />
  </div>
  <div className="min-w-0">
  <h2 className="font-extrabold text-sm sm:text-base leading-tight">Tanulmányi statisztika</h2>
@@ -10101,7 +10136,7 @@ export default function App() {
  Vizsgált félév
  </label>
  <select
- value={statsPrimarySemester}
+ value={effectivePrimarySem}
  onChange={(e) => {
  const nextPrimary = e.target.value;
  setStatsPrimarySemester(nextPrimary);
@@ -10130,7 +10165,7 @@ export default function App() {
  >
  <option value="">Nincs összehasonlítás (csak ez a félév)</option>
  {semesters
- .filter(sem => sem !== statsPrimarySemester)
+ .filter(sem => sem !== effectivePrimarySem)
  .map(sem => (
  <option key={sem} value={sem}>
  {formatSemesterLabel(sem)}{isCurrentSemester(sem) ? ' • Aktuális' : ''}

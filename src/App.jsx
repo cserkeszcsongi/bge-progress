@@ -638,6 +638,14 @@ function buildTemplatesForMajor(majorId) {
 
 const APP_RELEASES = [
  {
+ version: 'v2.5.0',
+ date: '2026. 11. 23.',
+ changes: [
+ 'Alkalmazásszintű Liquid Glass design language: áttetsző üveges kártyák, felső sávok, menük, gombok és modális ablakok háttérmosással (backdrop-filter blur & saturate) és finom fénytörés-kiemeléssel',
+ 'Világos/sötét módhoz, monokróm palettához és mobil olvashatósághoz igazított kontraszt, valamint sima fluid animációk minden megnyitáskor és becsukáskor'
+ ]
+ },
+ {
  version: 'v2.4.2',
  date: '2026. 11. 23.',
  changes: [
@@ -7311,8 +7319,42 @@ export default function App() {
  }
  to {
  opacity: 1;
- backdrop-filter: blur(4px);
+ backdrop-filter: blur(6px);
  }
+ }
+ .bge-fluid-app {
+ position: relative;
+ }
+ .bge-fluid-app::before {
+ content: "";
+ position: fixed;
+ inset: 0;
+ pointer-events: none;
+ z-index: 0;
+ background:
+ radial-gradient(circle at 12% 10%, rgba(251, 191, 36, 0.14), transparent 42%),
+ radial-gradient(circle at 88% 18%, rgba(56, 189, 248, 0.12), transparent 44%),
+ radial-gradient(circle at 50% 92%, rgba(16, 185, 129, 0.10), transparent 48%);
+ }
+ .bge-fluid-app > *:not(style) {
+ position: relative;
+ z-index: 1;
+ }
+ .bge-fluid-app .bg-white,
+ .bge-fluid-app .bg-slate-900,
+ .bge-fluid-app .bg-slate-800\/80,
+ .bge-fluid-app .bg-slate-800\/70,
+ .bge-fluid-app .bg-slate-50 {
+ backdrop-filter: blur(16px) saturate(155%);
+ -webkit-backdrop-filter: blur(16px) saturate(155%);
+ box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.22), 0 8px 24px -8px rgba(15, 23, 42, 0.10);
+ }
+ .bge-fluid-app header.sticky {
+ backdrop-filter: blur(20px) saturate(165%);
+ -webkit-backdrop-filter: blur(20px) saturate(165%);
+ background-color: rgba(15, 23, 42, 0.82);
+ border-bottom-color: rgba(255, 255, 255, 0.12);
+ box-shadow: inset 0 -1px 0 0 rgba(255, 255, 255, 0.06), 0 10px 28px -10px rgba(2, 6, 23, 0.45);
  }
  .bge-fluid-app button,
  .bge-fluid-app [role="button"],

@@ -2078,6 +2078,268 @@ function evaluateCappedItems(items, cap, getEffectiveScore) {
  };
 }
 
+function normalizeTemplateMatchKey(str) {
+ return String(str || '').trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+function hasUserEnteredAssessmentData(a) {
+ if (!a) return false;
+ const hasAchieved = a.achieved !== null && a.achieved !== undefined && a.achieved !== '' && !isNaN(Number(a.achieved));
+ const hasBonus = a.bonusPoints !== null && a.bonusPoints !== undefined && a.bonusPoints !== '' && !isNaN(Number(a.bonusPoints));
+ return hasAchieved || hasBonus || Boolean(a.isJokerRewritten);
+}
+
+function sortCollectorItems(items, collectorConfig, getEffectiveScore) {
+ const list = [...(items || [])];
+ const mode = collectorConfig?.mode || 'custom';
+
+ const getItemScoreForSort = (item) => {
+ const eff = getEffectiveScore(item);
+ const hasScore = eff !== null && eff !== undefined && eff !== '' && !isNaN(Number(eff));
+ if (!hasScore) return null;
+ const base = Number(eff);
+ const bonus = (item.category === 'ZH' && item.bonusPoints !== null && item.bonusPoints !== undefined && item.bonusPoints !== '' && !isNaN(Number(item.bonusPoints)))
+ ? Number(item.bonusPoints)
+ : 0;
+ return +(base + bonus).toFixed(4);
+ };
+
+ if (mode === 'az') {
+ list.sort((a, b) => (a.title || '').localeCompare(b.title || '', 'hu', { numeric: true }));
+ } else if (mode === 'za') {
+ list.sort((a, b) => (b.title || '').localeCompare(a.title || '', 'hu', { numeric: true }));
+ } else if (mode === 'points_desc') {
+ list.sort((a, b) => {
+ const sa = getItemScoreForSort(a);
+ const sb = getItemScoreForSort(b);
+ if (sa === null && sb === null) return (a.title || '').localeCompare(b.title || '', 'hu', { numeric: true });
+ if (sa === null) return 1;
+ if (sb === null) return -1;
+ if (sb !== sa) return sb - sa;
+ return (a.title || '').localeCompare(b.title || '', 'hu', { numeric: true });
+ });
+ } else if (mode === 'points_asc') {
+ list.sort((a, b) => {
+ const sa = getItemScoreForSort(a);
+ const sb = getItemScoreForSort(b);
+ if (sa === null && sb === null) return (a.title || '').localeCompare(b.title || '', 'hu', { numeric: true });
+ if (sa === null) return 1;
+ if (sb === null) return -1;
+ if (sa !== sb) return sa - sb;
+ return (a.title || '').localeCompare(b.title || '', 'hu', { numeric: true });
+ });
+ } else if (mode === 'custom') {
+ const customOrder = Array.isArray(collectorConfig?.customOrder) ? collectorConfig.customOrder : [];
+ if (customOrder.length > 0) {
+ const idxMap = new Map(customOrder.map((id, idx) => [id, idx]));
+ list.sort((a, b) => {
+ const ia = idxMap.has(a.id) ? idxMap.get(a.id) : Number.MAX_SAFE_INTEGER;
+ const ib = idxMap.has(b.id) ? idxMap.get(b.id) : Number.MAX_SAFE_INTEGER;
+ if (ia !== ib) return ia - ib;
+ return 0;
+ });
+ }
+ }
+
+ return list;
+}
+
+function mergeSubjectWithTemplate(subj, tpl, tplUpdatedMs) {
+ const now = Date.now();
+ const rand = () => Math.random().toString(36).slice(2, 6);
+
+ const existingBuckets = toArraySafe(subj.customBuckets);
+ const existingAssessments = toArraySafe(subj.assessments);
+ const tplBuckets = toArraySafe(tpl.customBuckets);
+ const tplAssessments = toArraySafe(tpl.assessments);
+
+ const bucketIdMap = {};
+ const matchedExistingBucketIds = new Set();
+ const mergedBuckets = [];
+
+ tplBuckets.forEach((tb, idx) => {
+ let match = existingBuckets.find(eb => !matchedExistingBucketIds.has(eb.id) && eb.templateBucketId && eb.templateBucketId === tb.id);
+ if (!match) {
+ const tbKey = normalizeTemplateMatchKey(tb.title);
+ match = existingBuckets.find(eb => !matchedExistingBucketIds.has(eb.id) && normalizeTemplateMatchKey(eb.title) === tbKey);
+ }
+ if (match) {
+ matchedExistingBucketIds.add(match.id);
+ bucketIdMap[tb.id] = match.id;
+ mergedBuckets.push({
+ ...match,
+ id: match.id,
+ templateBucketId: tb.id,
+ title: tb.title,
+ maxPoints: tb.maxPoints ?? null
+ });
+ } else {
+ const newBId = `bucket_${now}_${idx}_${rand()}`;
+ bucketIdMap[tb.id] = newBId;
+ mergedBuckets.push({
+ id: newBId,
+ templateBucketId: tb.id,
+ title: tb.title,
+ maxPoints: tb.maxPoints ?? null
+ });
+ }
+ });
+
+ existingBuckets.forEach(eb => {
+ if (matchedExistingBucketIds.has(eb.id)) return;
+ const bucketItems = existingAssessments.filter(a => a.category === 'Egyeb' && a.bucketId === eb.id);
+ const hasFilledData = bucketItems.some(hasUserEnteredAssessmentData);
+ if (!eb.templateBucketId || hasFilledData) {
+ mergedBuckets.push(eb);
+ }
+ });
+
+ const keptBucketIds = new Set(mergedBuckets.map(b => b.id));
+
+ const matchedExistingAssessmentIds = new Set();
+ const mergedAssessments = [];
+
+ tplAssessments.forEach((ta, idx) => {
+ const mappedBucketId = ta.category === 'Egyeb'
+ ? (ta.bucketId && bucketIdMap[ta.bucketId] ? bucketIdMap[ta.bucketId] : null)
+ : undefined;
+
+ let match = existingAssessments.find(
+ ea => !matchedExistingAssessmentIds.has(ea.id) && ea.templateItemId && ea.templateItemId === ta.id
+ );
+ if (!match) {
+ const taTitleKey = normalizeTemplateMatchKey(ta.title);
+ match = existingAssessments.find(ea => {
+ if (matchedExistingAssessmentIds.has(ea.id)) return false;
+ if (ea.category !== ta.category) return false;
+ if (ta.category === 'Egyeb' && (ea.bucketId || null) !== (mappedBucketId || null)) return false;
+ return normalizeTemplateMatchKey(ea.title) === taTitleKey;
+ });
+ }
+
+ const tplHasMax = ta.max !== undefined && ta.max !== null && ta.max !== '' && !isNaN(Number(ta.max));
+
+ if (match) {
+ matchedExistingAssessmentIds.add(match.id);
+ const mergedItem = {
+ ...match,
+ id: match.id,
+ templateItemId: ta.id,
+ category: ta.category,
+ title: ta.title,
+ date: (match.date && String(match.date).trim() !== '') ? match.date : (ta.date || ''),
+ max: tplHasMax ? Number(ta.max) : (match.max ?? null),
+ achieved: match.achieved !== undefined ? match.achieved : null
+ };
+ if (ta.category === 'ZH') {
+ mergedItem.bonusPoints = match.bonusPoints !== undefined ? match.bonusPoints : null;
+ }
+ if (ta.category === 'Egyeb') {
+ mergedItem.bucketId = mappedBucketId ?? null;
+ }
+ mergedAssessments.push(mergedItem);
+ } else {
+ const newItem = {
+ id: `item_${now}_${idx}_${rand()}`,
+ templateItemId: ta.id,
+ category: ta.category,
+ title: ta.title,
+ date: ta.date || '',
+ max: tplHasMax ? Number(ta.max) : null,
+ achieved: null
+ };
+ if (ta.category === 'ZH') {
+ newItem.bonusPoints = null;
+ }
+ if (ta.category === 'Egyeb') {
+ newItem.bucketId = mappedBucketId ?? null;
+ }
+ mergedAssessments.push(newItem);
+ }
+ });
+
+ existingAssessments.forEach(ea => {
+ if (matchedExistingAssessmentIds.has(ea.id)) return;
+ if (hasUserEnteredAssessmentData(ea) || !ea.templateItemId) {
+ const preserved = { ...ea };
+ if (preserved.category === 'Egyeb' && preserved.bucketId && !keptBucketIds.has(preserved.bucketId)) {
+ preserved.bucketId = null;
+ }
+ mergedAssessments.push(preserved);
+ }
+ });
+
+ const isExam = (tpl.courseKind || 'regular') === 'exam';
+ const existingSessions = toArraySafe(subj.attendanceSessions);
+ let lastFilledPracIdx = -1;
+ existingSessions.forEach((s, idx) => {
+ if (s && ((s.status !== null && s.status !== undefined) || (s.date && String(s.date).trim() !== ''))) {
+ lastFilledPracIdx = idx;
+ }
+ });
+ const tplTotalClasses = isExam ? 0 : Math.max(0, Number(tpl.totalClasses) || 0);
+ const finalTotalClasses = isExam ? 0 : Math.max(tplTotalClasses, lastFilledPracIdx + 1);
+ const mergedSessions = isExam
+ ? []
+ : Array.from({ length: finalTotalClasses }, (_, idx) => {
+ const ex = existingSessions[idx];
+ const tplDate = tpl.attendanceSessions?.[idx]?.date || '';
+ return {
+ id: ex?.id || `att_${idx + 1}_${now}_${rand()}`,
+ index: idx + 1,
+ date: (ex?.date && String(ex.date).trim() !== '') ? ex.date : tplDate,
+ status: ex?.status ?? null
+ };
+ });
+
+ const existingLecSessions = toArraySafe(subj.lectureAttendanceSessions);
+ let lastFilledLecIdx = -1;
+ existingLecSessions.forEach((s, idx) => {
+ if (s && ((s.status !== null && s.status !== undefined) || (s.date && String(s.date).trim() !== ''))) {
+ lastFilledLecIdx = idx;
+ }
+ });
+ const hasLectures = !isExam && (tpl.hasLectures !== false || lastFilledLecIdx >= 0);
+ const finalTotalLectures = hasLectures ? Math.max(finalTotalClasses, lastFilledLecIdx + 1) : 0;
+ const mergedLectureSessions = hasLectures
+ ? Array.from({ length: finalTotalLectures }, (_, idx) => {
+ const ex = existingLecSessions[idx];
+ const tplDate = tpl.lectureAttendanceSessions?.[idx]?.date || '';
+ return {
+ id: ex?.id || `lec_${idx + 1}_${now}_${rand()}`,
+ index: idx + 1,
+ date: (ex?.date && String(ex.date).trim() !== '') ? ex.date : tplDate,
+ status: ex?.status ?? null
+ };
+ })
+ : [];
+
+ return {
+ ...subj,
+ templateId: tpl.id,
+ templateSyncedAtMs: tplUpdatedMs,
+ courseKind: tpl.courseKind || 'regular',
+ name: tpl.name,
+ credits: Number(tpl.credits) || 0,
+ alairasMin: isExam ? 0 : (Number(tpl.alairasMin) || 0),
+ megajanlottMin: isExam
+ ? 59.5
+ : (tpl.megajanlottMin !== undefined && tpl.megajanlottMin !== null && tpl.megajanlottMin !== ''
+ ? Number(tpl.megajanlottMin)
+ : 60),
+ megajanlottMinZH: isExam ? 0 : (Number(tpl.megajanlottMinZH) || 0),
+ totalClasses: finalTotalClasses,
+ minAttendanceAlairas: isExam ? 0 : (Number(tpl.minAttendanceAlairas) || 0),
+ minAttendanceMegajanlott: isExam ? 0 : (Number(tpl.minAttendanceMegajanlott) || 0),
+ attendanceSessions: mergedSessions,
+ hasLectures,
+ totalLectures: finalTotalLectures,
+ lectureAttendanceSessions: mergedLectureSessions,
+ customBuckets: mergedBuckets,
+ assessments: mergedAssessments
+ };
+}
+
 function getTodayFormattedHu() {
  const now = new Date();
  const y = now.getFullYear();
@@ -2944,6 +3206,12 @@ export default function App() {
  const [draggedSubjectIdx, setDraggedSubjectIdx] = useState(null);
  const [dragOverSubjectIdx, setDragOverSubjectIdx] = useState(null);
 
+ const [openItemSortMenuKey, setOpenItemSortMenuKey] = useState(null);
+ const [itemCustomSortModal, setItemCustomSortModal] = useState(null);
+ const [draggedItemIdx, setDraggedItemIdx] = useState(null);
+ const [dragOverItemIdx, setDragOverItemIdx] = useState(null);
+ const syncedTemplateKeysRef = useRef(new Set());
+
  const [reclassificationThreshold, setReclassificationThreshold] = useState(() => {
  const saved = parseFloat(localStorage.getItem('bge_reclassification_threshold'));
  return !isNaN(saved) && saved >= 1 && saved <= 5 ? saved : DEFAULT_RECLASSIFICATION_AVG_THRESHOLD;
@@ -3480,6 +3748,30 @@ export default function App() {
  document.removeEventListener('touchstart', handleOutsideClick);
  };
  }, [isSortMenuOpen]);
+
+ useEffect(() => {
+ if (!openItemSortMenuKey) return;
+ const handleOutsideItemSortClick = (event) => {
+ if (
+ event.target &&
+ typeof event.target.closest === 'function' &&
+ event.target.closest('[data-item-sort-menu="true"]')
+ ) {
+ return;
+ }
+ setOpenItemSortMenuKey(null);
+ };
+ document.addEventListener('mousedown', handleOutsideItemSortClick);
+ document.addEventListener('touchstart', handleOutsideItemSortClick);
+ return () => {
+ document.removeEventListener('mousedown', handleOutsideItemSortClick);
+ document.removeEventListener('touchstart', handleOutsideItemSortClick);
+ };
+ }, [openItemSortMenuKey]);
+
+ useEffect(() => {
+ setOpenItemSortMenuKey(null);
+ }, [activeSubjectId, detailTab]);
 
  useEffect(() => {
  const unsub = onAuthStateChanged(auth, (currentUser) => {
@@ -4297,15 +4589,102 @@ export default function App() {
  }
  );
 
+ const unsubTemplates = onSnapshot(
+ collection(db, 'subjectTemplates'),
+ (snapshot) => {
+ const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+ list.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'hu'));
+ setTemplates(list);
+ writeLocalCache(TEMPLATES_CACHE_KEY, list);
+ },
+ () => {
  fetchTemplates(false);
+ }
+ );
  fetchReleases(false);
 
  return () => {
  unsubSubj();
  unsubSem();
  unsubPrefs();
+ unsubTemplates();
  };
  }, [user]);
+
+ useEffect(() => {
+ if (!user || !userDataLoaded || !Array.isArray(subjects) || subjects.length === 0 || !Array.isArray(templates) || templates.length === 0) {
+ return;
+ }
+
+ const templatesById = new Map();
+ const templatesByName = new Map();
+ templates.forEach(tpl => {
+ if (!tpl?.id) return;
+ templatesById.set(tpl.id, tpl);
+ const nKey = normalizeTemplateMatchKey(tpl.name);
+ if (nKey) {
+ if (!templatesByName.has(nKey)) templatesByName.set(nKey, []);
+ templatesByName.get(nKey).push(tpl);
+ }
+ });
+
+ const updatesToCommit = [];
+
+ subjects.forEach(subj => {
+ if (!subj || !subj.id || subj.disablePointCalc) return;
+
+ let matchedTpl = null;
+ if (subj.templateId && templatesById.has(subj.templateId)) {
+ matchedTpl = templatesById.get(subj.templateId);
+ } else if (!subj.templateId) {
+ const candidates = templatesByName.get(normalizeTemplateMatchKey(subj.name)) || [];
+ if (candidates.length > 0) {
+ const subjCanonical = getCanonicalSemesterCode(subj.semester);
+ matchedTpl = candidates.find(t => {
+ if (t.id === subj.id) return false;
+ const tCanonical = getCanonicalSemesterCode(t.sourceSemester);
+ return Boolean(subjCanonical && tCanonical && subjCanonical === tCanonical);
+ }) || (candidates.length === 1 && candidates[0].id !== subj.id ? candidates[0] : null);
+ }
+ }
+
+ if (!matchedTpl || matchedTpl.id === subj.id) return;
+
+ const tplUpdatedMs = typeof matchedTpl.updatedAtMs === 'number'
+ ? matchedTpl.updatedAtMs
+ : (Date.parse(matchedTpl.updatedAt || '') || 0);
+ if (!tplUpdatedMs) return;
+
+ const lastSyncedMs = Number(subj.templateSyncedAtMs) || 0;
+ if (lastSyncedMs >= tplUpdatedMs) return;
+
+ const syncKey = `${subj.id}__${matchedTpl.id}__${tplUpdatedMs}`;
+ if (syncedTemplateKeysRef.current.has(syncKey)) return;
+ syncedTemplateKeysRef.current.add(syncKey);
+
+ const mergedSubject = mergeSubjectWithTemplate(subj, matchedTpl, tplUpdatedMs);
+ updatesToCommit.push({ id: subj.id, data: mergedSubject });
+ });
+
+ if (updatesToCommit.length === 0) return;
+
+ const batch = writeBatch(db);
+ updatesToCommit.forEach(({ id, data }) => {
+ batch.set(doc(db, 'users', user.uid, 'subjects', id), data);
+ });
+
+ batch.commit()
+ .then(() => {
+ showToast(
+ updatesToCommit.length === 1
+ ? '1 tantárgy sablonja automatikusan frissült (a kitöltött adataid megmaradtak).'
+ : `${updatesToCommit.length} tantárgy sablonja automatikusan frissült (a kitöltött adataid megmaradtak).`
+ );
+ })
+ .catch((err) => {
+ console.warn('Sablon szinkronizálási hiba:', err?.code || err?.message);
+ });
+ }, [user, userDataLoaded, subjects, templates]);
 
  const handleOpenThresholdModal = () => {
  setThresholdInputText(formatHu(reclassificationThreshold, 2));
@@ -4610,6 +4989,7 @@ export default function App() {
  bucketIdMap[b.id] = newBId;
  return {
  id: newBId,
+ templateBucketId: b.id,
  title: b.title,
  maxPoints: b.maxPoints ?? null
  };
@@ -4617,10 +4997,11 @@ export default function App() {
 
  const newAssessments = (tpl.assessments || []).map((a, i) => ({
  id: `item_${now + idx}_${i}_${rand()}`,
+ templateItemId: a.id,
  category: a.category,
  title: a.title,
  date: a.date || '',
- max: a.category === 'ZH' && a.max !== undefined && a.max !== null && a.max !== ''
+ max: a.max !== undefined && a.max !== null && a.max !== ''
  ? Number(a.max)
  : null,
  achieved: null,
@@ -4649,8 +5030,13 @@ export default function App() {
  }))
  : [];
 
+ const tplUpdatedMs = typeof tpl.updatedAtMs === 'number'
+ ? tpl.updatedAtMs
+ : (Date.parse(tpl.updatedAt || '') || Date.now());
  const payload = {
  id: newSubjId,
+ templateId: tpl.id,
+ templateSyncedAtMs: tplUpdatedMs,
  semester: currentSem,
  courseKind: tpl.courseKind || 'regular',
  courseType: 'mandatory',
@@ -5387,7 +5773,7 @@ export default function App() {
  category: a.category,
  title: a.title,
  date: a.date || '',
- max: a.category === 'ZH' && a.max !== undefined && a.max !== null && a.max !== ''
+ max: a.max !== undefined && a.max !== null && a.max !== ''
  ? Number(a.max)
  : null,
  achieved: null,
@@ -5439,7 +5825,8 @@ export default function App() {
  lectureAttendanceSessions: sanitizedLectureSessions,
  customBuckets: sanitizedBuckets,
  assessments: sanitizedAssessments,
- updatedAt: new Date().toISOString()
+ updatedAt: new Date().toISOString(),
+ updatedAtMs: Date.now()
  };
  };
 
@@ -5449,7 +5836,7 @@ export default function App() {
  const payload = buildSanitizedTemplate(subj);
  await setDoc(doc(db, 'subjectTemplates', subj.id), payload);
  await fetchTemplates(true);
- showToast(`„${subj.name}” közzétéve a(z) ${formatSemesterLabel(subj.semester)} sablonjai közé!`);
+ showToast(`„${subj.name}” sablon közzétéve/frissítve — mindenkinél automatikusan frissül adatvesztés nélkül!`);
  } catch (err) {
  alert('Hiba a sablon mentésekor: ' + err.message);
  }
@@ -5465,7 +5852,7 @@ export default function App() {
  });
  await batch.commit();
  await fetchTemplates(true);
- showToast(`${semesterSubjects.length} tárgy közzétéve a(z) ${formatSemesterLabel(selectedSemester)} sablonjai közé!`);
+ showToast(`${semesterSubjects.length} tárgysablon közzétéve/frissítve — mindenkinél automatikusan frissül adatvesztés nélkül!`);
  } catch (err) {
  alert('Hiba a sablonok mentésekor: ' + err.message);
  }
@@ -5492,6 +5879,7 @@ export default function App() {
  bucketIdMap[b.id] = newBId;
  return {
  id: newBId,
+ templateBucketId: b.id,
  title: b.title,
  maxPoints: b.maxPoints ?? null
  };
@@ -5499,10 +5887,11 @@ export default function App() {
 
  const newAssessments = (tpl.assessments || []).map((a, i) => ({
  id: `item_${now}_${i}_${rand()}`,
+ templateItemId: a.id,
  category: a.category,
  title: a.title,
  date: a.date || '',
- max: a.category === 'ZH' && a.max !== undefined && a.max !== null && a.max !== ''
+ max: a.max !== undefined && a.max !== null && a.max !== ''
  ? Number(a.max)
  : null,
  achieved: null,
@@ -5531,8 +5920,12 @@ export default function App() {
  }))
  : [];
 
+ const tplUpdatedMs = typeof tpl.updatedAtMs === 'number'
+ ? tpl.updatedAtMs
+ : (Date.parse(tpl.updatedAt || '') || Date.now());
  const payload = {
  id: newSubjId,
+ ...(tpl.isWebScrapedMajor ? {} : { templateId: tpl.id, templateSyncedAtMs: tplUpdatedMs }),
  semester: targetSemester,
  courseKind: tpl.courseKind || 'regular',
  courseType: tpl.courseType || 'mandatory',
@@ -5626,7 +6019,12 @@ export default function App() {
  zhMax += max;
  });
 
- const pluszItems = assessments.filter(a => a.category === 'Pluszpont');
+ const sortCfg = subj.assessmentSortConfig || {};
+ const pluszItems = sortCollectorItems(
+ assessments.filter(a => a.category === 'Pluszpont'),
+ sortCfg['Pluszpont'],
+ getEffectiveScore
+ );
  const pluszEval = evaluateCappedItems(pluszItems, BONUS_POINTS_CAP, getEffectiveScore);
  const pluszElert = pluszEval.countedElert;
  const pluszMax = pluszItems.some(a => a.max !== null && a.max !== undefined && a.max !== '' && Number(a.max) > 0)
@@ -5638,7 +6036,11 @@ export default function App() {
  const bucketStatsMap = {};
 
  customBuckets.forEach(bucket => {
- const bItems = assessments.filter(a => a.category === 'Egyeb' && a.bucketId === bucket.id);
+ const bItems = sortCollectorItems(
+ assessments.filter(a => a.category === 'Egyeb' && a.bucketId === bucket.id),
+ sortCfg[`bucket_${bucket.id}`],
+ getEffectiveScore
+ );
  const bEval = evaluateCappedItems(bItems, bucket.maxPoints, getEffectiveScore);
  bucketStatsMap[bucket.id] = bEval;
  egyebElert += bEval.countedElert;
@@ -5646,8 +6048,12 @@ export default function App() {
  });
 
  const validBucketIds = new Set(customBuckets.map(b => b.id));
- const unassignedEgyebItems = assessments.filter(
+ const unassignedEgyebItems = sortCollectorItems(
+ assessments.filter(
  a => a.category === 'Egyeb' && (!a.bucketId || !validBucketIds.has(a.bucketId))
+ ),
+ sortCfg['unassigned'],
+ getEffectiveScore
  );
  const unassignedEgyebEval = evaluateCappedItems(unassignedEgyebItems, null, getEffectiveScore);
  egyebElert = +(egyebElert + unassignedEgyebEval.countedElert).toFixed(2);
@@ -6190,6 +6596,70 @@ export default function App() {
  }
  };
 
+ const handleSelectItemSortMode = async (subj, collectorKey, nextMode) => {
+ if (!user || !subj || !collectorKey) return;
+ setOpenItemSortMenuKey(null);
+ const prevCfg = subj.assessmentSortConfig || {};
+ const prevCollector = prevCfg[collectorKey] || {};
+ const nextConfig = {
+ ...prevCfg,
+ [collectorKey]: {
+ ...prevCollector,
+ mode: nextMode
+ }
+ };
+ await updateDoc(doc(db, 'users', user.uid, 'subjects', subj.id), {
+ assessmentSortConfig: nextConfig
+ });
+ };
+
+ const handleOpenItemCustomSortModal = (subj, collectorKey, collectorTitle, currentSortedItems) => {
+ setOpenItemSortMenuKey(null);
+ setDraggedItemIdx(null);
+ setDragOverItemIdx(null);
+ setItemCustomSortModal({
+ subjectId: subj.id,
+ subjectName: subj.name,
+ collectorKey,
+ collectorTitle,
+ draftIds: (currentSortedItems || []).map(item => item.id)
+ });
+ };
+
+ const handleMoveItemCustomSort = (fromIdx, toIdx) => {
+ if (fromIdx === toIdx || fromIdx < 0 || toIdx < 0) return;
+ setItemCustomSortModal(prev => {
+ if (!prev || fromIdx >= prev.draftIds.length || toIdx >= prev.draftIds.length) return prev;
+ const nextIds = [...prev.draftIds];
+ const [moved] = nextIds.splice(fromIdx, 1);
+ nextIds.splice(toIdx, 0, moved);
+ return { ...prev, draftIds: nextIds };
+ });
+ };
+
+ const handleSaveItemCustomSort = async (e) => {
+ e.preventDefault();
+ if (!user || !itemCustomSortModal) return;
+ const targetSubj = subjects.find(s => s.id === itemCustomSortModal.subjectId);
+ if (!targetSubj) {
+ setItemCustomSortModal(null);
+ return;
+ }
+ const prevCfg = targetSubj.assessmentSortConfig || {};
+ const nextConfig = {
+ ...prevCfg,
+ [itemCustomSortModal.collectorKey]: {
+ mode: 'custom',
+ customOrder: itemCustomSortModal.draftIds
+ }
+ };
+ await updateDoc(doc(db, 'users', user.uid, 'subjects', targetSubj.id), {
+ assessmentSortConfig: nextConfig
+ });
+ setItemCustomSortModal(null);
+ showToast(`Egyéni sorrend elmentve (${itemCustomSortModal.collectorTitle})!`);
+ };
+
  const activeJokerInfo = useMemo(() => {
  for (const subj of semesterSubjects) {
  const found = (subj.assessments || []).find(a => a.isJokerRewritten);
@@ -6684,7 +7154,11 @@ export default function App() {
  lectureAttendanceSessions: lectureSessions,
  manualGrade: editingSubject.manualGrade || '',
  customBuckets: finalBuckets,
- assessments: finalAssessments
+ assessments: finalAssessments,
+ ...(editingSubject.templateId ? { templateId: editingSubject.templateId } : {}),
+ ...(editingSubject.templateSyncedAtMs ? { templateSyncedAtMs: editingSubject.templateSyncedAtMs } : {}),
+ ...(editingSubject.assessmentSortConfig ? { assessmentSortConfig: editingSubject.assessmentSortConfig } : {}),
+ ...(editingSubject.autoExamScore !== undefined ? { autoExamScore: editingSubject.autoExamScore } : {})
  };
 
  await setDoc(doc(db, 'users', user.uid, 'subjects', id), payload);
@@ -6729,6 +7203,7 @@ export default function App() {
  isJokerModalOpen ||
  semesterToDelete ||
  isCustomSortModalOpen ||
+ Boolean(itemCustomSortModal) ||
  isAvgCalcOpen ||
  isStatsModalOpen ||
  isInstallGuideOpen ||
@@ -6761,6 +7236,7 @@ export default function App() {
  setExcelImportTargetSemCode(null);
  return;
  }
+ if (itemCustomSortModal) { setItemCustomSortModal(null); return; }
  if (itemModal) { setItemModal(null); return; }
  if (bucketModal) { setBucketModal(null); return; }
  if (isSubjectModalOpen) {
@@ -6865,7 +7341,7 @@ export default function App() {
  setSelectedSubjectMajorId(null);
  return;
  }
- if (activeSubject && !itemModal && !bucketModal && !isSubjectModalOpen) {
+ if (activeSubject && !itemModal && !bucketModal && !isSubjectModalOpen && !itemCustomSortModal) {
  e.preventDefault();
  setActiveSubjectId(null);
  }
@@ -12156,6 +12632,175 @@ export default function App() {
  )}
  </AnimatedPresence>
 
+ {/* EGYÉNI TÉTELSORREND MODAL (GYŰJTŐNKÉNT) */}
+ <AnimatedPresence show={Boolean(itemCustomSortModal)} variant="modal" duration={240}>
+ {itemCustomSortModal && (() => {
+ const targetSubj = subjects.find(s => s.id === itemCustomSortModal.subjectId);
+ const subjAssessments = toArraySafe(targetSubj?.assessments);
+ return (
+ <div
+ data-top-modal="true"
+ onClick={() => setItemCustomSortModal(null)}
+ className={`fixed inset-0 ${modalBackdrop} z-[60] flex items-center justify-center p-2.5 sm:p-4 overscroll-none`}
+ >
+ <div
+ onClick={(e) => e.stopPropagation()}
+ className={`rounded-2xl max-w-md w-full max-h-[90dvh] flex flex-col shadow-2xl overflow-hidden border ${modalCard}`}
+ >
+ <div className={`px-4 sm:px-6 py-3.5 sm:py-4 flex justify-between items-center shrink-0 ${modalHeader}`}>
+ <div className="flex items-center gap-2.5 min-w-0">
+ <div className="w-8 h-8 rounded-lg bg-amber-400 text-slate-950 flex items-center justify-center shrink-0">
+ <ArrowUpDown className="w-4 h-4" />
+ </div>
+ <div className="min-w-0">
+ <h2 className="font-extrabold text-sm sm:text-base leading-tight">Egyéni sorrend beállítása</h2>
+ <p className={`text-[11px] truncate ${modalHeaderSubtext}`}>
+ {itemCustomSortModal.collectorTitle} • {itemCustomSortModal.subjectName}
+ </p>
+ </div>
+ </div>
+ <button
+  data-no-glass="true"
+ type="button"
+ onClick={() => setItemCustomSortModal(null)}
+ className={`p-1.5 cursor-pointer shrink-0 ${modalCloseBtn}`}
+ >
+ <X className="w-5 h-5" />
+ </button>
+ </div>
+
+ <form onSubmit={handleSaveItemCustomSort} className="flex flex-col flex-1 min-h-0">
+ <div className="p-4 sm:p-6 overflow-y-auto overscroll-contain space-y-2.5 flex-1 min-h-0">
+ <p className={`text-xs mb-3 leading-relaxed ${textMuted}`}>
+ Húzd a pont tételeket a kívánt sorrendbe (vagy használd a jobb oldali nyilakat), majd kattints a <strong>Mentés</strong> gombra:
+ </p>
+
+ {itemCustomSortModal.draftIds.map((itemId, idx) => {
+ const item = subjAssessments.find(a => a.id === itemId);
+ if (!item) return null;
+ const isDragging = draggedItemIdx === idx;
+ const isDragOver = dragOverItemIdx === idx && draggedItemIdx !== idx;
+ const eff = getEffectiveScore(item);
+ const hasScore = eff !== null && eff !== undefined && eff !== '' && !isNaN(Number(eff));
+ const bonusVal = (item.category === 'ZH' && item.bonusPoints !== null && item.bonusPoints !== undefined && item.bonusPoints !== '' && !isNaN(Number(item.bonusPoints)))
+ ? Number(item.bonusPoints)
+ : 0;
+ const totalScore = hasScore ? +(Number(eff) + bonusVal).toFixed(2) : null;
+ const hasMax = item.max !== null && item.max !== undefined && item.max !== '' && Number(item.max) > 0;
+
+ return (
+ <div
+ key={item.id}
+ draggable
+ onDragStart={() => setDraggedItemIdx(idx)}
+ onDragOver={(e) => {
+ e.preventDefault();
+ if (dragOverItemIdx !== idx) {
+ setDragOverItemIdx(idx);
+ }
+ }}
+ onDrop={(e) => {
+ e.preventDefault();
+ if (draggedItemIdx !== null) {
+ handleMoveItemCustomSort(draggedItemIdx, idx);
+ }
+ setDraggedItemIdx(null);
+ setDragOverItemIdx(null);
+ }}
+ onDragEnd={() => {
+ setDraggedItemIdx(null);
+ setDragOverItemIdx(null);
+ }}
+ className={`p-3 rounded-xl border flex items-center justify-between gap-2.5 select-none transition cursor-grab active:cursor-grabbing ${
+ isDragging
+ ? 'opacity-50 border-amber-400 scale-[0.99]'
+ : isDragOver
+ ? darkMode
+ ? 'border-amber-400 bg-amber-400/15'
+ : 'border-amber-400 bg-amber-50'
+ : darkMode
+ ? 'bg-slate-800/80 border-slate-700 hover:border-slate-600'
+ : 'bg-slate-50 border-slate-200 hover:border-slate-300'
+ }`}
+ >
+ <div className="flex items-center gap-2.5 min-w-0">
+ <GripVertical className={`w-4 h-4 shrink-0 ${textMuted}`} />
+ <span className="w-5 h-5 rounded-full bg-amber-400/20 text-amber-500 text-[11px] font-extrabold flex items-center justify-center shrink-0">
+ {idx + 1}
+ </span>
+ <div className="min-w-0">
+ <p className={`text-xs sm:text-sm font-bold truncate ${textStrong}`}>
+ {item.title}
+ </p>
+ <p className={`text-[10px] ${textMuted}`}>
+ {hasScore
+ ? `${formatHu(totalScore)}${hasMax ? ` / ${formatHu(item.max)} p` : ' p'}`
+ : hasMax
+ ? `— / ${formatHu(item.max)} p`
+ : 'Még nincs pontszám'}
+ {item.date ? ` • ${item.date}` : ''}
+ </p>
+ </div>
+ </div>
+
+ <div className="flex items-center gap-1 shrink-0">
+ <button
+ type="button"
+ disabled={idx === 0}
+ onClick={() => handleMoveItemCustomSort(idx, idx - 1)}
+ title="Feljebb"
+ className={`p-1.5 rounded-lg border transition cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed ${
+ darkMode
+ ? 'bg-slate-900 border-slate-700 text-slate-300 hover:text-amber-400'
+ : 'bg-white border-slate-200 text-slate-600 hover:text-slate-900'
+ }`}
+ >
+ <ArrowUp className="w-3.5 h-3.5" />
+ </button>
+ <button
+ type="button"
+ disabled={idx === itemCustomSortModal.draftIds.length - 1}
+ onClick={() => handleMoveItemCustomSort(idx, idx + 1)}
+ title="Lejjebb"
+ className={`p-1.5 rounded-lg border transition cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed ${
+ darkMode
+ ? 'bg-slate-900 border-slate-700 text-slate-300 hover:text-amber-400'
+ : 'bg-white border-slate-200 text-slate-600 hover:text-slate-900'
+ }`}
+ >
+ <ArrowDown className="w-3.5 h-3.5" />
+ </button>
+ </div>
+ </div>
+ );
+ })}
+ </div>
+
+ <div className={`px-4 sm:px-6 py-3.5 border-t flex justify-end gap-2 shrink-0 ${
+ darkMode ? 'border-slate-800 bg-slate-900/70' : 'border-slate-200 bg-slate-50'
+ }`}>
+ <button
+ data-no-glass="true"
+ type="button"
+ onClick={() => setItemCustomSortModal(null)}
+ className={`px-4 py-2 text-sm rounded-lg cursor-pointer ${textMuted}`}
+ >
+ Mégse
+ </button>
+ <button
+ type="submit"
+ className="px-4 py-2 text-sm font-bold bg-amber-400 hover:bg-amber-300 text-slate-950 rounded-lg cursor-pointer"
+ >
+ Mentés
+ </button>
+ </div>
+ </form>
+ </div>
+ </div>
+ );
+ })()}
+ </AnimatedPresence>
+
  {/* ADATVÉDELMI TÁJÉKOZTATÓ (GDPR) — KÖTELEZŐ EGYSZERI ELFOGADÁS / MEGTEKINTÉS */}
  <AnimatedPresence show={Boolean(mustAcceptGdpr || isGdprModalOpen)} variant="modal" duration={240}>
  {(mustAcceptGdpr || isGdprModalOpen) && (
@@ -13832,7 +14477,104 @@ export default function App() {
  <AnimatedPresence show={Boolean(activeSubject)} variant="modal" duration={240}>
  {activeSubject && (() => {
  const st = subjectStatsMap[activeSubject.id] || calcStats(activeSubject);
- const zhItems = (activeSubject.assessments || []).filter(a => a.category === 'ZH');
+ const itemSortCfg = activeSubject.assessmentSortConfig || {};
+ const zhItems = sortCollectorItems(
+ (activeSubject.assessments || []).filter(a => a.category === 'ZH'),
+ itemSortCfg['ZH'],
+ getEffectiveScore
+ );
+
+ const renderCollectorSortMenu = (collectorKey, collectorTitle, currentItems) => {
+ if (!currentItems || currentItems.length === 0) return null;
+ const currentMode = itemSortCfg[collectorKey]?.mode || 'custom';
+ const isOpen = openItemSortMenuKey === collectorKey;
+ const compactModeLabels = {
+ az: 'A → Z',
+ za: 'Z → A',
+ points_desc: 'Pont ↓',
+ points_asc: 'Pont ↑',
+ custom: 'Egyéni'
+ };
+
+ return (
+ <div data-item-sort-menu="true" className="relative">
+ <button
+ type="button"
+ onClick={() => setOpenItemSortMenuKey(prev => (prev === collectorKey ? null : collectorKey))}
+ aria-expanded={isOpen}
+ title={`Tételek rendezése (${collectorTitle})`}
+ className={`px-2.5 py-1.5 text-xs font-bold rounded-lg border flex items-center gap-1 transition cursor-pointer shrink-0 ${
+ darkMode
+ ? 'bg-slate-800/90 hover:bg-slate-700 text-slate-200 border-slate-700'
+ : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200 shadow-2xs'
+ }`}
+ >
+ <ArrowUpDown className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+ <span className="hidden sm:inline">Rendezés:</span>
+ <span className="text-amber-500">{compactModeLabels[currentMode] || 'Egyéni'}</span>
+ <ChevronDown className={`w-3 h-3 transition-transform duration-150 ${isOpen ? 'rotate-180' : ''}`} />
+ </button>
+
+ <AnimatedPresence show={Boolean(isOpen)} variant="dropdown" duration={190}>
+ {isOpen && (
+ <div className={`absolute right-0 mt-1.5 w-60 rounded-2xl border shadow-2xl p-2 space-y-1 z-50 ${
+ darkMode
+ ? 'bg-slate-900/92 border-white/15 text-slate-100 backdrop-blur-2xl'
+ : 'bg-white/95 border-slate-200 text-slate-800 backdrop-blur-2xl'
+ }`}>
+ {[
+ { id: 'az', label: 'A → Z (ABC sorrend)' },
+ { id: 'za', label: 'Z → A (fordított ABC)' },
+ { id: 'points_desc', label: 'Pontszám (csökkenő)' },
+ { id: 'points_asc', label: 'Pontszám (növekvő)' }
+ ].map(opt => {
+ const active = currentMode === opt.id;
+ return (
+ <button
+ data-no-glass="ghost"
+ key={opt.id}
+ type="button"
+ onClick={() => handleSelectItemSortMode(activeSubject, collectorKey, opt.id)}
+ className={`w-full px-3 py-2 rounded-xl text-xs font-bold flex items-center justify-between gap-2 text-left transition cursor-pointer ${
+ active
+ ? 'bg-amber-400 text-slate-950'
+ : darkMode
+ ? 'hover:bg-slate-800 text-slate-200'
+ : 'hover:bg-slate-100 text-slate-700'
+ }`}
+ >
+ <span>{opt.label}</span>
+ {active && <Check className="w-3.5 h-3.5 shrink-0" />}
+ </button>
+ );
+ })}
+
+ <div className={`my-1 border-t ${darkMode ? 'border-slate-800' : 'border-slate-200'}`} />
+
+ <button
+ data-no-glass="ghost"
+ type="button"
+ onClick={() => handleOpenItemCustomSortModal(activeSubject, collectorKey, collectorTitle, currentItems)}
+ className={`w-full px-3 py-2 rounded-xl text-xs font-bold flex items-center justify-between gap-2 text-left transition cursor-pointer ${
+ currentMode === 'custom'
+ ? 'bg-amber-400 text-slate-950'
+ : darkMode
+ ? 'hover:bg-slate-800 text-amber-400'
+ : 'hover:bg-amber-50 text-slate-900'
+ }`}
+ >
+ <span className="flex items-center gap-1.5">
+ <GripVertical className="w-3.5 h-3.5" />
+ Egyéni sorrend beállítása...
+ </span>
+ {currentMode === 'custom' && <Check className="w-3.5 h-3.5 shrink-0" />}
+ </button>
+ </div>
+ )}
+ </AnimatedPresence>
+ </div>
+ );
+ };
  const customBuckets = activeSubject.customBuckets || [];
  const sessions = createDefaultSessions(
  activeSubject.totalClasses ?? (activeSubject.attendanceSessions || []).length,
@@ -14546,6 +15288,8 @@ export default function App() {
  </span>
  )}
  </div>
+ <div className="flex items-center gap-1.5 flex-wrap shrink-0">
+ {renderCollectorSortMenu('ZH', 'ZH-k (Zárthelyi dolgozatok)', zhItems)}
  <button
  onClick={() => setItemModal({
  category: 'ZH',
@@ -14562,6 +15306,7 @@ export default function App() {
  >
  <Plus className="w-3.5 h-3.5" /> ZH hozzáadása
  </button>
+ </div>
  </div>
 
  {zhItems.length === 0 ? (
@@ -14594,6 +15339,8 @@ export default function App() {
  Ebben a kategóriában maximum <strong>{BONUS_POINTS_CAP} pont</strong> számítható be az összpontszámba.
  </p>
  </div>
+ <div className="flex items-center gap-1.5 flex-wrap shrink-0">
+ {renderCollectorSortMenu('Pluszpont', 'Pluszpontok', st.pluszProcessed.map(p => p.item))}
  <button
  onClick={() => setItemModal({ category: 'Pluszpont', bucketId: '', title: '', date: '', max: '', achieved: '' })}
  className={`px-3 py-1.5 text-xs font-semibold rounded-lg flex items-center gap-1 cursor-pointer shrink-0 ${
@@ -14602,6 +15349,7 @@ export default function App() {
  >
  <Plus className="w-3.5 h-3.5" /> Pluszpont hozzáadása
  </button>
+ </div>
  </div>
 
  {st.pluszProcessed.length === 0 ? (
@@ -14676,6 +15424,7 @@ export default function App() {
  </div>
 
  <div className="flex items-center gap-1.5 flex-wrap">
+ {renderCollectorSortMenu(`bucket_${bucket.id}`, bucket.title, bStats.processed.map(p => p.item))}
  <button
  onClick={() => setItemModal({ category: 'Egyeb', bucketId: bucket.id, title: '', date: '', max: '', achieved: '' })}
  className={`px-2.5 py-1.5 sm:py-1 text-xs font-semibold rounded-lg flex items-center gap-1 cursor-pointer ${
@@ -14722,6 +15471,7 @@ export default function App() {
  <div className={`rounded-2xl border p-3.5 sm:p-4 space-y-3 transition-opacity ${bgSubCard} ${
  (st.needsAutoExam || st.autoFailedByNoSignature) ? 'opacity-50' : ''
  }`}>
+ <div className="flex flex-wrap items-center justify-between gap-2">
  <div className="flex items-center gap-2 flex-wrap">
  <h4 className={`font-bold text-sm ${textStrong}`}>Besorolatlan egyéb tételek</h4>
  <span className={`px-2 py-0.5 text-xs font-bold rounded-full ${
@@ -14730,6 +15480,8 @@ export default function App() {
  {formatHu(st.unassignedEgyebEval.countedElert)}{st.unassignedEgyebEval.effectiveMax > 0 ? ` / ${formatHu(st.unassignedEgyebEval.effectiveMax)} p` : ' p'}
  {unassignedPct !== null && ` (${formatHu(unassignedPct)}%)`}
  </span>
+ </div>
+ {renderCollectorSortMenu('unassigned', 'Besorolatlan egyéb tételek', st.unassignedEgyebEval.processed.map(p => p.item))}
  </div>
  <div className="space-y-2.5">
  {st.unassignedEgyebEval.processed.map(({ item, capMeta }) => renderItemRow(item, capMeta))}

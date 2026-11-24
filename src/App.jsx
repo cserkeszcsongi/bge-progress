@@ -9153,18 +9153,18 @@ export default function App() {
  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.07), inset 0 -1px 0 rgba(255, 255, 255, 0.55) !important;
  }
  .bge-fluid-app.bge-glass-dark .bge-frosted-dropdown {
- background-color: rgba(15, 23, 42, 0.62) !important;
+ background-color: rgba(15, 23, 42, 0.82) !important;
  backdrop-filter: blur(28px) saturate(190%) !important;
  -webkit-backdrop-filter: blur(28px) saturate(190%) !important;
- border: 1px solid rgba(255, 255, 255, 0.16) !important;
- box-shadow: 0 20px 44px rgba(2, 6, 23, 0.52), inset 0 1px 0 rgba(255, 255, 255, 0.16) !important;
+ border: 1px solid rgba(255, 255, 255, 0.18) !important;
+ box-shadow: 0 20px 44px rgba(2, 6, 23, 0.62), inset 0 1px 0 rgba(255, 255, 255, 0.16) !important;
  }
  .bge-fluid-app.bge-glass-light .bge-frosted-dropdown {
- background-color: rgba(255, 255, 255, 0.64) !important;
+ background-color: rgba(255, 255, 255, 0.84) !important;
  backdrop-filter: blur(28px) saturate(190%) !important;
  -webkit-backdrop-filter: blur(28px) saturate(190%) !important;
- border: 1px solid rgba(255, 255, 255, 0.82) !important;
- box-shadow: 0 18px 40px rgba(15, 23, 42, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.85) !important;
+ border: 1px solid rgba(255, 255, 255, 0.88) !important;
+ box-shadow: 0 18px 40px rgba(15, 23, 42, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.9) !important;
  }
  .bge-fluid-app button:not([data-no-glass="true"]):not([data-no-glass="ghost"]),
  .bge-fluid-app a[href]:not([data-no-glass="true"]):not([data-no-glass="ghost"]) {
@@ -10786,12 +10786,11 @@ export default function App() {
  <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-150 ${isSortMenuOpen ? 'rotate-180' : ''}`} />
  </button>
 
- <AnimatedPresence show={Boolean(isSortMenuOpen)} variant="dropdown" duration={190}>
  {isSortMenuOpen && (
- <div className={`bge-frosted-dropdown absolute right-0 mt-2 w-64 rounded-2xl border shadow-2xl p-2 space-y-1 z-50 ${
+ <div className={`bge-frosted-dropdown bge-fluid-reveal absolute right-0 mt-2 w-64 rounded-2xl border shadow-2xl p-2 space-y-1 z-50 ${
  darkMode
- ? 'bg-slate-900/48 border-white/15 text-slate-100 backdrop-blur-2xl'
- : 'bg-white/44 border-white/80 text-slate-800 backdrop-blur-2xl'
+ ? 'bg-slate-900/82 border-white/15 text-slate-100 backdrop-blur-2xl'
+ : 'bg-white/84 border-white/80 text-slate-800 backdrop-blur-2xl'
  }`}>
  {[
  { id: 'az', label: 'A → Z (ABC sorrend)' },
@@ -10842,7 +10841,6 @@ export default function App() {
  </button>
  </div>
  )}
- </AnimatedPresence>
  </div>
  </div>
  </>
@@ -14636,12 +14634,11 @@ export default function App() {
  <ChevronDown className={`w-3 h-3 transition-transform duration-150 ${isOpen ? 'rotate-180' : ''}`} />
  </button>
 
- <AnimatedPresence show={Boolean(isOpen)} variant="dropdown" duration={190}>
  {isOpen && (
- <div className={`bge-frosted-dropdown absolute ${openItemSortMenuAlign === 'right' ? 'right-0' : 'left-0'} mt-1.5 w-60 max-w-[calc(100vw-2rem)] rounded-2xl border shadow-2xl p-2 space-y-1 z-50 ${
+ <div className={`bge-frosted-dropdown bge-fluid-reveal absolute ${openItemSortMenuAlign === 'right' ? 'right-0' : 'left-0'} mt-1.5 w-60 max-w-[calc(100vw-2rem)] rounded-2xl border shadow-2xl p-2 space-y-1 z-50 ${
  darkMode
- ? 'bg-slate-900/48 border-white/15 text-slate-100 backdrop-blur-2xl'
- : 'bg-white/44 border-white/80 text-slate-800 backdrop-blur-2xl'
+ ? 'bg-slate-900/82 border-white/15 text-slate-100 backdrop-blur-2xl'
+ : 'bg-white/84 border-white/80 text-slate-800 backdrop-blur-2xl'
  }`}>
  {[
  { id: 'az', label: 'A → Z (ABC sorrend)' },
@@ -14692,7 +14689,6 @@ export default function App() {
  </button>
  </div>
  )}
- </AnimatedPresence>
  </div>
  );
  };

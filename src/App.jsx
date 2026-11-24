@@ -11157,15 +11157,6 @@ export default function App() {
  Vizsgakurzus
  </span>
  )}
- {st.hasPendingJokerForSubject && !st.isGradeOnlyCard && (
- <span className={`inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold rounded-full border ${
- darkMode
- ? 'bg-violet-500/25 text-violet-200 border-violet-400/50'
- : 'bg-violet-100 text-violet-800 border-violet-300'
- }`}>
- <JokerIcon className="w-3 h-3" /> Joker ZH várakozik ({st.pendingJokerZhTitle})
- </span>
- )}
  {hasJokerInSubject && !st.isGradeOnlyCard && (
  <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold rounded-full bg-violet-600/20 text-violet-400 border border-violet-500/30">
  <JokerIcon className="w-3 h-3" /> Joker ZH

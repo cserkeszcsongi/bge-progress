@@ -2996,7 +2996,7 @@ function AnimatedPresence({
  const content = show ? children : lastChildrenRef.current;
  if (!shouldRender || !content) return null;
 
- const isContentsVariant = variant === 'modal' || variant === 'backdrop' || variant === 'toast';
+ const isContentsVariant = variant === 'modal' || variant === 'backdrop' || variant === 'toast' || variant === 'dropdown';
  const stateClass = `bge-presence-${variant}-${stage}`;
 
  return (
@@ -9153,18 +9153,18 @@ export default function App() {
  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.07), inset 0 -1px 0 rgba(255, 255, 255, 0.55) !important;
  }
  .bge-fluid-app.bge-glass-dark .bge-frosted-dropdown {
- background-color: rgba(15, 23, 42, 0.48) !important;
- backdrop-filter: blur(26px) saturate(190%) !important;
- -webkit-backdrop-filter: blur(26px) saturate(190%) !important;
- border: 1px solid rgba(255, 255, 255, 0.14) !important;
- box-shadow: 0 18px 40px rgba(2, 6, 23, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.14) !important;
+ background-color: rgba(15, 23, 42, 0.62) !important;
+ backdrop-filter: blur(28px) saturate(190%) !important;
+ -webkit-backdrop-filter: blur(28px) saturate(190%) !important;
+ border: 1px solid rgba(255, 255, 255, 0.16) !important;
+ box-shadow: 0 20px 44px rgba(2, 6, 23, 0.52), inset 0 1px 0 rgba(255, 255, 255, 0.16) !important;
  }
  .bge-fluid-app.bge-glass-light .bge-frosted-dropdown {
- background-color: rgba(255, 255, 255, 0.44) !important;
- backdrop-filter: blur(26px) saturate(190%) !important;
- -webkit-backdrop-filter: blur(26px) saturate(190%) !important;
- border: 1px solid rgba(255, 255, 255, 0.72) !important;
- box-shadow: 0 16px 36px rgba(15, 23, 42, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.75) !important;
+ background-color: rgba(255, 255, 255, 0.64) !important;
+ backdrop-filter: blur(28px) saturate(190%) !important;
+ -webkit-backdrop-filter: blur(28px) saturate(190%) !important;
+ border: 1px solid rgba(255, 255, 255, 0.82) !important;
+ box-shadow: 0 18px 40px rgba(15, 23, 42, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.85) !important;
  }
  .bge-fluid-app button:not([data-no-glass="true"]):not([data-no-glass="ghost"]),
  .bge-fluid-app a[href]:not([data-no-glass="true"]):not([data-no-glass="ghost"]) {
@@ -9218,12 +9218,12 @@ export default function App() {
  to { opacity: 0; transform: translate3d(0, 22px, 0) scale(0.95); filter: blur(10px); }
  }
  @keyframes bgeDropdownIn {
- from { opacity: 0; transform: translate3d(0, -8px, 0) scale(0.96); }
- to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+ 0% { opacity: 0; transform: translate3d(0, -8px, 0) scale(0.96); }
+ 100% { opacity: 1; transform: none; }
  }
  @keyframes bgeDropdownOut {
- from { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
- to { opacity: 0; transform: translate3d(0, -8px, 0) scale(0.96); }
+ 0% { opacity: 1; transform: none; }
+ 100% { opacity: 0; transform: translate3d(0, -8px, 0) scale(0.96); }
  }
  @keyframes bgeCollapseOut {
  from { opacity: 1; transform: translate3d(0, 0, 0) scaleY(1); filter: blur(0px); }
@@ -9273,15 +9273,11 @@ export default function App() {
  pointer-events: none !important;
  }
 
- .bge-presence-dropdown-enter {
- animation: bgeDropdownIn 220ms cubic-bezier(0.34, 1.28, 0.64, 1) both;
- position: relative;
- z-index: 50;
+ .bge-presence-dropdown-enter > * {
+ animation: bgeDropdownIn 220ms cubic-bezier(0.34, 1.28, 0.64, 1) backwards;
  }
- .bge-presence-dropdown-exit {
+ .bge-presence-dropdown-exit > * {
  animation: bgeDropdownOut 185ms cubic-bezier(0.32, 0.72, 0, 1) forwards !important;
- position: relative;
- z-index: 50;
  pointer-events: none !important;
  }
 

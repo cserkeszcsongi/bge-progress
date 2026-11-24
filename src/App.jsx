@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
 import {
  collection, collectionGroup, doc, getDocs, onSnapshot, setDoc, updateDoc, deleteDoc, writeBatch,
@@ -3246,6 +3247,7 @@ export default function App() {
 
  const [openItemSortMenuKey, setOpenItemSortMenuKey] = useState(null);
  const [openItemSortMenuAlign, setOpenItemSortMenuAlign] = useState('left');
+ const [openItemSortMenuPos, setOpenItemSortMenuPos] = useState(null);
  const [itemCustomSortModal, setItemCustomSortModal] = useState(null);
  const [draggedItemIdx, setDraggedItemIdx] = useState(null);
  const [dragOverItemIdx, setDragOverItemIdx] = useState(null);
@@ -3810,7 +3812,23 @@ export default function App() {
 
  useEffect(() => {
  setOpenItemSortMenuKey(null);
+ setOpenItemSortMenuPos(null);
  }, [activeSubjectId, detailTab]);
+
+ useEffect(() => {
+ if (!openItemSortMenuKey) return;
+ const closeOnViewportChange = () => {
+ setOpenItemSortMenuKey(null);
+ setOpenItemSortMenuPos(null);
+ };
+ const bodyEl = detailModalBodyRef.current;
+ if (bodyEl) bodyEl.addEventListener('scroll', closeOnViewportChange, { passive: true });
+ window.addEventListener('resize', closeOnViewportChange, { passive: true });
+ return () => {
+ if (bodyEl) bodyEl.removeEventListener('scroll', closeOnViewportChange);
+ window.removeEventListener('resize', closeOnViewportChange);
+ };
+ }, [openItemSortMenuKey]);
 
  useEffect(() => {
  const unsub = onAuthStateChanged(auth, (currentUser) => {
@@ -14601,6 +14619,8 @@ export default function App() {
  custom: 'Egyéni'
  };
 
+ const portalHost = typeof document !== 'undefined' ? document.querySelector('.bge-fluid-app') : null;
+
  return (
  <div data-item-sort-menu="true" className={`relative ${isOpen ? 'z-50' : 'z-20'}`}>
  <button
@@ -14608,16 +14628,26 @@ export default function App() {
  onClick={(e) => {
  if (openItemSortMenuKey === collectorKey) {
  setOpenItemSortMenuKey(null);
+ setOpenItemSortMenuPos(null);
  return;
  }
  const btnRect = e.currentTarget.getBoundingClientRect();
- const containerRect = detailModalBodyRef.current
- ? detailModalBodyRef.current.getBoundingClientRect()
- : { left: 0, right: typeof window !== 'undefined' ? window.innerWidth : 1024 };
- const dropdownWidth = 248;
- const spaceRight = containerRect.right - btnRect.left;
- const spaceLeft = btnRect.right - containerRect.left;
- setOpenItemSortMenuAlign(spaceRight >= dropdownWidth || spaceRight >= spaceLeft ? 'left' : 'right');
+ const vw = typeof window !== 'undefined' ? window.innerWidth : 1024;
+ const vh = typeof window !== 'undefined' ? window.innerHeight : 768;
+ const menuW = Math.min(240, vw - 32);
+ const estMenuH = 248;
+ let left = btnRect.left;
+ if (left + menuW > vw - 12) {
+ left = Math.max(12, btnRect.right - menuW);
+ }
+ left = Math.max(12, left);
+ const openUpward = btnRect.bottom + 6 + estMenuH > vh - 12 && btnRect.top - 6 - estMenuH >= 12;
+ setOpenItemSortMenuAlign(left + menuW >= btnRect.right - 2 ? 'right' : 'left');
+ setOpenItemSortMenuPos({
+ left,
+ top: openUpward ? undefined : btnRect.bottom + 6,
+ bottom: openUpward ? vh - btnRect.top + 6 : undefined
+ });
  setOpenItemSortMenuKey(collectorKey);
  }}
  aria-expanded={isOpen}
@@ -14634,12 +14664,23 @@ export default function App() {
  <ChevronDown className={`w-3 h-3 transition-transform duration-150 ${isOpen ? 'rotate-180' : ''}`} />
  </button>
 
- {isOpen && (
- <div className={`bge-frosted-dropdown bge-fluid-reveal absolute ${openItemSortMenuAlign === 'right' ? 'right-0' : 'left-0'} mt-1.5 w-60 max-w-[calc(100vw-2rem)] rounded-2xl border shadow-2xl p-2 space-y-1 z-50 ${
+ {isOpen && openItemSortMenuPos && portalHost && createPortal(
+ <div
+ data-item-sort-menu="true"
+ onClick={(e) => e.stopPropagation()}
+ style={{
+ position: 'fixed',
+ left: `${openItemSortMenuPos.left}px`,
+ ...(openItemSortMenuPos.top !== undefined ? { top: `${openItemSortMenuPos.top}px` } : {}),
+ ...(openItemSortMenuPos.bottom !== undefined ? { bottom: `${openItemSortMenuPos.bottom}px` } : {}),
+ zIndex: 90
+ }}
+ className={`bge-frosted-dropdown bge-fluid-reveal w-60 max-w-[calc(100vw-2rem)] rounded-2xl border shadow-2xl p-2 space-y-1 ${
  darkMode
  ? 'bg-slate-900/82 border-white/15 text-slate-100 backdrop-blur-2xl'
  : 'bg-white/84 border-white/80 text-slate-800 backdrop-blur-2xl'
- }`}>
+ }`}
+ >
  {[
  { id: 'az', label: 'A → Z (ABC sorrend)' },
  { id: 'za', label: 'Z → A (fordított ABC)' },
@@ -14687,7 +14728,8 @@ export default function App() {
  </span>
  {currentMode === 'custom' && <Check className="w-3.5 h-3.5 shrink-0" />}
  </button>
- </div>
+ </div>,
+ portalHost
  )}
  </div>
  );

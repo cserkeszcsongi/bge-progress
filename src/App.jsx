@@ -9152,6 +9152,20 @@ export default function App() {
  border-bottom: 1px solid rgba(255, 255, 255, 0.72) !important;
  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.07), inset 0 -1px 0 rgba(255, 255, 255, 0.55) !important;
  }
+ .bge-fluid-app.bge-glass-dark .bge-frosted-dropdown {
+ background-color: rgba(15, 23, 42, 0.48) !important;
+ backdrop-filter: blur(26px) saturate(190%) !important;
+ -webkit-backdrop-filter: blur(26px) saturate(190%) !important;
+ border: 1px solid rgba(255, 255, 255, 0.14) !important;
+ box-shadow: 0 18px 40px rgba(2, 6, 23, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.14) !important;
+ }
+ .bge-fluid-app.bge-glass-light .bge-frosted-dropdown {
+ background-color: rgba(255, 255, 255, 0.44) !important;
+ backdrop-filter: blur(26px) saturate(190%) !important;
+ -webkit-backdrop-filter: blur(26px) saturate(190%) !important;
+ border: 1px solid rgba(255, 255, 255, 0.72) !important;
+ box-shadow: 0 16px 36px rgba(15, 23, 42, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.75) !important;
+ }
  .bge-fluid-app button:not([data-no-glass="true"]):not([data-no-glass="ghost"]),
  .bge-fluid-app a[href]:not([data-no-glass="true"]):not([data-no-glass="ghost"]) {
  backdrop-filter: blur(14px) saturate(160%);
@@ -9204,12 +9218,12 @@ export default function App() {
  to { opacity: 0; transform: translate3d(0, 22px, 0) scale(0.95); filter: blur(10px); }
  }
  @keyframes bgeDropdownIn {
- from { opacity: 0; transform: translate3d(0, -8px, 0) scale(0.95); filter: blur(6px); }
- to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); filter: blur(0px); }
+ from { opacity: 0; transform: translate3d(0, -8px, 0) scale(0.96); }
+ to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
  }
  @keyframes bgeDropdownOut {
- from { opacity: 1; transform: translate3d(0, 0, 0) scale(1); filter: blur(0px); }
- to { opacity: 0; transform: translate3d(0, -8px, 0) scale(0.95); filter: blur(6px); }
+ from { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+ to { opacity: 0; transform: translate3d(0, -8px, 0) scale(0.96); }
  }
  @keyframes bgeCollapseOut {
  from { opacity: 1; transform: translate3d(0, 0, 0) scaleY(1); filter: blur(0px); }
@@ -10778,10 +10792,10 @@ export default function App() {
 
  <AnimatedPresence show={Boolean(isSortMenuOpen)} variant="dropdown" duration={190}>
  {isSortMenuOpen && (
- <div className={`absolute right-0 mt-2 w-64 rounded-2xl border shadow-2xl p-2 space-y-1 z-50 ${
+ <div className={`bge-frosted-dropdown absolute right-0 mt-2 w-64 rounded-2xl border shadow-2xl p-2 space-y-1 z-50 ${
  darkMode
- ? 'bg-slate-900/88 border-white/15 text-slate-100 backdrop-blur-2xl'
- : 'bg-white/92 border-white/80 text-slate-800 backdrop-blur-2xl'
+ ? 'bg-slate-900/48 border-white/15 text-slate-100 backdrop-blur-2xl'
+ : 'bg-white/44 border-white/80 text-slate-800 backdrop-blur-2xl'
  }`}>
  {[
  { id: 'az', label: 'A → Z (ABC sorrend)' },
@@ -14628,10 +14642,10 @@ export default function App() {
 
  <AnimatedPresence show={Boolean(isOpen)} variant="dropdown" duration={190}>
  {isOpen && (
- <div className={`absolute ${openItemSortMenuAlign === 'right' ? 'right-0' : 'left-0'} mt-1.5 w-60 max-w-[calc(100vw-2rem)] rounded-2xl border shadow-2xl p-2 space-y-1 z-50 ${
+ <div className={`bge-frosted-dropdown absolute ${openItemSortMenuAlign === 'right' ? 'right-0' : 'left-0'} mt-1.5 w-60 max-w-[calc(100vw-2rem)] rounded-2xl border shadow-2xl p-2 space-y-1 z-50 ${
  darkMode
- ? 'bg-slate-900/92 border-white/15 text-slate-100 backdrop-blur-2xl'
- : 'bg-white/95 border-slate-200 text-slate-800 backdrop-blur-2xl'
+ ? 'bg-slate-900/48 border-white/15 text-slate-100 backdrop-blur-2xl'
+ : 'bg-white/44 border-white/80 text-slate-800 backdrop-blur-2xl'
  }`}>
  {[
  { id: 'az', label: 'A → Z (ABC sorrend)' },

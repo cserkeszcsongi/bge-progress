@@ -17175,10 +17175,10 @@ export default function App() {
  </div>
  </label>
 
- <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
- <div>
+ <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 items-start">
+ <div className="flex flex-col">
  <label
- className={`block text-[11px] font-semibold mb-1 ${textMuted}`}
+ className={`flex items-end sm:min-h-[2.25rem] leading-tight text-[11px] font-semibold mb-1 ${textMuted}`}
  title={editingSubject.hasLectures !== false ? 'Ugyanennyi előadás alkalom is létrejön automatikusan' : 'Csak gyakorlati alkalmak száma'}
  >
  {editingSubject.hasLectures !== false ? 'Összes gyakorlat / előadás' : 'Összes gyakorlat'}
@@ -17205,8 +17205,8 @@ export default function App() {
  className={`w-full border rounded-lg px-3 py-2.5 sm:py-2 focus:outline-none ${inputStyle}`}
  />
  </div>
- <div>
- <label className={`block text-[11px] font-semibold mb-1 ${textMuted}`}>Aláírás min. jelenlét (%)</label>
+ <div className="flex flex-col">
+ <label className={`flex items-end sm:min-h-[2.25rem] leading-tight text-[11px] font-semibold mb-1 ${textMuted}`}>Aláírás min. jelenlét (%)</label>
  <div className="relative">
  <input
  type="number"
@@ -17234,8 +17234,8 @@ export default function App() {
  </p>
  )}
  </div>
- <div>
- <label className={`block text-[11px] font-semibold mb-1 ${textMuted}`}>Megajánlott min. jelenlét (%)</label>
+ <div className="flex flex-col">
+ <label className={`flex items-end sm:min-h-[2.25rem] leading-tight text-[11px] font-semibold mb-1 ${textMuted}`}>Megajánlott min. jelenlét (%)</label>
  <div className="relative">
  <input
  type="number"

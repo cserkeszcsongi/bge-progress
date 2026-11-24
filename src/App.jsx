@@ -596,7 +596,8 @@ function buildTemplatesForMajor(majorId) {
  const totalClasses = cred === 3 ? 6 : cred === 6 ? 12 : 0;
  const minAttendanceAlairasPct = totalClasses > 0 ? 50 : 0;
  const minAttendanceAlairas = calcMinAttendanceFromPct(totalClasses, minAttendanceAlairasPct);
- const minAttendanceMegajanlott = cred === 3 ? 4 : cred === 6 ? 9 : 0;
+ const minAttendanceMegajanlottPct = cred === 3 ? 67 : cred === 6 ? 75 : 0;
+ const minAttendanceMegajanlott = calcMinAttendanceFromPct(totalClasses, minAttendanceMegajanlottPct);
 
  const assessments = Array.from({ length: zhCount }, (_, zIdx) => ({
  id: `tpl_zh_${majorId}_${semOrd}_${idx}_${zIdx + 1}`,
@@ -625,6 +626,7 @@ function buildTemplatesForMajor(majorId) {
  minAttendanceAlairas,
  minAttendanceAlairasPct,
  minAttendanceMegajanlott,
+ minAttendanceMegajanlottPct,
  attendanceSessions: [],
  hasLectures: true,
  totalLectures: totalClasses,
@@ -2357,7 +2359,16 @@ function mergeSubjectWithTemplate(subj, tpl, tplUpdatedMs) {
  : (tpl.minAttendanceAlairasPct !== undefined && tpl.minAttendanceAlairasPct !== null && tpl.minAttendanceAlairasPct !== ''
  ? Number(tpl.minAttendanceAlairasPct)
  : (deriveAttendancePct(tpl.minAttendanceAlairas, finalTotalClasses) || 0)),
- minAttendanceMegajanlott: isExam ? 0 : (Number(tpl.minAttendanceMegajanlott) || 0),
+ minAttendanceMegajanlott: isExam
+ ? 0
+ : (tpl.minAttendanceMegajanlottPct !== undefined && tpl.minAttendanceMegajanlottPct !== null && tpl.minAttendanceMegajanlottPct !== ''
+ ? calcMinAttendanceFromPct(finalTotalClasses, tpl.minAttendanceMegajanlottPct)
+ : (Number(tpl.minAttendanceMegajanlott) || 0)),
+ minAttendanceMegajanlottPct: isExam
+ ? 0
+ : (tpl.minAttendanceMegajanlottPct !== undefined && tpl.minAttendanceMegajanlottPct !== null && tpl.minAttendanceMegajanlottPct !== ''
+ ? Number(tpl.minAttendanceMegajanlottPct)
+ : (deriveAttendancePct(tpl.minAttendanceMegajanlott, finalTotalClasses) || 0)),
  attendanceSessions: mergedSessions,
  hasLectures,
  totalLectures: finalTotalLectures,
@@ -5084,7 +5095,12 @@ export default function App() {
  minAttendanceAlairasPct: tpl.minAttendanceAlairasPct !== undefined && tpl.minAttendanceAlairasPct !== null && tpl.minAttendanceAlairasPct !== ''
  ? Number(tpl.minAttendanceAlairasPct)
  : (deriveAttendancePct(tpl.minAttendanceAlairas, totalClasses) || 0),
- minAttendanceMegajanlott: Number(tpl.minAttendanceMegajanlott) || 0,
+ minAttendanceMegajanlott: tpl.minAttendanceMegajanlottPct !== undefined && tpl.minAttendanceMegajanlottPct !== null && tpl.minAttendanceMegajanlottPct !== ''
+ ? calcMinAttendanceFromPct(totalClasses, tpl.minAttendanceMegajanlottPct)
+ : (Number(tpl.minAttendanceMegajanlott) || 0),
+ minAttendanceMegajanlottPct: tpl.minAttendanceMegajanlottPct !== undefined && tpl.minAttendanceMegajanlottPct !== null && tpl.minAttendanceMegajanlottPct !== ''
+ ? Number(tpl.minAttendanceMegajanlottPct)
+ : (deriveAttendancePct(tpl.minAttendanceMegajanlott, totalClasses) || 0),
  attendanceSessions: newSessions,
  hasLectures,
  totalLectures,
@@ -5537,7 +5553,9 @@ export default function App() {
  megajanlottMinZH: 0,
  totalClasses: 0,
  minAttendanceAlairas: 0,
+ minAttendanceAlairasPct: 0,
  minAttendanceMegajanlott: 0,
+ minAttendanceMegajanlottPct: 0,
  attendanceSessions: [],
  hasLectures: false,
  totalLectures: 0,
@@ -5855,6 +5873,9 @@ export default function App() {
  ? Number(subj.minAttendanceAlairasPct)
  : (deriveAttendancePct(subj.minAttendanceAlairas, totalClasses) || 0),
  minAttendanceMegajanlott: Number(subj.minAttendanceMegajanlott) || 0,
+ minAttendanceMegajanlottPct: subj.minAttendanceMegajanlottPct !== undefined && subj.minAttendanceMegajanlottPct !== null && subj.minAttendanceMegajanlottPct !== ''
+ ? Number(subj.minAttendanceMegajanlottPct)
+ : (deriveAttendancePct(subj.minAttendanceMegajanlott, totalClasses) || 0),
  attendanceSessions: sanitizedSessions,
  hasLectures,
  totalLectures,
@@ -5981,7 +6002,12 @@ export default function App() {
  minAttendanceAlairasPct: tpl.minAttendanceAlairasPct !== undefined && tpl.minAttendanceAlairasPct !== null && tpl.minAttendanceAlairasPct !== ''
  ? Number(tpl.minAttendanceAlairasPct)
  : (deriveAttendancePct(tpl.minAttendanceAlairas, totalClasses) || 0),
- minAttendanceMegajanlott: Number(tpl.minAttendanceMegajanlott) || 0,
+ minAttendanceMegajanlott: tpl.minAttendanceMegajanlottPct !== undefined && tpl.minAttendanceMegajanlottPct !== null && tpl.minAttendanceMegajanlottPct !== ''
+ ? calcMinAttendanceFromPct(totalClasses, tpl.minAttendanceMegajanlottPct)
+ : (Number(tpl.minAttendanceMegajanlott) || 0),
+ minAttendanceMegajanlottPct: tpl.minAttendanceMegajanlottPct !== undefined && tpl.minAttendanceMegajanlottPct !== null && tpl.minAttendanceMegajanlottPct !== ''
+ ? Number(tpl.minAttendanceMegajanlottPct)
+ : (deriveAttendancePct(tpl.minAttendanceMegajanlott, totalClasses) || 0),
  attendanceSessions: newSessions,
  hasLectures,
  totalLectures,
@@ -6900,6 +6926,7 @@ export default function App() {
  minAttendanceAlairas: '',
  minAttendanceAlairasPct: '',
  minAttendanceMegajanlott: '',
+ minAttendanceMegajanlottPct: '',
  attendanceSessions: [],
  hasLectures: true,
  totalLectures: '',
@@ -6932,6 +6959,7 @@ export default function App() {
  totalClasses: 6,
  minAttendanceAlairasPct: 50,
  minAttendanceAlairas: 3,
+ minAttendanceMegajanlottPct: 67,
  minAttendanceMegajanlott: 4,
  totalLectures: hasLec ? 6 : 0
  };
@@ -6943,6 +6971,7 @@ export default function App() {
  totalClasses: 12,
  minAttendanceAlairasPct: 50,
  minAttendanceAlairas: 6,
+ minAttendanceMegajanlottPct: 75,
  minAttendanceMegajanlott: 9,
  totalLectures: hasLec ? 12 : 0
  };
@@ -6953,6 +6982,7 @@ export default function App() {
  totalClasses: '',
  minAttendanceAlairasPct: '',
  minAttendanceAlairas: '',
+ minAttendanceMegajanlottPct: '',
  minAttendanceMegajanlott: '',
  totalLectures: ''
  };
@@ -7201,7 +7231,16 @@ export default function App() {
  : (editingSubject.minAttendanceAlairasPct !== '' && editingSubject.minAttendanceAlairasPct !== null && editingSubject.minAttendanceAlairasPct !== undefined
  ? Math.min(100, Math.max(0, Number(editingSubject.minAttendanceAlairasPct) || 0))
  : (deriveAttendancePct(editingSubject.minAttendanceAlairas, totalClasses) || 0)),
- minAttendanceMegajanlott: noAttendance ? 0 : (Number(editingSubject.minAttendanceMegajanlott) || 0),
+ minAttendanceMegajanlott: noAttendance
+ ? 0
+ : (editingSubject.minAttendanceMegajanlottPct !== '' && editingSubject.minAttendanceMegajanlottPct !== null && editingSubject.minAttendanceMegajanlottPct !== undefined
+ ? calcMinAttendanceFromPct(totalClasses, editingSubject.minAttendanceMegajanlottPct)
+ : (Number(editingSubject.minAttendanceMegajanlott) || 0)),
+ minAttendanceMegajanlottPct: noAttendance
+ ? 0
+ : (editingSubject.minAttendanceMegajanlottPct !== '' && editingSubject.minAttendanceMegajanlottPct !== null && editingSubject.minAttendanceMegajanlottPct !== undefined
+ ? Math.min(100, Math.max(0, Number(editingSubject.minAttendanceMegajanlottPct) || 0))
+ : (deriveAttendancePct(editingSubject.minAttendanceMegajanlott, totalClasses) || 0)),
  attendanceSessions: sessions,
  hasLectures,
  totalLectures,
@@ -14925,6 +14964,9 @@ export default function App() {
  ? activeSubject.minAttendanceAlairasPct
  : deriveAttendancePct(activeSubject.minAttendanceAlairas ?? 0, activeSubject.totalClasses ?? (activeSubject.attendanceSessions || []).length),
  minAttendanceMegajanlott: activeSubject.minAttendanceMegajanlott ?? 0,
+ minAttendanceMegajanlottPct: (activeSubject.minAttendanceMegajanlottPct !== undefined && activeSubject.minAttendanceMegajanlottPct !== null && activeSubject.minAttendanceMegajanlottPct !== '')
+ ? activeSubject.minAttendanceMegajanlottPct
+ : deriveAttendancePct(activeSubject.minAttendanceMegajanlott ?? 0, activeSubject.totalClasses ?? (activeSubject.attendanceSessions || []).length),
  totalLectures: activeSubject.totalLectures ?? (activeSubject.lectureAttendanceSessions || []).length
  });
  setIsSubjectModalOpen(true);
@@ -15072,6 +15114,9 @@ export default function App() {
  ? activeSubject.minAttendanceAlairasPct
  : deriveAttendancePct(activeSubject.minAttendanceAlairas ?? 0, activeSubject.totalClasses ?? (activeSubject.attendanceSessions || []).length),
  minAttendanceMegajanlott: activeSubject.minAttendanceMegajanlott ?? 0,
+ minAttendanceMegajanlottPct: (activeSubject.minAttendanceMegajanlottPct !== undefined && activeSubject.minAttendanceMegajanlottPct !== null && activeSubject.minAttendanceMegajanlottPct !== '')
+ ? activeSubject.minAttendanceMegajanlottPct
+ : deriveAttendancePct(activeSubject.minAttendanceMegajanlott ?? 0, activeSubject.totalClasses ?? (activeSubject.attendanceSessions || []).length),
  totalLectures: activeSubject.totalLectures ?? (activeSubject.lectureAttendanceSessions || []).length
  });
  setIsSubjectModalOpen(true);
@@ -17151,7 +17196,10 @@ export default function App() {
  totalClasses: nextTotal,
  minAttendanceAlairas: editingSubject.minAttendanceAlairasPct !== '' && editingSubject.minAttendanceAlairasPct !== null && editingSubject.minAttendanceAlairasPct !== undefined
  ? calcMinAttendanceFromPct(nextTotal, editingSubject.minAttendanceAlairasPct)
- : editingSubject.minAttendanceAlairas
+ : editingSubject.minAttendanceAlairas,
+ minAttendanceMegajanlott: editingSubject.minAttendanceMegajanlottPct !== '' && editingSubject.minAttendanceMegajanlottPct !== null && editingSubject.minAttendanceMegajanlottPct !== undefined
+ ? calcMinAttendanceFromPct(nextTotal, editingSubject.minAttendanceMegajanlottPct)
+ : editingSubject.minAttendanceMegajanlott
  });
  }}
  className={`w-full border rounded-lg px-3 py-2.5 sm:py-2 focus:outline-none ${inputStyle}`}
@@ -17187,16 +17235,33 @@ export default function App() {
  )}
  </div>
  <div>
- <label className={`block text-[11px] font-semibold mb-1 ${textMuted}`}>Megajánlott min. jelenlét</label>
+ <label className={`block text-[11px] font-semibold mb-1 ${textMuted}`}>Megajánlott min. jelenlét (%)</label>
+ <div className="relative">
  <input
  type="number"
  min="0"
- max="40"
- placeholder="Üres"
- value={editingSubject.minAttendanceMegajanlott}
- onChange={e => setEditingSubject({ ...editingSubject, minAttendanceMegajanlott: e.target.value })}
- className={`w-full border rounded-lg px-3 py-2.5 sm:py-2 focus:outline-none ${inputStyle}`}
+ max="100"
+ placeholder="pl. 75"
+ value={editingSubject.minAttendanceMegajanlottPct ?? ''}
+ onChange={e => {
+ const nextPct = e.target.value;
+ setEditingSubject({
+ ...editingSubject,
+ minAttendanceMegajanlottPct: nextPct,
+ minAttendanceMegajanlott: calcMinAttendanceFromPct(editingSubject.totalClasses, nextPct)
+ });
+ }}
+ className={`w-full border rounded-lg pl-3 pr-7 py-2.5 sm:py-2 focus:outline-none ${inputStyle}`}
  />
+ <span className={`pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-xs font-bold ${textMuted}`}>
+ %
+ </span>
+ </div>
+ {Number(editingSubject.totalClasses) > 0 && editingSubject.minAttendanceMegajanlottPct !== '' && editingSubject.minAttendanceMegajanlottPct !== null && editingSubject.minAttendanceMegajanlottPct !== undefined && (
+ <p className={`text-[10px] font-semibold mt-1 ${textMuted}`}>
+ → Min. <strong className={textStrong}>{calcMinAttendanceFromPct(editingSubject.totalClasses, editingSubject.minAttendanceMegajanlottPct)}</strong> alkalom
+ </p>
+ )}
  </div>
  </div>
  </>

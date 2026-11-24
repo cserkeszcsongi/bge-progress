@@ -6220,16 +6220,35 @@ export default function App() {
  simManualGrades[subj.id] !== ''
  );
 
+ const subjCanonicalSem = getCanonicalSemesterCode(subj.semester);
+ const pendingJokerEntry =
+ (subj.semester && jokerPendingBySem[subj.semester]) ||
+ (subjCanonicalSem && jokerPendingBySem[subjCanonicalSem]) ||
+ null;
+ const hasPendingJokerForSubject = Boolean(
+ !disablePointCalc &&
+ !isExamCourse &&
+ pendingJokerEntry &&
+ pendingJokerEntry.subjectId === subj.id &&
+ pendingJokerEntry.assessmentId &&
+ zhAssessments.some(a => a.id === pendingJokerEntry.assessmentId)
+ );
+ const pendingJokerZhTitle = hasPendingJokerForSubject
+ ? (zhAssessments.find(a => a.id === pendingJokerEntry.assessmentId)?.title || 'ZH')
+ : '';
+
  const autoFailedByNoSignature = Boolean(
  !disablePointCalc &&
  !isExamCourse &&
  !hasManualGrade &&
+ !hasPendingJokerForSubject &&
  ((allZhsFilled && !alairasPontOk) || !attendanceAlairasPossible)
  );
 
  const needsAutoExam = Boolean(
  !disablePointCalc &&
  !isExamCourse &&
+ !hasPendingJokerForSubject &&
  allZhsFilled &&
  alairasTeljesul &&
  (!megajanlottZHOk || !megajanlottPontOk)
@@ -6329,6 +6348,9 @@ export default function App() {
  projectedGrade = getGradeFromScore(regularOsszElert);
  progressLabel = `Megajánlott: ${projectedGrade}`;
  progressStage = 'offered';
+ } else if (hasPendingJokerForSubject) {
+ progressLabel = `Joker ZH várakozik (${pendingJokerZhTitle})`;
+ progressStage = 'joker_pending';
  } else if (alairasTeljesul) {
  progressLabel = 'Vizsga';
  progressStage = 'exam';
@@ -6342,6 +6364,8 @@ export default function App() {
  disablePointCalc,
  isGradeOnlyCard,
  hasManualGrade,
+ hasPendingJokerForSubject,
+ pendingJokerZhTitle,
  autoFailedByNoSignature,
  needsAutoExam,
  hasAutoExamScore,
@@ -6389,7 +6413,7 @@ export default function App() {
  map[subj.id] = calcStats(subj);
  });
  return map;
- }, [subjects, isSim, simScores, simManualGrades]);
+ }, [subjects, isSim, simScores, simManualGrades, jokerPendingBySem]);
 
  const calcSemesterSummary = (semName) => {
  const list = subjects.filter(s => s.semester === semName);
@@ -7598,6 +7622,20 @@ export default function App() {
 
  const prevItem = itemModal.id ? existing.find(a => a.id === itemModal.id) : null;
  const itemId = itemModal.id || `item_${Date.now()}`;
+ const subjSem = activeSubject.semester || selectedSemester;
+ const subjCanonSem = getCanonicalSemesterCode(subjSem);
+ const pendingForSubjSem =
+ (subjSem && jokerPendingBySem[subjSem]) ||
+ (subjCanonSem && jokerPendingBySem[subjCanonSem]) ||
+ null;
+ const isCompletingPendingJokerHere = Boolean(
+ !isSim &&
+ itemModal.category === 'ZH' &&
+ parsedAchieved !== null &&
+ pendingForSubjSem &&
+ pendingForSubjSem.subjectId === activeSubject.id &&
+ pendingForSubjSem.assessmentId === itemId
+ );
 
  const formattedItem = {
  id: itemId,
@@ -7608,7 +7646,14 @@ export default function App() {
  achieved: parsedAchieved,
  ...(itemModal.category === 'ZH' && activeSubject.courseKind !== 'exam' ? { bonusPoints: parsedBonus } : {}),
  ...(itemModal.category === 'Egyeb' ? { bucketId: itemModal.bucketId || null } : {}),
- ...(prevItem?.isJokerRewritten
+ ...(isCompletingPendingJokerHere
+ ? {
+ isJokerRewritten: true,
+ jokerOriginalAchieved: prevItem?.isJokerRewritten
+ ? (prevItem.jokerOriginalAchieved ?? null)
+ : (prevItem?.achieved !== undefined && prevItem?.achieved !== '' ? prevItem.achieved : null)
+ }
+ : prevItem?.isJokerRewritten
  ? {
  isJokerRewritten: true,
  jokerOriginalAchieved: prevItem.jokerOriginalAchieved ?? null
@@ -7633,6 +7678,9 @@ export default function App() {
  itemUpdatePayload.isFailed = false;
  }
  await updateDoc(doc(db, 'users', user.uid, 'subjects', activeSubject.id), itemUpdatePayload);
+ if (isCompletingPendingJokerHere) {
+ persistJokerPendingForSemester(subjSem, null);
+ }
  setItemModal(null);
  };
 
@@ -7642,6 +7690,19 @@ export default function App() {
  await updateDoc(doc(db, 'users', user.uid, 'subjects', activeSubject.id), {
  assessments: updated
  });
+ const subjSem = activeSubject.semester || selectedSemester;
+ const subjCanonSem = getCanonicalSemesterCode(subjSem);
+ const pendingForSubjSem =
+ (subjSem && jokerPendingBySem[subjSem]) ||
+ (subjCanonSem && jokerPendingBySem[subjCanonSem]) ||
+ null;
+ if (
+ pendingForSubjSem &&
+ pendingForSubjSem.subjectId === activeSubject.id &&
+ pendingForSubjSem.assessmentId === itemId
+ ) {
+ persistJokerPendingForSemester(subjSem, null);
+ }
  if (closeItemModal) {
  setItemModal(null);
  showToast('Tétel törölve.');
@@ -10903,6 +10964,10 @@ export default function App() {
  progressBadgeClass = darkMode
  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
  : 'bg-emerald-100 text-emerald-800 border-emerald-300';
+ } else if (st.progressStage === 'joker_pending') {
+ progressBadgeClass = darkMode
+ ? 'bg-violet-500/25 text-violet-200 border border-violet-400/50'
+ : 'bg-violet-100 text-violet-900 border border-violet-300';
  } else if (st.progressStage === 'exam') {
  progressBadgeClass = darkMode
  ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
@@ -11090,6 +11155,15 @@ export default function App() {
  : 'bg-violet-50 text-violet-700 border-violet-300'
  }`}>
  Vizsgakurzus
+ </span>
+ )}
+ {st.hasPendingJokerForSubject && !st.isGradeOnlyCard && (
+ <span className={`inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold rounded-full border ${
+ darkMode
+ ? 'bg-violet-500/25 text-violet-200 border-violet-400/50'
+ : 'bg-violet-100 text-violet-800 border-violet-300'
+ }`}>
+ <JokerIcon className="w-3 h-3" /> Joker ZH várakozik ({st.pendingJokerZhTitle})
  </span>
  )}
  {hasJokerInSubject && !st.isGradeOnlyCard && (
@@ -15294,6 +15368,40 @@ export default function App() {
  )}
  </div>
  </div>
+
+ {st.hasPendingJokerForSubject && (
+ <div className={`p-4 rounded-2xl border-2 space-y-2 ${
+ darkMode
+ ? 'bg-violet-950/40 border-violet-500/70 text-violet-100'
+ : 'bg-violet-50 border-violet-300 text-violet-950'
+ }`}>
+ <div className="flex flex-wrap items-center justify-between gap-2">
+ <div className="flex items-center gap-2">
+ <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-xs font-extrabold uppercase tracking-wider bg-violet-600 text-white">
+ <JokerIcon className="w-3.5 h-3.5" /> JOKER ZH VÁRAKOZIK
+ </span>
+ <span className="text-xs sm:text-sm font-extrabold">
+ {st.pendingJokerZhTitle} eredményre vár
+ </span>
+ </div>
+ <button
+ type="button"
+ onClick={() => {
+ setActiveSubjectId(null);
+ handleOpenJokerModal();
+ }}
+ className="px-3 py-1 rounded-lg text-xs font-extrabold bg-violet-600 hover:bg-violet-500 text-white transition cursor-pointer"
+ >
+ Joker ZH pontszám beírása
+ </button>
+ </div>
+ <p className={`text-xs leading-relaxed ${
+ darkMode ? 'text-violet-200/90' : 'text-violet-900'
+ }`}>
+ A(z) <strong>{st.pendingJokerZhTitle}</strong> ki van választva Joker ZH újraírásra, ezért a tárgy addig várakozó állapotban marad és nem kerül automatikusan bukott vagy vizsga módba, amíg a Joker ZH eredményét nem rögzíted (vagy nem törlöd a kijelölést).
+ </p>
+ </div>
+ )}
 
  {st.autoFailedByNoSignature && (
  <div className={`p-4 sm:p-5 rounded-2xl border-2 space-y-2.5 ${

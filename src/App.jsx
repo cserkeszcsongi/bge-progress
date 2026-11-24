@@ -9261,9 +9261,13 @@ export default function App() {
 
  .bge-presence-dropdown-enter {
  animation: bgeDropdownIn 220ms cubic-bezier(0.34, 1.28, 0.64, 1) both;
+ position: relative;
+ z-index: 50;
  }
  .bge-presence-dropdown-exit {
  animation: bgeDropdownOut 185ms cubic-bezier(0.32, 0.72, 0, 1) forwards !important;
+ position: relative;
+ z-index: 50;
  pointer-events: none !important;
  }
 
@@ -10755,7 +10759,7 @@ export default function App() {
  </h2>
  </div>
 
- <div data-sort-menu="true" className="relative">
+ <div data-sort-menu="true" className={`relative ${isSortMenuOpen ? 'z-50' : 'z-20'}`}>
  <button
  type="button"
  onClick={() => setIsSortMenuOpen(prev => !prev)}
@@ -10774,10 +10778,10 @@ export default function App() {
 
  <AnimatedPresence show={Boolean(isSortMenuOpen)} variant="dropdown" duration={190}>
  {isSortMenuOpen && (
- <div className={`absolute right-0 mt-2 w-64 rounded-2xl border shadow-2xl p-2 space-y-1 z-40 ${
+ <div className={`absolute right-0 mt-2 w-64 rounded-2xl border shadow-2xl p-2 space-y-1 z-50 ${
  darkMode
- ? 'bg-slate-900/66 border-white/15 text-slate-100 backdrop-blur-2xl'
- : 'bg-white/68 border-white/80 text-slate-800 backdrop-blur-2xl'
+ ? 'bg-slate-900/88 border-white/15 text-slate-100 backdrop-blur-2xl'
+ : 'bg-white/92 border-white/80 text-slate-800 backdrop-blur-2xl'
  }`}>
  {[
  { id: 'az', label: 'A → Z (ABC sorrend)' },
@@ -14590,7 +14594,7 @@ export default function App() {
  };
 
  return (
- <div data-item-sort-menu="true" className="relative">
+ <div data-item-sort-menu="true" className={`relative ${isOpen ? 'z-50' : 'z-20'}`}>
  <button
  type="button"
  onClick={(e) => {

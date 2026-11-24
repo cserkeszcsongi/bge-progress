@@ -3207,6 +3207,7 @@ export default function App() {
  const [dragOverSubjectIdx, setDragOverSubjectIdx] = useState(null);
 
  const [openItemSortMenuKey, setOpenItemSortMenuKey] = useState(null);
+ const [openItemSortMenuAlign, setOpenItemSortMenuAlign] = useState('left');
  const [itemCustomSortModal, setItemCustomSortModal] = useState(null);
  const [draggedItemIdx, setDraggedItemIdx] = useState(null);
  const [dragOverItemIdx, setDragOverItemIdx] = useState(null);
@@ -14500,7 +14501,21 @@ export default function App() {
  <div data-item-sort-menu="true" className="relative">
  <button
  type="button"
- onClick={() => setOpenItemSortMenuKey(prev => (prev === collectorKey ? null : collectorKey))}
+ onClick={(e) => {
+ if (openItemSortMenuKey === collectorKey) {
+ setOpenItemSortMenuKey(null);
+ return;
+ }
+ const btnRect = e.currentTarget.getBoundingClientRect();
+ const containerRect = detailModalBodyRef.current
+ ? detailModalBodyRef.current.getBoundingClientRect()
+ : { left: 0, right: typeof window !== 'undefined' ? window.innerWidth : 1024 };
+ const dropdownWidth = 248;
+ const spaceRight = containerRect.right - btnRect.left;
+ const spaceLeft = btnRect.right - containerRect.left;
+ setOpenItemSortMenuAlign(spaceRight >= dropdownWidth || spaceRight >= spaceLeft ? 'left' : 'right');
+ setOpenItemSortMenuKey(collectorKey);
+ }}
  aria-expanded={isOpen}
  title={`Tételek rendezése (${collectorTitle})`}
  className={`px-2.5 py-1.5 text-xs font-bold rounded-lg border flex items-center gap-1 transition cursor-pointer shrink-0 ${
@@ -14517,7 +14532,7 @@ export default function App() {
 
  <AnimatedPresence show={Boolean(isOpen)} variant="dropdown" duration={190}>
  {isOpen && (
- <div className={`absolute right-0 mt-1.5 w-60 rounded-2xl border shadow-2xl p-2 space-y-1 z-50 ${
+ <div className={`absolute ${openItemSortMenuAlign === 'right' ? 'right-0' : 'left-0'} mt-1.5 w-60 max-w-[calc(100vw-2rem)] rounded-2xl border shadow-2xl p-2 space-y-1 z-50 ${
  darkMode
  ? 'bg-slate-900/92 border-white/15 text-slate-100 backdrop-blur-2xl'
  : 'bg-white/95 border-slate-200 text-slate-800 backdrop-blur-2xl'

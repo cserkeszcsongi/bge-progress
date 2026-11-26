@@ -9884,7 +9884,7 @@ export default function App() {
 
  <main className="max-w-4xl w-full min-w-0 mx-auto px-3 sm:px-4 pt-5 sm:pt-7 space-y-5 overflow-x-clip">
  {/* 1. HALLGATÓI PROFIL KÁRTYA */}
- <div className={`bge-menu-card bge-menu-card-1 rounded-2xl border p-4 sm:p-6 space-y-4 ${bgCard}`}>
+ <div className={`rounded-2xl border p-4 sm:p-6 space-y-4 ${bgCard}`}>
  <div className="flex items-center justify-between gap-2">
  <div className="flex items-center gap-2">
  <User className="w-4 h-4 text-amber-500 shrink-0" />
@@ -10041,7 +10041,7 @@ export default function App() {
  </div>
 
  {/* 2. MEGJELENÉS ÉS NÉZET KÁRTYA */}
- <div className={`bge-menu-card bge-menu-card-2 rounded-2xl border p-4 sm:p-6 space-y-4 ${bgCard}`}>
+ <div className={`rounded-2xl border p-4 sm:p-6 space-y-4 ${bgCard}`}>
  <div className="flex items-center gap-2">
  <Palette className="w-4 h-4 text-amber-500 shrink-0" />
  <h2 className={`text-xs sm:text-sm font-extrabold uppercase tracking-wider ${textStrong}`}>
@@ -10191,7 +10191,7 @@ export default function App() {
  </div>
 
  {/* 3. TANULMÁNYI BEÁLLÍTÁSOK KÁRTYA */}
- <div className={`bge-menu-card bge-menu-card-3 rounded-2xl border p-4 sm:p-6 space-y-3.5 ${bgCard}`}>
+ <div className={`rounded-2xl border p-4 sm:p-6 space-y-3.5 ${bgCard}`}>
  <div className="flex items-center gap-2">
  <Settings className="w-4 h-4 text-amber-500 shrink-0" />
  <h2 className={`text-xs sm:text-sm font-extrabold uppercase tracking-wider ${textStrong}`}>
@@ -10275,7 +10275,7 @@ export default function App() {
  </div>
 
  {/* 3/B. ÉRTESÍTÉSEK ÉS EMLÉKEZTETŐK KÁRTYA */}
- <div className={`bge-menu-card bge-menu-card-3 rounded-2xl border p-4 sm:p-6 space-y-3.5 ${bgCard}`}>
+ <div className={`rounded-2xl border p-4 sm:p-6 space-y-3.5 ${bgCard}`}>
  <div className="flex items-center justify-between gap-2 flex-wrap">
  <div className="flex items-center gap-2">
  <BellRing className="w-4 h-4 text-amber-500 shrink-0" />
@@ -10405,7 +10405,7 @@ export default function App() {
  </div>
 
  {/* 4. INFORMÁCIÓK & ESZKÖZÖK KÁRTYA */}
- <div className={`bge-menu-card bge-menu-card-4 rounded-2xl border p-4 sm:p-6 space-y-3.5 ${bgCard}`}>
+ <div className={`rounded-2xl border p-4 sm:p-6 space-y-3.5 ${bgCard}`}>
  <div className="flex items-center gap-2">
  <Sparkles className="w-4 h-4 text-amber-500 shrink-0" />
  <h2 className={`text-xs sm:text-sm font-extrabold uppercase tracking-wider ${textStrong}`}>
@@ -10575,7 +10575,7 @@ export default function App() {
  </div>
 
  {/* 5. KIJELENTKEZÉS KÁRTYA */}
- <div className={`bge-menu-card bge-menu-card-5 rounded-2xl border p-4 sm:p-5 ${bgCard}`}>
+ <div className={`rounded-2xl border p-4 sm:p-5 ${bgCard}`}>
  <button
  type="button"
  onClick={handleLogout}
@@ -10791,10 +10791,6 @@ export default function App() {
  transform: scale(0.955);
  transition-duration: 110ms;
  }
- .bge-fluid-app section,
- .bge-fluid-app article {
- animation: bgeFluidEnter 320ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
- }
  .bge-fluid-reveal {
  animation: bgeCollapseReveal 300ms cubic-bezier(0.34, 1.25, 0.64, 1) both;
  transform-origin: top center;
@@ -10906,12 +10902,6 @@ export default function App() {
  transition: transform 340ms cubic-bezier(0.34, 1.32, 0.64, 1), box-shadow 260ms cubic-bezier(0.22, 1, 0.36, 1);
  will-change: transform;
  }
- .bge-view-slide-left section,
- .bge-view-slide-left article,
- .bge-view-slide-right section,
- .bge-view-slide-right article {
- animation: none !important;
- }
  .bge-bottom-nav-capsule {
  backdrop-filter: blur(24px) saturate(185%);
  -webkit-backdrop-filter: blur(24px) saturate(185%);
@@ -10924,27 +10914,6 @@ export default function App() {
  pointer-events: none;
  background: linear-gradient(135deg, rgba(255, 255, 255, 0.36) 0%, rgba(255, 255, 255, 0.08) 45%, rgba(251, 191, 36, 0.14) 100%);
  }
- @keyframes bgeMenuCardIn {
- 0% {
- opacity: 0;
- transform: translate3d(0, 14px, 0) scale(0.98);
- filter: blur(4px);
- }
- 100% {
- opacity: 1;
- transform: translate3d(0, 0, 0) scale(1);
- filter: blur(0px);
- }
- }
- .bge-menu-card {
- animation: bgeMenuCardIn 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
- will-change: transform, opacity;
- }
- .bge-menu-card-1 { animation-delay: 25ms; }
- .bge-menu-card-2 { animation-delay: 70ms; }
- .bge-menu-card-3 { animation-delay: 115ms; }
- .bge-menu-card-4 { animation-delay: 160ms; }
- .bge-menu-card-5 { animation-delay: 205ms; }
  /* === TELJES APPLIKÁCIÓS FROSTED GLASS RENDSZER === */
  .bge-fluid-app header,
  .bge-fluid-app .rounded-2xl,
@@ -13034,7 +13003,7 @@ export default function App() {
  </>
  )}
 
- <section key={`cards-${simpleView ? 'simple' : 'detail'}-${sortMode}`} className={`bge-step-enter grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 ${simpleView ? 'gap-2.5 sm:gap-3' : 'gap-3.5 sm:gap-4'}`}>
+ <section key={`cards-${simpleView ? 'simple' : 'detail'}-${sortMode}`} className={`grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 ${simpleView ? 'gap-2.5 sm:gap-3' : 'gap-3.5 sm:gap-4'}`}>
  {semesterSubjects.map(subj => {
  const st = subjectStatsMap[subj.id] || calcStats(subj);
  const hasJokerInSubject = (subj.assessments || []).some(a => a.isJokerRewritten);

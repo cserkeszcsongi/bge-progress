@@ -643,6 +643,15 @@ function buildTemplatesForMajor(majorId) {
 
 const APP_RELEASES = [
   {
+    version: 'v3.1.0',
+    date: '2026. 11. 26.',
+    changes: [
+      'Új „Ma esedékes” Frosted Glass ablak a féléves dashboard tetején: automatikusan összegyűjti és rendszerezi az adott napra dátummal rögzített összes gyakorlatot, előadást, ZH-t, vizsgát, pluszpontot és egyéni gyűjtő tételt',
+      'Azonnali, helyben történő értékadás a napi teendőkhöz: jelenléteknél egyetlen kattintással jelölhető az „Ott voltam” (pipa) vagy „Hiányzás” (X) állapot, ZH-knál, vizsgáknál, pluszpontoknál és egyéb tételeknél pedig közvetlenül beírható és menthető az elért pontszám (Szimulátor és várakozó Joker ZH támogatással)',
+      'Élő napi teljesítési számláló („X / Y rögzítve” / „Minden rögzítve”), összecsukható nézet és egykattintásos ugrás bármelyik sorról az adott tantárgy megfelelő fülére'
+    ]
+  },
+  {
     version: 'v3.0.0',
     date: '2026. 11. 23.',
     changes: [
@@ -2385,6 +2394,31 @@ function getTodayFormattedHu() {
  const m = String(now.getMonth() + 1).padStart(2, '0');
  const d = String(now.getDate()).padStart(2, '0');
  return `${y}. ${m}. ${d}.`;
+}
+
+function getTodayIsoLocal() {
+ const now = new Date();
+ const y = now.getFullYear();
+ const m = String(now.getMonth() + 1).padStart(2, '0');
+ const d = String(now.getDate()).padStart(2, '0');
+ return `${y}-${m}-${d}`;
+}
+
+function getTodayWeekdayHu() {
+ const days = ['vasárnap', 'hétfő', 'kedd', 'szerda', 'csütörtök', 'péntek', 'szombat'];
+ return days[new Date().getDay()] || '';
+}
+
+function normalizeDateToIso(rawDate) {
+ if (!rawDate) return '';
+ const str = String(rawDate).trim();
+ if (!str) return '';
+ if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str;
+ const m = str.match(/^(\d{4})[.\-/\s]+(\d{1,2})[.\-/\s]+(\d{1,2})\.?$/);
+ if (m) {
+  return `${m[1]}-${String(m[2]).padStart(2, '0')}-${String(m[3]).padStart(2, '0')}`;
+ }
+ return '';
 }
 
 function DinoRunnerGame({ darkMode }) {
@@ -7896,6 +7930,256 @@ export default function App() {
  };
  }, [semesterSubjects, isSim, simScores]);
 
+ const [isTodayBoxCollapsed, setIsTodayBoxCollapsed] = useState(false);
+ const [todayScoreDrafts, setTodayScoreDrafts] = useState({});
+ const [savingTodayItemKey, setSavingTodayItemKey] = useState(null);
+
+ const todayIso = getTodayIsoLocal();
+ const todayDisplayHu = `${getTodayFormattedHu()} (${getTodayWeekdayHu()})`;
+
+ const todayDueItems = useMemo(() => {
+  const items = [];
+
+  semesterSubjects.forEach((subj) => {
+   if (!subj) return;
+   const isExamCourse = subj.courseKind === 'exam';
+   const disablePointCalc = Boolean(subj.disablePointCalc);
+   const customBuckets = toArraySafe(subj.customBuckets);
+   const bucketTitleMap = new Map(customBuckets.map(b => [b.id, b.title]));
+
+   if (!disablePointCalc) {
+    toArraySafe(subj.assessments).forEach((a) => {
+     if (!a || normalizeDateToIso(a.date) !== todayIso) return;
+     const eff = getEffectiveScore(a);
+     const hasValue = eff !== null && eff !== undefined && eff !== '' && !isNaN(Number(eff));
+     const isExamItem = isExamCourse;
+     const bucketTitle = a.category === 'Egyeb' && a.bucketId ? bucketTitleMap.get(a.bucketId) : '';
+
+     let badgeLabel = 'Egyéb';
+     let badgeTone = 'violet';
+     let priority = 3;
+
+     if (isExamItem) {
+      badgeLabel = 'Vizsga';
+      badgeTone = 'orange';
+      priority = 0;
+     } else if (a.category === 'ZH') {
+      badgeLabel = 'ZH';
+      badgeTone = 'amber';
+      priority = 1;
+     } else if (a.category === 'Pluszpont') {
+      badgeLabel = 'Pluszpont';
+      badgeTone = 'emerald';
+      priority = 2;
+     } else if (bucketTitle) {
+      badgeLabel = bucketTitle;
+      badgeTone = 'violet';
+      priority = 3;
+     }
+
+     items.push({
+      key: `assess_${subj.id}_${a.id}`,
+      kind: 'assessment',
+      priority,
+      subjectId: subj.id,
+      subjectName: subj.name || 'Névtelen tárgy',
+      assessmentId: a.id,
+      category: a.category,
+      title: a.title || (a.category === 'ZH' ? 'ZH' : 'Tétel'),
+      badgeLabel,
+      badgeTone,
+      max: (a.max !== null && a.max !== undefined && a.max !== '' && !isNaN(Number(a.max))) ? Number(a.max) : null,
+      achieved: hasValue ? Number(eff) : null,
+      hasValue,
+      isCompleted: hasValue
+     });
+    });
+   }
+
+   if (!disablePointCalc && !isExamCourse) {
+    toArraySafe(subj.attendanceSessions).forEach((sess, idx) => {
+     if (!sess || normalizeDateToIso(sess.date) !== todayIso) return;
+     const status = sess.status ?? null;
+     items.push({
+      key: `prac_${subj.id}_${idx}`,
+      kind: 'attendance_practice',
+      priority: 4,
+      subjectId: subj.id,
+      subjectName: subj.name || 'Névtelen tárgy',
+      sessionIdx: idx,
+      sessionNumber: sess.index || idx + 1,
+      title: `${sess.index || idx + 1}. gyakorlat`,
+      badgeLabel: 'Gyakorlat',
+      badgeTone: 'amber',
+      status,
+      isCompleted: status === 'present' || status === 'absent'
+     });
+    });
+
+    if (subj.hasLectures !== false) {
+     toArraySafe(subj.lectureAttendanceSessions).forEach((sess, idx) => {
+      if (!sess || normalizeDateToIso(sess.date) !== todayIso) return;
+      const status = sess.status ?? null;
+      items.push({
+       key: `lec_${subj.id}_${idx}`,
+       kind: 'attendance_lecture',
+       priority: 5,
+       subjectId: subj.id,
+       subjectName: subj.name || 'Névtelen tárgy',
+       sessionIdx: idx,
+       sessionNumber: sess.index || idx + 1,
+       title: `${sess.index || idx + 1}. előadás`,
+       badgeLabel: 'Előadás',
+       badgeTone: 'sky',
+       status,
+       isCompleted: status === 'present' || status === 'absent'
+      });
+     });
+    }
+   }
+  });
+
+  items.sort((a, b) => {
+   if (a.priority !== b.priority) return a.priority - b.priority;
+   const subjCmp = (a.subjectName || '').localeCompare(b.subjectName || '', 'hu');
+   if (subjCmp !== 0) return subjCmp;
+   return (a.title || '').localeCompare(b.title || '', 'hu', { numeric: true });
+  });
+
+  return items;
+ }, [semesterSubjects, todayIso, isSim, simScores]);
+
+ const todayCompletedCount = useMemo(
+  () => todayDueItems.filter(it => it.isCompleted).length,
+  [todayDueItems]
+ );
+
+ const handleTodayAttendanceToggle = async (subjectId, sessionKind, sessionIdx, targetStatus) => {
+  if (!user) return;
+  const subj = subjects.find(s => s.id === subjectId);
+  if (!subj) return;
+
+  const isLecture = sessionKind === 'attendance_lecture';
+  const fieldName = isLecture ? 'lectureAttendanceSessions' : 'attendanceSessions';
+  const itemKey = `${isLecture ? 'lec' : 'prac'}_${subjectId}_${sessionIdx}`;
+  const baseSessions = createDefaultSessions(
+   subj.totalClasses ?? toArraySafe(subj.attendanceSessions).length,
+   toArraySafe(subj[fieldName])
+  );
+  const currentStatus = baseSessions[sessionIdx]?.status ?? null;
+  const nextStatus = currentStatus === targetStatus ? null : targetStatus;
+
+  const updated = baseSessions.map((s, idx) =>
+   idx === sessionIdx ? { ...s, status: nextStatus } : s
+  );
+
+  setSavingTodayItemKey(itemKey);
+  try {
+   await updateDoc(doc(db, 'users', user.uid, 'subjects', subj.id), {
+    [fieldName]: updated
+   });
+  } catch (err) {
+   alert('Hiba a jelenlét mentésekor: ' + err.message);
+  } finally {
+   setSavingTodayItemKey(null);
+  }
+ };
+
+ const handleTodayAssessmentScoreSave = async (subjectId, assessmentId, rawInput) => {
+  if (!user) return;
+  const subj = subjects.find(s => s.id === subjectId);
+  if (!subj) return;
+
+  const trimmed = String(rawInput ?? '').trim();
+  const parsedVal = trimmed === '' ? null : Number(trimmed.replace(',', '.'));
+  if (trimmed !== '' && isNaN(parsedVal)) {
+   showToast('Érvénytelen pontszám!');
+   return;
+  }
+
+  const itemKey = `assess_${subjectId}_${assessmentId}`;
+
+  if (isSim) {
+   setSimScores(prev => ({
+    ...prev,
+    [assessmentId]: parsedVal === null ? undefined : parsedVal
+   }));
+   setTodayScoreDrafts(prev => {
+    const next = { ...prev };
+    delete next[assessmentId];
+    return next;
+   });
+   showToast(
+    parsedVal === null
+     ? 'Szimulált pontszám törölve.'
+     : `Szimulált pontszám rögzítve: ${formatHu(parsedVal)} p`
+   );
+   return;
+  }
+
+  setSavingTodayItemKey(itemKey);
+  try {
+   const existing = toArraySafe(subj.assessments);
+   const prevItem = existing.find(a => a.id === assessmentId);
+   if (!prevItem) return;
+
+   const subjSem = subj.semester || selectedSemester;
+   const subjCanonSem = getCanonicalSemesterCode(subjSem);
+   const pendingForSubjSem =
+    (subjSem && jokerPendingBySem[subjSem]) ||
+    (subjCanonSem && jokerPendingBySem[subjCanonSem]) ||
+    null;
+   const isCompletingPendingJokerHere = Boolean(
+    prevItem.category === 'ZH' &&
+    parsedVal !== null &&
+    pendingForSubjSem &&
+    pendingForSubjSem.subjectId === subj.id &&
+    pendingForSubjSem.assessmentId === assessmentId
+   );
+
+   const updated = existing.map(a => {
+    if (a.id !== assessmentId) return a;
+    return {
+     ...a,
+     achieved: parsedVal,
+     ...(isCompletingPendingJokerHere
+      ? {
+         isJokerRewritten: true,
+         jokerOriginalAchieved: a.isJokerRewritten
+          ? (a.jokerOriginalAchieved ?? null)
+          : (a.achieved !== undefined && a.achieved !== '' ? a.achieved : null)
+        }
+      : {})
+    };
+   });
+
+   const updatePayload = { assessments: updated };
+   if (subj.courseKind === 'exam' && parsedVal !== null && parsedVal >= 59.5 && subj.isFailed) {
+    updatePayload.isFailed = false;
+   }
+
+   await updateDoc(doc(db, 'users', user.uid, 'subjects', subj.id), updatePayload);
+   if (isCompletingPendingJokerHere) {
+    persistJokerPendingForSemester(subjSem, null);
+   }
+
+   setTodayScoreDrafts(prev => {
+    const next = { ...prev };
+    delete next[assessmentId];
+    return next;
+   });
+   showToast(
+    parsedVal === null
+     ? `Pontszám törölve (${prevItem.title}).`
+     : `Pontszám mentve: ${prevItem.title} — ${formatHu(parsedVal)} p`
+   );
+  } catch (err) {
+   alert('Hiba a pontszám mentésekor: ' + err.message);
+  } finally {
+   setSavingTodayItemKey(null);
+  }
+ };
+
  const handleReloadForUpdate = async () => {
  if (isReloadingApp) return;
  setIsReloadingApp(true);
@@ -10462,6 +10746,262 @@ export default function App() {
 
  {semesterSubjects.length > 0 && (
  <>
+ {/* MA ESEDÉKES TEENDŐK ABLAK */}
+ <section className="mb-4 sm:mb-5">
+  <div className={`rounded-2xl border shadow-sm overflow-hidden transition-all ${
+   todayDueItems.length > 0
+    ? darkMode
+     ? 'bg-slate-900/55 border-amber-400/45 backdrop-blur-xl shadow-[inset_0_1px_0_rgba(255,255,255,0.14),0_12px_32px_rgba(0,0,0,0.38)]'
+     : 'bg-white/62 border-amber-400/75 backdrop-blur-xl shadow-[inset_0_1px_0_rgba(255,255,255,0.92),0_10px_28px_rgba(15,23,42,0.08)]'
+    : bgCard
+  }`}>
+   <button
+    data-no-glass="ghost"
+    type="button"
+    onClick={() => {
+     if (todayDueItems.length > 0) setIsTodayBoxCollapsed(prev => !prev);
+    }}
+    aria-expanded={todayDueItems.length > 0 ? !isTodayBoxCollapsed : undefined}
+    className={`w-full px-3.5 sm:px-4 py-3 flex items-center justify-between gap-2.5 text-left transition ${
+     todayDueItems.length > 0 ? 'cursor-pointer' : 'cursor-default'
+    }`}
+   >
+    <div className="flex items-center gap-2.5 min-w-0 flex-wrap">
+     <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
+      todayDueItems.length > 0
+       ? todayCompletedCount === todayDueItems.length
+        ? 'bg-emerald-500/20 text-emerald-500 border border-emerald-500/35'
+        : 'bg-amber-400/20 text-amber-500 border border-amber-400/40'
+       : darkMode
+        ? 'bg-slate-800/80 text-slate-400 border border-white/10'
+        : 'bg-slate-100 text-slate-500 border border-slate-200'
+     }`}>
+      <Calendar className="w-4 h-4" />
+     </div>
+     <div className="min-w-0">
+      <div className="flex items-center gap-2 flex-wrap">
+       <h2 className={`text-xs sm:text-sm font-extrabold tracking-tight ${textStrong}`}>
+        Ma esedékes
+       </h2>
+       <span className={`text-[11px] font-semibold ${textMuted}`}>
+        {todayDisplayHu}
+       </span>
+       {todayDueItems.length > 0 && (
+        <span className={`px-2 py-0.5 rounded-full text-[10px] sm:text-[11px] font-extrabold ${
+         todayCompletedCount === todayDueItems.length
+          ? darkMode
+           ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/35'
+           : 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+          : darkMode
+           ? 'bg-amber-400/20 text-amber-300 border border-amber-400/35'
+           : 'bg-amber-100 text-amber-900 border border-amber-300'
+        }`}>
+         {todayCompletedCount === todayDueItems.length
+          ? `Minden rögzítve (${todayCompletedCount}/${todayDueItems.length})`
+          : `${todayCompletedCount} / ${todayDueItems.length} rögzítve`}
+        </span>
+       )}
+      </div>
+      {todayDueItems.length === 0 && (
+       <p className={`text-[11px] sm:text-xs mt-0.5 ${textMuted}`}>
+        Mára nincs dátummal megadott előadás, gyakorlat, ZH vagy egyéb tétel.
+       </p>
+      )}
+     </div>
+    </div>
+
+    {todayDueItems.length > 0 && (
+     <span className="inline-flex items-center gap-1 text-xs font-bold text-amber-500 shrink-0">
+      <span className="hidden sm:inline">{isTodayBoxCollapsed ? 'Megnyitás' : 'Összecsukás'}</span>
+      <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${!isTodayBoxCollapsed ? 'rotate-180' : ''}`} />
+     </span>
+    )}
+   </button>
+
+   <AnimatedPresence show={Boolean(todayDueItems.length > 0 && !isTodayBoxCollapsed)} variant="collapse" duration={220}>
+    {todayDueItems.length > 0 && !isTodayBoxCollapsed && (
+     <div className={`px-3.5 sm:px-4 pb-3.5 sm:pb-4 pt-2 border-t space-y-2 ${
+      darkMode ? 'border-white/10' : 'border-slate-200/80'
+     }`}>
+      {todayDueItems.map((item) => {
+       const isSavingThis = savingTodayItemKey === item.key;
+       const toneClasses = {
+        amber: darkMode ? 'bg-amber-400/20 text-amber-300 border-amber-400/35' : 'bg-amber-100 text-amber-900 border-amber-300',
+        orange: darkMode ? 'bg-orange-500/20 text-orange-300 border-orange-500/35' : 'bg-orange-100 text-orange-900 border-orange-300',
+        emerald: darkMode ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/35' : 'bg-emerald-100 text-emerald-800 border-emerald-300',
+        sky: darkMode ? 'bg-sky-500/20 text-sky-300 border-sky-500/35' : 'bg-sky-100 text-sky-800 border-sky-300',
+        violet: darkMode ? 'bg-violet-500/20 text-violet-300 border-violet-500/35' : 'bg-violet-100 text-violet-800 border-violet-300'
+       }[item.badgeTone] || (darkMode ? 'bg-slate-800 text-slate-300 border-slate-700' : 'bg-slate-100 text-slate-700 border-slate-200');
+
+       if (item.kind === 'attendance_practice' || item.kind === 'attendance_lecture') {
+        const isLec = item.kind === 'attendance_lecture';
+        return (
+         <div
+          key={item.key}
+          className={`p-2.5 sm:p-3 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 transition ${
+           item.status === 'present'
+            ? isLec
+             ? darkMode ? 'bg-sky-500/10 border-sky-500/35' : 'bg-sky-50/80 border-sky-300'
+             : darkMode ? 'bg-emerald-500/10 border-emerald-500/35' : 'bg-emerald-50/80 border-emerald-300'
+            : item.status === 'absent'
+             ? darkMode ? 'bg-rose-500/10 border-rose-500/35' : 'bg-rose-50/80 border-rose-300'
+             : bgSubCard
+          }`}
+         >
+          <button
+           data-no-glass="true"
+           type="button"
+           onClick={() => {
+            setActiveSubjectId(item.subjectId);
+            setDetailTab('attendance');
+            setAttendanceSubTab(isLec ? 'lecture' : 'practice');
+           }}
+           title="Tantárgy jelenlét fül megnyitása"
+           className="flex items-center gap-2 min-w-0 text-left cursor-pointer group bg-transparent"
+          >
+           <span className={`px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase border shrink-0 ${toneClasses}`}>
+            {item.badgeLabel}
+           </span>
+           <div className="min-w-0">
+            <p className={`text-xs sm:text-sm font-bold truncate group-hover:text-amber-500 transition ${textStrong}`}>
+             {item.subjectName}
+            </p>
+            <p className={`text-[11px] truncate ${textMuted}`}>
+             {item.title}
+            </p>
+           </div>
+          </button>
+
+          <div className="flex items-center gap-1.5 sm:gap-2 w-full sm:w-auto shrink-0">
+           <button
+            type="button"
+            disabled={isSavingThis}
+            onClick={() => handleTodayAttendanceToggle(item.subjectId, item.kind, item.sessionIdx, 'present')}
+            title="Ott voltam (Jelen)"
+            className={`flex-1 sm:flex-initial justify-center px-3 py-2 sm:py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 transition cursor-pointer disabled:opacity-60 ${
+             item.status === 'present'
+              ? isLec
+               ? 'bg-sky-500 text-white shadow-sm'
+               : 'bg-emerald-500 text-white shadow-sm'
+              : darkMode
+               ? 'bg-slate-800/90 text-slate-300 hover:bg-slate-700 border border-white/10'
+               : 'bg-white/90 text-slate-700 hover:bg-slate-100 border border-slate-200'
+            }`}
+           >
+            <Check className="w-3.5 h-3.5" /> Ott voltam
+           </button>
+           <button
+            type="button"
+            disabled={isSavingThis}
+            onClick={() => handleTodayAttendanceToggle(item.subjectId, item.kind, item.sessionIdx, 'absent')}
+            title="Nem voltam ott (Hiányzás)"
+            className={`flex-1 sm:flex-initial justify-center px-3 py-2 sm:py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 transition cursor-pointer disabled:opacity-60 ${
+             item.status === 'absent'
+              ? 'bg-rose-500 text-white shadow-sm'
+              : darkMode
+               ? 'bg-slate-800/90 text-slate-300 hover:bg-slate-700 border border-white/10'
+               : 'bg-white/90 text-slate-700 hover:bg-slate-100 border border-slate-200'
+            }`}
+           >
+            <X className="w-3.5 h-3.5" /> Hiányzás
+           </button>
+          </div>
+         </div>
+        );
+       }
+
+       // Assessment row (ZH / Vizsga / Pluszpont / Egyéb)
+       const hasDraft = Object.prototype.hasOwnProperty.call(todayScoreDrafts, item.assessmentId);
+       const savedStr = item.hasValue ? String(item.achieved) : '';
+       const inputVal = hasDraft ? todayScoreDrafts[item.assessmentId] : savedStr;
+       const isDirty = hasDraft && String(todayScoreDrafts[item.assessmentId]).trim() !== savedStr;
+
+       return (
+        <div
+         key={item.key}
+         className={`p-2.5 sm:p-3 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 transition ${
+          item.hasValue && !isDirty
+           ? darkMode ? 'bg-emerald-500/10 border-emerald-500/35' : 'bg-emerald-50/75 border-emerald-300'
+           : bgSubCard
+         }`}
+        >
+         <button
+          data-no-glass="true"
+          type="button"
+          onClick={() => {
+           setActiveSubjectId(item.subjectId);
+           setDetailTab('points');
+          }}
+          title="Tantárgy részleteinek megnyitása"
+          className="flex items-center gap-2 min-w-0 text-left cursor-pointer group bg-transparent"
+         >
+          <span className={`px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase border shrink-0 max-w-[110px] truncate ${toneClasses}`}>
+           {item.badgeLabel}
+          </span>
+          <div className="min-w-0">
+           <p className={`text-xs sm:text-sm font-bold truncate group-hover:text-amber-500 transition ${textStrong}`}>
+            {item.subjectName}
+           </p>
+           <p className={`text-[11px] truncate ${textMuted}`}>
+            {item.title}{item.max !== null ? ` • max ${formatHu(item.max)} p` : ''}
+           </p>
+          </div>
+         </button>
+
+         <form
+          onSubmit={(e) => {
+           e.preventDefault();
+           handleTodayAssessmentScoreSave(item.subjectId, item.assessmentId, inputVal);
+          }}
+          className="flex items-center gap-1.5 sm:gap-2 w-full sm:w-auto shrink-0"
+         >
+          <div className="relative flex items-center flex-1 sm:flex-initial">
+           <input
+            type="number"
+            step="any"
+            placeholder="Elért pont"
+            value={inputVal}
+            onChange={(e) =>
+             setTodayScoreDrafts(prev => ({
+              ...prev,
+              [item.assessmentId]: e.target.value
+             }))
+            }
+            className={`w-full sm:w-28 border rounded-lg px-2.5 py-2 sm:py-1.5 text-sm sm:text-xs font-bold focus:outline-none ${inputStyle}`}
+           />
+           {item.max !== null && (
+            <span className={`ml-1.5 text-xs font-semibold whitespace-nowrap ${textMuted}`}>
+             / {formatHu(item.max)} p
+            </span>
+           )}
+          </div>
+          <button
+           type="submit"
+           disabled={isSavingThis}
+           title="Pontszám mentése"
+           className={`px-3 py-2 sm:py-1.5 rounded-lg text-xs font-extrabold flex items-center gap-1 transition cursor-pointer shrink-0 disabled:opacity-60 ${
+            isDirty
+             ? 'bg-amber-400 hover:bg-amber-300 text-slate-950 shadow-sm'
+             : item.hasValue
+              ? 'bg-emerald-500 hover:bg-emerald-400 text-white shadow-sm'
+              : darkMode
+               ? 'bg-slate-800 hover:bg-slate-700 text-amber-300 border border-white/15'
+               : 'bg-slate-900 hover:bg-slate-800 text-white'
+           }`}
+          >
+           <Check className="w-3.5 h-3.5" />
+           <span>{isSavingThis ? '...' : isDirty ? 'Mentés' : item.hasValue ? 'Rögzítve' : 'Mentés'}</span>
+          </button>
+         </form>
+        </div>
+       );
+      })}
+     </div>
+    )}
+   </AnimatedPresence>
+  </div>
+ </section>
+
  <section className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4 mb-2.5 sm:mb-4">
  <div className={`p-3.5 sm:p-4 rounded-xl border shadow-sm ${bgCard}`}>
  <p className={`text-[11px] sm:text-xs font-medium uppercase ${textMuted}`}>Aláírások</p>

@@ -14,8 +14,9 @@ import {
  Menu, Palette, ChevronDown, SlidersHorizontal, RefreshCw, Lightbulb, CheckCircle2,
  LayoutList, ArrowUpDown, GripVertical, ArrowUp, ArrowDown, Calculator,
  BarChart3, Users, FastForward, FileSpreadsheet, HelpCircle, Upload,
- Download, Smartphone, Share, ShieldCheck, Lock, Database, Bell, Wrench, Home, Clock
+ Download, Smartphone, Share, ShieldCheck, Lock, Database, Bell, BellRing, BellOff, Wrench, Home, Clock
 } from 'lucide-react';
+import { getMessaging, getToken, onMessage, isSupported as isMessagingSupported } from 'firebase/messaging';
 import { auth, googleProvider, db } from './firebase';
 
 let cachedXlsxLib = null;
@@ -52,6 +53,60 @@ const STATS_CACHE_TTL_MS = 2 * 60 * 1000;
 const SEEN_NOTICES_STORAGE_KEY = 'bge_seen_notice_ids_v1';
 const UPDATE_CHECK_THROTTLE_MS = 30 * 1000;
 const GDPR_POLICY_VERSION = 'v2.3.0';
+const NOTIF_PREFS_STORAGE_KEY = 'bge_notif_prefs_v1';
+const FIRED_NOTIFS_STORAGE_KEY = 'bge_fired_notifs_v1';
+const DEFAULT_UNTIMED_REMINDER_TIME = '08:00';
+const DEFAULT_TIMED_LEAD_MINUTES = 20;
+const FIREBASE_VAPID_KEY = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_FIREBASE_VAPID_KEY)
+ ? import.meta.env.VITE_FIREBASE_VAPID_KEY
+ : '';
+
+function normalizeTimeHHMM(rawTime, fallback = '08:00') {
+ const str = String(rawTime || '').trim();
+ const m = str.match(/^(\d{1,2})[:.](\d{2})$/);
+ if (!m) return fallback;
+ const hh = Math.min(23, Math.max(0, parseInt(m[1], 10)));
+ const mm = Math.min(59, Math.max(0, parseInt(m[2], 10)));
+ if (isNaN(hh) || isNaN(mm)) return fallback;
+ return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
+}
+
+function parseTimeHHMMToMinutes(rawTime) {
+ const norm = normalizeTimeHHMM(rawTime, '');
+ if (!norm) return null;
+ const [hStr, mStr] = norm.split(':');
+ return Number(hStr) * 60 + Number(mStr);
+}
+
+function formatMinutesToHHMM(totalMins) {
+ const clamped = ((Math.round(totalMins) % 1440) + 1440) % 1440;
+ const hh = Math.floor(clamped / 60);
+ const mm = clamped % 60;
+ return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
+}
+
+function playNotificationChime() {
+ try {
+  const AudioCtx = window.AudioContext || window.webkitAudioContext;
+  if (!AudioCtx) return;
+  const ctx = new AudioCtx();
+  const now = ctx.currentTime;
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = 'sine';
+  osc.frequency.setValueAtTime(659.25, now);
+  osc.frequency.setValueAtTime(880, now + 0.11);
+  gain.gain.setValueAtTime(0.001, now);
+  gain.gain.exponentialRampToValueAtTime(0.09, now + 0.02);
+  gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.34);
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+  osc.start(now);
+  osc.stop(now + 0.36);
+ } catch {
+  // ignore audio autoplay restrictions
+ }
+}
 
 const BGE_MAJORS = [
  { id: 'emberi_eroforrasok', label: 'Emberi erőforrások', isGazdinfo: false },
@@ -648,6 +703,15 @@ function buildTemplatesForMajor(majorId) {
 }
 
 const APP_RELEASES = [
+  {
+    version: 'v3.3.0',
+    date: '2026. 11. 26.',
+    changes: [
+      'Push értesítések és élő emlékeztető rendszer: értesítést kapsz, ha új közérdekű közlemény kerül fel a Faliújságra (csak az érintett szaknak vagy mindenkinek), valamint emlékeztetőt a ma esedékes óráidról (előadás, gyakorlat), ZH-król, vizsgákról és pluszpontokról',
+      'Új „Értesítések és emlékeztetők” kártya a Menü és beállítások oldalon: egyetlen kattintással engedélyezhetők a böngésző / mobil push értesítések (FCM + Service Worker + háttér-ütemezés szinkronizálással) és tesztértesítés is küldhető',
+      'Testreszabható emlékeztető időzítések a Menüben: külön beállítható, hogy hány órakor érkezzen értesítés az időpont nélküli napi tételekről (pl. pluszpontok, határidők — alapértelmezetten 08:00), valamint hogy hány perccel korábban figyelmeztessen az időponttal rendelkező órák előtt (alapértelmezetten 20 perccel korábban)'
+    ]
+  },
   {
     version: 'v3.2.0',
     date: '2026. 11. 26.',
@@ -3632,6 +3696,50 @@ export default function App() {
  const [nicknameDraft, setNicknameDraft] = useState('');
  const [isSavingNickname, setIsSavingNickname] = useState(false);
 
+ const [notifEnabled, setNotifEnabled] = useState(() => {
+ try {
+ const raw = localStorage.getItem(NOTIF_PREFS_STORAGE_KEY);
+ if (!raw) return false;
+ const parsed = JSON.parse(raw);
+ return Boolean(parsed.enabled);
+ } catch {
+ return false;
+ }
+ });
+ const [untimedReminderTime, setUntimedReminderTime] = useState(() => {
+ try {
+ const raw = localStorage.getItem(NOTIF_PREFS_STORAGE_KEY);
+ if (!raw) return DEFAULT_UNTIMED_REMINDER_TIME;
+ const parsed = JSON.parse(raw);
+ return normalizeTimeHHMM(parsed.untimedReminderTime, DEFAULT_UNTIMED_REMINDER_TIME);
+ } catch {
+ return DEFAULT_UNTIMED_REMINDER_TIME;
+ }
+ });
+ const [timedLeadMinutes, setTimedLeadMinutes] = useState(() => {
+ try {
+ const raw = localStorage.getItem(NOTIF_PREFS_STORAGE_KEY);
+ if (!raw) return DEFAULT_TIMED_LEAD_MINUTES;
+ const parsed = JSON.parse(raw);
+ const n = parseInt(parsed.timedLeadMinutes, 10);
+ return !isNaN(n) && n >= 0 && n <= 240 ? n : DEFAULT_TIMED_LEAD_MINUTES;
+ } catch {
+ return DEFAULT_TIMED_LEAD_MINUTES;
+ }
+ });
+ const [notifPermissionState, setNotifPermissionState] = useState(() => {
+ if (typeof window === 'undefined' || !('Notification' in window)) return 'unsupported';
+ return Notification.permission;
+ });
+ const [fcmToken, setFcmToken] = useState('');
+ const [isRequestingNotifPerm, setIsRequestingNotifPerm] = useState(false);
+ const [isNotifSettingsModalOpen, setIsNotifSettingsModalOpen] = useState(false);
+ const [untimedTimeDraft, setUntimedTimeDraft] = useState(DEFAULT_UNTIMED_REMINDER_TIME);
+ const [leadMinutesDraft, setLeadMinutesDraft] = useState(String(DEFAULT_TIMED_LEAD_MINUTES));
+ const [isSavingNotifPrefs, setIsSavingNotifPrefs] = useState(false);
+ const initialNoticeIdsLoadedRef = useRef(false);
+ const knownNoticeIdsRef = useRef(new Set());
+
  const isAdmin = useMemo(
  () => Boolean(user?.email && ADMIN_EMAILS.includes(user.email.toLowerCase())),
  [user]
@@ -4489,14 +4597,184 @@ export default function App() {
  });
  setNoticeboardItems(list);
  writeLocalCache(NOTICEBOARD_CACHE_KEY, list);
+  // Trigger local/system push notification when a brand new notice arrives during an active session
+  if (!initialNoticeIdsLoadedRef.current) {
+   initialNoticeIdsLoadedRef.current = true;
+   list.forEach(item => {
+    if (item?.id) knownNoticeIdsRef.current.add(item.id);
+   });
+  } else {
+   list.forEach(item => {
+    if (!item?.id || knownNoticeIdsRef.current.has(item.id)) return;
+    knownNoticeIdsRef.current.add(item.id);
+    const audience = item.targetAudience || 'all';
+    const userIsGazd = Boolean(
+     BGE_MAJORS.find(m => m.id === userMajorId)?.isGazdinfo || userMajorId === 'gazdasaginformatikus'
+    );
+    const isRelevant = isAdmin || audience !== 'gazdinfo' || userIsGazd;
+    const isSelfCreated = item.authorEmail && user?.email && item.authorEmail.toLowerCase() === user.email.toLowerCase();
+    if (isRelevant && !isSelfCreated) {
+     dispatchSystemNotification({
+      tag: `bge_notice_${item.id}`,
+      title: `📢 Új faliújság: ${item.title || 'Közérdekű információ'}`,
+      body: String(item.message || '').slice(0, 180)
+     });
+    }
+   });
+  }
  },
  (err) => {
  console.warn('Faliújság betöltési hiba:', err);
  }
  );
 
- return () => unsubNotices();
- }, [user]);
+ return () => {
+  initialNoticeIdsLoadedRef.current = false;
+  knownNoticeIdsRef.current = new Set();
+  unsubNotices();
+ };
+ }, [user, userMajorId, isAdmin]);
+
+ const dispatchSystemNotification = async ({ tag, title, body, url = '/' }) => {
+  if (!notifEnabled) return false;
+  if (typeof window === 'undefined' || !('Notification' in window)) return false;
+  if (Notification.permission !== 'granted') return false;
+
+  try {
+   const firedRaw = localStorage.getItem(FIRED_NOTIFS_STORAGE_KEY);
+   const firedMap = firedRaw ? JSON.parse(firedRaw) : {};
+   if (tag && firedMap[tag]) return false;
+   if (tag) {
+    firedMap[tag] = Date.now();
+    const cutoff = Date.now() - 3 * 24 * 60 * 60 * 1000;
+    Object.keys(firedMap).forEach(k => {
+     if (firedMap[k] < cutoff) delete firedMap[k];
+    });
+    localStorage.setItem(FIRED_NOTIFS_STORAGE_KEY, JSON.stringify(firedMap));
+   }
+  } catch {
+   // ignore storage error
+  }
+
+  playNotificationChime();
+
+  const options = {
+   body,
+   icon: '/logo.png',
+   badge: '/logo.png',
+   tag: tag || `bge_notif_${Date.now()}`,
+   renotify: true,
+   data: { url }
+  };
+
+  try {
+   if ('serviceWorker' in navigator) {
+    const reg = await navigator.serviceWorker.getRegistration();
+    if (reg && typeof reg.showNotification === 'function') {
+     await reg.showNotification(title, options);
+     return true;
+    }
+   }
+   const n = new Notification(title, options);
+   n.onclick = () => {
+    window.focus();
+    n.close();
+   };
+   return true;
+  } catch (err) {
+   console.warn('Értesítés megjelenítési hiba:', err);
+   return false;
+  }
+ };
+
+ const registerFcmPushTokenForUser = async (uid, overrideSettings = null) => {
+  if (!uid || typeof window === 'undefined') return '';
+  try {
+   const supported = await isMessagingSupported();
+   if (!supported) return '';
+   if (!('serviceWorker' in navigator)) return '';
+
+   const swReg = await navigator.serviceWorker.register('/firebase-messaging-sw.js').catch(() => null)
+    || await navigator.serviceWorker.getRegistration();
+   if (!swReg) return '';
+
+   const messaging = getMessaging(auth.app);
+   const tokenOptions = { serviceWorkerRegistration: swReg };
+   if (FIREBASE_VAPID_KEY) {
+    tokenOptions.vapidKey = FIREBASE_VAPID_KEY;
+   }
+   const token = await getToken(messaging, tokenOptions);
+   if (token) {
+    setFcmToken(token);
+    const effectiveEnabled = overrideSettings?.enabled ?? notifEnabled;
+    const effectiveUntimed = overrideSettings?.untimedReminderTime ?? untimedReminderTime;
+    const effectiveLead = overrideSettings?.timedLeadMinutes ?? timedLeadMinutes;
+    const effectiveMajorObj = BGE_MAJORS.find(m => m.id === userMajorId) || null;
+
+    await setDoc(
+     doc(db, 'users', uid, 'settings', 'preferences'),
+     {
+      notificationsEnabled: Boolean(effectiveEnabled),
+      untimedReminderTime: effectiveUntimed,
+      timedLeadMinutes: effectiveLead,
+      fcmToken: token,
+      fcmUpdatedAtMs: Date.now()
+     },
+     { merge: true }
+    );
+
+    await setDoc(
+     doc(db, 'fcmTokens', `${uid}_${token.slice(0, 16)}`),
+     {
+      uid,
+      token,
+      enabled: Boolean(effectiveEnabled),
+      majorId: effectiveMajorObj?.id || userMajorId || '',
+      untimedReminderTime: effectiveUntimed,
+      timedLeadMinutes: effectiveLead,
+      updatedAtMs: Date.now(),
+      updatedAt: serverTimestamp()
+     },
+     { merge: true }
+    );
+    return token;
+   }
+  } catch (err) {
+   console.warn('FCM token lekérés (ha még nincs VAPID kulcs vagy SW beállítva, helyi push aktív marad):', err?.code || err?.message);
+  }
+  return '';
+ };
+
+ useEffect(() => {
+  if (!user || !notifEnabled || notifPermissionState !== 'granted') return;
+  let unsubOnMessage = null;
+
+  registerFcmPushTokenForUser(user.uid, {
+   enabled: notifEnabled,
+   untimedReminderTime,
+   timedLeadMinutes
+  });
+
+  (async () => {
+   try {
+    const supported = await isMessagingSupported();
+    if (!supported) return;
+    const messaging = getMessaging(auth.app);
+    unsubOnMessage = onMessage(messaging, (payload) => {
+     const title = payload?.notification?.title || payload?.data?.title || 'BGE Progress';
+     const body = payload?.notification?.body || payload?.data?.body || '';
+     const tag = payload?.data?.tag || `fcm_${Date.now()}`;
+     dispatchSystemNotification({ tag, title, body });
+    });
+   } catch {
+    // ignore
+   }
+  })();
+
+  return () => {
+   if (typeof unsubOnMessage === 'function') unsubOnMessage();
+  };
+ }, [user, notifEnabled, notifPermissionState]);
 
  const mustAcceptGdpr = Boolean(user && userDataLoaded && !hasAcceptedGdpr);
  const mustSelectMajor = Boolean(user && userDataLoaded && hasAcceptedGdpr && !userMajorId);
@@ -4641,6 +4919,149 @@ export default function App() {
  } finally {
  setIsSavingNotice(false);
  }
+ };
+
+ const persistNotificationPrefs = async (nextEnabled, nextUntimedTime, nextLeadMins) => {
+  const normTime = normalizeTimeHHMM(nextUntimedTime, DEFAULT_UNTIMED_REMINDER_TIME);
+  const normLead = Math.min(240, Math.max(0, parseInt(nextLeadMins, 10) || 0));
+
+  setNotifEnabled(Boolean(nextEnabled));
+  setUntimedReminderTime(normTime);
+  setTimedLeadMinutes(normLead);
+
+  try {
+   localStorage.setItem(NOTIF_PREFS_STORAGE_KEY, JSON.stringify({
+    enabled: Boolean(nextEnabled),
+    untimedReminderTime: normTime,
+    timedLeadMinutes: normLead
+   }));
+  } catch {
+   // ignore
+  }
+
+  if (user) {
+   await setDoc(
+    doc(db, 'users', user.uid, 'settings', 'preferences'),
+    {
+     notificationsEnabled: Boolean(nextEnabled),
+     untimedReminderTime: normTime,
+     timedLeadMinutes: normLead,
+     notifPrefsUpdatedAtMs: Date.now()
+    },
+    { merge: true }
+   ).catch(() => {});
+
+   if (fcmToken) {
+    await setDoc(
+     doc(db, 'fcmTokens', `${user.uid}_${fcmToken.slice(0, 16)}`),
+     {
+      uid: user.uid,
+      token: fcmToken,
+      enabled: Boolean(nextEnabled),
+      untimedReminderTime: normTime,
+      timedLeadMinutes: normLead,
+      updatedAtMs: Date.now()
+     },
+     { merge: true }
+    ).catch(() => {});
+   }
+  }
+ };
+
+ const handleTogglePushNotifications = async () => {
+  if (isRequestingNotifPerm) return;
+  if (typeof window === 'undefined' || !('Notification' in window)) {
+   showToast('Ez a böngésző nem támogatja a push értesítéseket.');
+   return;
+  }
+
+  if (notifEnabled) {
+   await persistNotificationPrefs(false, untimedReminderTime, timedLeadMinutes);
+   showToast('Push értesítések kikapcsolva.');
+   return;
+  }
+
+  setIsRequestingNotifPerm(true);
+  try {
+   let perm = Notification.permission;
+   if (perm !== 'granted') {
+    perm = await Notification.requestPermission();
+   }
+   setNotifPermissionState(perm);
+
+   if (perm !== 'granted') {
+    await persistNotificationPrefs(false, untimedReminderTime, timedLeadMinutes);
+    showToast('Az értesítések engedélyezése le lett tiltva a böngészőben.');
+    return;
+   }
+
+   await persistNotificationPrefs(true, untimedReminderTime, timedLeadMinutes);
+   if (user) {
+    await registerFcmPushTokenForUser(user.uid, {
+     enabled: true,
+     untimedReminderTime,
+     timedLeadMinutes
+    });
+   }
+   showToast('Push értesítések bekapcsolva!');
+  } catch (err) {
+   alert('Hiba az értesítések bekapcsolásakor: ' + err.message);
+  } finally {
+   setIsRequestingNotifPerm(false);
+  }
+ };
+
+ const handleOpenNotifSettingsModal = () => {
+  setUntimedTimeDraft(untimedReminderTime || DEFAULT_UNTIMED_REMINDER_TIME);
+  setLeadMinutesDraft(String(timedLeadMinutes ?? DEFAULT_TIMED_LEAD_MINUTES));
+  setIsNotifSettingsModalOpen(true);
+ };
+
+ const handleSaveNotifSettingsModal = async (e) => {
+  if (e && e.preventDefault) e.preventDefault();
+  if (isSavingNotifPrefs) return;
+  const parsedLead = parseInt(String(leadMinutesDraft).trim(), 10);
+  if (isNaN(parsedLead) || parsedLead < 0 || parsedLead > 240) return;
+  const normTime = normalizeTimeHHMM(untimedTimeDraft, DEFAULT_UNTIMED_REMINDER_TIME);
+
+  setIsSavingNotifPrefs(true);
+  try {
+   await persistNotificationPrefs(notifEnabled, normTime, parsedLead);
+   setIsNotifSettingsModalOpen(false);
+   showToast(`Értesítési időzítések mentve (${normTime} • ${parsedLead} perccel előtte).`);
+  } finally {
+   setIsSavingNotifPrefs(false);
+  }
+ };
+
+ const handleSendTestPushNotification = async () => {
+  if (typeof window === 'undefined' || !('Notification' in window)) {
+   showToast('A böngésződ nem támogatja az értesítéseket.');
+   return;
+  }
+  let perm = Notification.permission;
+  if (perm !== 'granted') {
+   perm = await Notification.requestPermission();
+   setNotifPermissionState(perm);
+  }
+  if (perm !== 'granted') {
+   showToast('Előbb engedélyezd az értesítéseket a böngészőben!');
+   return;
+  }
+  if (!notifEnabled) {
+   await persistNotificationPrefs(true, untimedReminderTime, timedLeadMinutes);
+  }
+  const uniqueTag = `bge_test_${Date.now()}`;
+  const sent = await dispatchSystemNotification({
+   tag: uniqueTag,
+   title: '🔔 BGE Progress — Teszt értesítés',
+   body: `Minden működik! Időpont nélküli tételek: ${untimedReminderTime} • Órák előtt: ${timedLeadMinutes} perccel.`
+  });
+  if (sent) {
+   showToast('Teszt push értesítés elküldve!');
+  } else {
+   showToast('Nem sikerült megjeleníteni a rendszerértesítést (ellenőrizd a Ne zavarjanak módot).');
+  }
  };
 
  const handleDeleteNotice = async (notice) => {
@@ -4886,6 +5307,34 @@ export default function App() {
  if (typeof data.subjectSortMode === 'string') {
  setSortMode(data.subjectSortMode);
  localStorage.setItem('bge_subject_sort_mode', data.subjectSortMode);
+ }
+ if (typeof data.notificationsEnabled === 'boolean') {
+  const permGranted = typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted';
+  const nextEn = data.notificationsEnabled && permGranted;
+  setNotifEnabled(nextEn);
+  const nextUntimed = normalizeTimeHHMM(data.untimedReminderTime, DEFAULT_UNTIMED_REMINDER_TIME);
+  const nextLead = !isNaN(parseInt(data.timedLeadMinutes, 10))
+   ? Math.min(240, Math.max(0, parseInt(data.timedLeadMinutes, 10)))
+   : DEFAULT_TIMED_LEAD_MINUTES;
+  setUntimedReminderTime(nextUntimed);
+  setTimedLeadMinutes(nextLead);
+  try {
+   localStorage.setItem(NOTIF_PREFS_STORAGE_KEY, JSON.stringify({
+    enabled: nextEn,
+    untimedReminderTime: nextUntimed,
+    timedLeadMinutes: nextLead
+   }));
+  } catch {
+   // ignore
+  }
+ } else {
+  if (typeof data.untimedReminderTime === 'string') {
+   setUntimedReminderTime(normalizeTimeHHMM(data.untimedReminderTime, DEFAULT_UNTIMED_REMINDER_TIME));
+  }
+  if (data.timedLeadMinutes !== undefined && data.timedLeadMinutes !== null) {
+   const nLead = parseInt(data.timedLeadMinutes, 10);
+   if (!isNaN(nLead) && nLead >= 0 && nLead <= 240) setTimedLeadMinutes(nLead);
+  }
  }
  if (data.jokerPendingBySem && typeof data.jokerPendingBySem === 'object') {
  setJokerPendingBySem(data.jokerPendingBySem);
@@ -7753,6 +8202,7 @@ export default function App() {
  isSubjectModalOpen ||
  isDegreeCreditsModalOpen ||
  isThresholdModalOpen ||
+ isNotifSettingsModalOpen ||
  isGazdinfoOnboardingOpen ||
  isWelcomeOpen ||
  isFeedbackOpen ||
@@ -7811,6 +8261,7 @@ export default function App() {
  if (isAvgCalcOpen) { setIsAvgCalcOpen(false); return; }
  if (isDegreeCreditsModalOpen) { setIsDegreeCreditsModalOpen(false); return; }
  if (isThresholdModalOpen) { setIsThresholdModalOpen(false); return; }
+ if (isNotifSettingsModalOpen && !isSavingNotifPrefs) { setIsNotifSettingsModalOpen(false); return; }
  if (isPastSemestersWizardOpen && !isSavingPastSemesters) { setIsPastSemestersWizardOpen(false); return; }
  if (isSemesterModalOpen) { setIsSemesterModalOpen(false); return; }
  if (editingSemesterOldName && !isUpdatingSemester) { setEditingSemesterOldName(null); return; }
@@ -8704,6 +9155,113 @@ export default function App() {
   [todayDueItems]
  );
 
+ // Sync today's reminder schedule to Firestore (so Firebase Cloud Functions can also send background web-push when the app is closed)
+ useEffect(() => {
+  if (!user || !userDataLoaded) return;
+  const untimedMins = parseTimeHHMMToMinutes(untimedReminderTime) ?? (8 * 60);
+  const leadMins = Math.max(0, Number(timedLeadMinutes) || 0);
+
+  const scheduledEntries = todayDueItems.map((it) => {
+   const eventStartMins = it.time ? parseTimeHHMMToMinutes(it.time) : null;
+   const triggerMins = eventStartMins !== null
+    ? Math.max(0, eventStartMins - leadMins)
+    : untimedMins;
+   return {
+    key: it.key,
+    date: todayIso,
+    subjectName: it.subjectName,
+    title: it.title,
+    badgeLabel: it.badgeLabel,
+    eventTime: it.time || '',
+    triggerTime: formatMinutesToHHMM(triggerMins),
+    triggerMinutesOfDay: triggerMins,
+    isCompleted: Boolean(it.isCompleted)
+   };
+  });
+
+  setDoc(
+   doc(db, 'users', user.uid, 'settings', 'dailyReminders'),
+   {
+    uid: user.uid,
+    date: todayIso,
+    enabled: Boolean(notifEnabled),
+    untimedReminderTime,
+    timedLeadMinutes: leadMins,
+    items: scheduledEntries,
+    updatedAtMs: Date.now()
+   },
+   { merge: true }
+  ).catch(() => {});
+ }, [user, userDataLoaded, todayDueItems, todayIso, notifEnabled, untimedReminderTime, timedLeadMinutes]);
+
+ // Live client-side reminder scheduler (fires exact notifications while app/tab/PWA is open)
+ useEffect(() => {
+  if (!user || !notifEnabled || notifPermissionState !== 'granted') return;
+  if (!todayDueItems || todayDueItems.length === 0) return;
+
+  const checkDueRemindersNow = () => {
+   const now = new Date();
+   const currentIso = getTodayIsoLocal();
+   if (currentIso !== todayIso) return;
+
+   const nowMins = now.getHours() * 60 + now.getMinutes();
+   const untimedTargetMins = parseTimeHHMMToMinutes(untimedReminderTime) ?? (8 * 60);
+   const leadMins = Math.max(0, Number(timedLeadMinutes) || 0);
+
+   // 1) Group untimed items for today at untimedReminderTime
+   const untimedDueNow = todayDueItems.filter(it => {
+    if (it.isCompleted) return false;
+    const startMins = it.time ? parseTimeHHMMToMinutes(it.time) : null;
+    return startMins === null;
+   });
+
+   if (untimedDueNow.length > 0 && nowMins >= untimedTargetMins && nowMins <= untimedTargetMins + 180) {
+    const summaryLines = untimedDueNow
+     .slice(0, 4)
+     .map(it => `${it.subjectName}: ${it.title} (${it.badgeLabel})`)
+     .join(' • ');
+    const extraCount = untimedDueNow.length > 4 ? ` (+${untimedDueNow.length - 4} további)` : '';
+    dispatchSystemNotification({
+     tag: `bge_untimed_${currentIso}_${untimedReminderTime}`,
+     title: `📅 Ma esedékes teendők (${untimedDueNow.length} db)`,
+     body: `${summaryLines}${extraCount}`
+    });
+   }
+
+   // 2) Timed items: fire timedLeadMinutes before start time
+   todayDueItems.forEach((it) => {
+    if (it.isCompleted || !it.time) return;
+    const startMins = parseTimeHHMMToMinutes(it.time);
+    if (startMins === null) return;
+    const triggerMins = Math.max(0, startMins - leadMins);
+
+    if (nowMins >= triggerMins && nowMins <= startMins + 5) {
+     const minsUntil = startMins - nowMins;
+     const whenText = minsUntil > 0
+      ? `${minsUntil} perc múlva (${it.time}-kor) kezdődik`
+      : `Most (${it.time}-kor) kezdődik`;
+     dispatchSystemNotification({
+      tag: `bge_timed_${currentIso}_${it.key}_${leadMins}`,
+      title: `⏰ ${it.badgeLabel}: ${it.subjectName}`,
+      body: `${it.title} — ${whenText}!`
+     });
+    }
+   });
+  };
+
+  checkDueRemindersNow();
+  const intervalId = setInterval(checkDueRemindersNow, 20 * 1000);
+  const onVis = () => {
+   if (document.visibilityState === 'visible') checkDueRemindersNow();
+  };
+  document.addEventListener('visibilitychange', onVis);
+
+  return () => {
+   clearInterval(intervalId);
+   document.removeEventListener('visibilitychange', onVis);
+  };
+ }, [user, notifEnabled, notifPermissionState, todayDueItems, todayIso, untimedReminderTime, timedLeadMinutes]);
+
  const handleTodayAttendanceToggle = async (subjectId, sessionKind, sessionIdx, targetStatus) => {
   if (!user) return;
   const subj = subjects.find(s => s.id === subjectId);
@@ -9589,6 +10147,135 @@ export default function App() {
  }`}>
  {isSim ? 'BE' : 'KI'}
  </span>
+ </button>
+ </div>
+ </div>
+
+ {/* 3/B. ÉRTESÍTÉSEK ÉS EMLÉKEZTETŐK KÁRTYA */}
+ <div className={`bge-menu-card bge-menu-card-3 rounded-2xl border p-4 sm:p-6 space-y-3.5 ${bgCard}`}>
+ <div className="flex items-center justify-between gap-2 flex-wrap">
+ <div className="flex items-center gap-2">
+ <BellRing className="w-4 h-4 text-amber-500 shrink-0" />
+ <h2 className={`text-xs sm:text-sm font-extrabold uppercase tracking-wider ${textStrong}`}>
+ Értesítések és emlékeztetők
+ </h2>
+ </div>
+ <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider ${
+ notifEnabled && notifPermissionState === 'granted'
+ ? 'bg-emerald-500/20 text-emerald-500 border border-emerald-500/35'
+ : darkMode
+ ? 'bg-slate-800 text-slate-400 border border-white/10'
+ : 'bg-slate-100 text-slate-600 border border-slate-200'
+ }`}>
+ {notifEnabled && notifPermissionState === 'granted' ? 'Aktív' : 'Kikapcsolva'}
+ </span>
+ </div>
+
+ <button
+ type="button"
+ disabled={isRequestingNotifPerm}
+ onClick={handleTogglePushNotifications}
+ className={`w-full px-4 py-3.5 rounded-2xl text-xs sm:text-sm font-bold border flex items-center justify-between gap-3 text-left transition cursor-pointer disabled:opacity-60 ${
+ notifEnabled && notifPermissionState === 'granted'
+ ? darkMode
+ ? 'bg-emerald-950/30 hover:bg-emerald-900/40 text-emerald-100 border-emerald-500/45'
+ : 'bg-emerald-50/85 hover:bg-emerald-100/80 text-slate-900 border-emerald-300'
+ : darkMode
+ ? 'bg-slate-800/65 hover:bg-slate-800 text-slate-100 border-white/12'
+ : 'bg-white/65 hover:bg-amber-50/75 text-slate-800 border-slate-200/90'
+ }`}
+ >
+ <span className="flex items-center gap-2.5 min-w-0">
+ {notifEnabled && notifPermissionState === 'granted' ? (
+ <BellRing className="w-4 h-4 text-emerald-500 shrink-0" />
+ ) : (
+ <BellOff className="w-4 h-4 text-amber-500 shrink-0" />
+ )}
+ <span className="min-w-0">
+ <span className="block font-extrabold">Push értesítések (Faliújság & Napi órák)</span>
+ <span className={`block text-[11px] font-medium mt-0.5 ${textMuted}`}>
+ {notifPermissionState === 'denied'
+ ? 'A böngészőben tiltva van — engedélyezd az oldal beállításaiban'
+ : 'Új faliújság közlemények és ma esedékes órák / pluszpontok emlékeztetői'}
+ </span>
+ </span>
+ </span>
+ <span className={`px-3 py-1 rounded-full text-[11px] font-extrabold shrink-0 ${
+ notifEnabled && notifPermissionState === 'granted'
+ ? 'bg-emerald-500 text-white'
+ : darkMode ? 'bg-slate-700 text-slate-300' : 'bg-slate-200 text-slate-700'
+ }`}>
+ {isRequestingNotifPerm ? '...' : (notifEnabled && notifPermissionState === 'granted' ? 'BE' : 'KI')}
+ </span>
+ </button>
+
+ <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3">
+ <button
+ type="button"
+ onClick={handleOpenNotifSettingsModal}
+ className={`w-full px-4 py-3.5 rounded-2xl text-xs sm:text-sm font-bold border flex items-center justify-between gap-2 text-left transition cursor-pointer ${
+ darkMode
+ ? 'bg-slate-800/65 hover:bg-slate-800 text-slate-100 border-white/12'
+ : 'bg-white/65 hover:bg-amber-50/75 text-slate-800 border-slate-200/90'
+ }`}
+ >
+ <span className="flex items-center gap-2.5 min-w-0">
+ <Clock className="w-4 h-4 text-amber-500 shrink-0" />
+ <span className="min-w-0">
+ <span className="block truncate">Időpont nélküli tételek</span>
+ <span className={`block text-[10px] font-medium ${textMuted}`}>Pluszpontok, határidők</span>
+ </span>
+ </span>
+ <span className="px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-amber-400/20 text-amber-500 border border-amber-400/30 shrink-0">
+ {untimedReminderTime}
+ </span>
+ </button>
+
+ <button
+ type="button"
+ onClick={handleOpenNotifSettingsModal}
+ className={`w-full px-4 py-3.5 rounded-2xl text-xs sm:text-sm font-bold border flex items-center justify-between gap-2 text-left transition cursor-pointer ${
+ darkMode
+ ? 'bg-slate-800/65 hover:bg-slate-800 text-slate-100 border-white/12'
+ : 'bg-white/65 hover:bg-sky-50/75 text-slate-800 border-slate-200/90'
+ }`}
+ >
+ <span className="flex items-center gap-2.5 min-w-0">
+ <Bell className="w-4 h-4 text-sky-500 shrink-0" />
+ <span className="min-w-0">
+ <span className="block truncate">Időpontos órák előtt</span>
+ <span className={`block text-[10px] font-medium ${textMuted}`}>Előadás, gyakorlat</span>
+ </span>
+ </span>
+ <span className="px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-sky-500/15 text-sky-500 border border-sky-500/30 shrink-0">
+ {timedLeadMinutes} perccel
+ </span>
+ </button>
+ </div>
+
+ <div className="flex items-center justify-between gap-2 pt-0.5">
+ <button
+ type="button"
+ onClick={handleOpenNotifSettingsModal}
+ className={`text-xs font-bold inline-flex items-center gap-1.5 hover:underline cursor-pointer ${
+ darkMode ? 'text-amber-400' : 'text-amber-700'
+ }`}
+ >
+ <SlidersHorizontal className="w-3.5 h-3.5" />
+ <span>Időzítések finomhangolása</span>
+ </button>
+
+ <button
+ type="button"
+ onClick={handleSendTestPushNotification}
+ className={`px-3 py-1.5 rounded-xl text-[11px] font-bold border inline-flex items-center gap-1.5 transition cursor-pointer ${
+ darkMode
+ ? 'bg-slate-800/80 hover:bg-slate-700 text-slate-200 border-white/12'
+ : 'bg-white/80 hover:bg-slate-100 text-slate-700 border-slate-300'
+ }`}
+ >
+ <BellRing className="w-3 h-3 text-amber-500" />
+ <span>Teszt értesítés</span>
  </button>
  </div>
  </div>
@@ -19164,6 +19851,149 @@ export default function App() {
  Bezárás
  </button>
  </div>
+ </div>
+ </div>
+ )}
+ </AnimatedPresence>
+
+ {/* ÉRTESÍTÉSI IDŐZÍTÉSEK BEÁLLÍTÁSA MODAL */}
+ <AnimatedPresence show={Boolean(isNotifSettingsModalOpen)} variant="modal" duration={240}>
+ {isNotifSettingsModalOpen && (
+ <div
+ data-top-modal="true"
+ onClick={() => !isSavingNotifPrefs && setIsNotifSettingsModalOpen(false)}
+ className={`fixed inset-0 ${modalBackdrop} z-50 flex items-center justify-center p-2.5 sm:p-4 overscroll-none`}
+ >
+ <div
+ onClick={(e) => e.stopPropagation()}
+ className={`rounded-2xl max-w-md w-full shadow-2xl overflow-hidden border ${modalCard}`}
+ >
+ <div className={`px-4 sm:px-6 py-3.5 sm:py-4 flex justify-between items-center ${modalHeader}`}>
+ <div className="flex items-center gap-2.5 min-w-0">
+ <div className="w-8 h-8 rounded-lg bg-amber-400 text-slate-950 flex items-center justify-center shrink-0">
+ <BellRing className="w-4 h-4" />
+ </div>
+ <div className="min-w-0">
+ <h2 className="font-extrabold text-sm sm:text-base leading-tight">Értesítési időzítések</h2>
+ <p className={`text-[11px] truncate ${modalHeaderSubtext}`}>
+ Ma esedékes órák, ZH-k és pluszpontok emlékeztetői
+ </p>
+ </div>
+ </div>
+ <button
+ data-no-glass="true"
+ type="button"
+ disabled={isSavingNotifPrefs}
+ onClick={() => setIsNotifSettingsModalOpen(false)}
+ className={`p-1.5 cursor-pointer shrink-0 ${modalCloseBtn}`}
+ >
+ <X className="w-5 h-5" />
+ </button>
+ </div>
+
+ <form onSubmit={handleSaveNotifSettingsModal} className="p-4 sm:p-6 space-y-4">
+ <div className={`p-3.5 rounded-xl border space-y-2 ${bgSubCard}`}>
+ <label className={`block text-xs font-extrabold ${textStrong}`}>
+ 1. Időpont nélküli napi tételek értesítési ideje
+ </label>
+ <p className={`text-[11px] leading-relaxed ${textMuted}`}>
+ Ha egy mai tételhez (pl. pluszpont, ZH vagy határidő) nincs megadva pontos óra:perc kezdés, hány órakor küldjön emlékeztetőt?
+ </p>
+ <div className="flex items-center gap-2 pt-1">
+ <input
+ type="time"
+ required
+ value={untimedTimeDraft}
+ onChange={(e) => setUntimedTimeDraft(e.target.value)}
+ className={`border rounded-xl px-3.5 py-2.5 font-extrabold focus:outline-none ${inputStyle}`}
+ />
+ <div className="flex items-center gap-1.5 flex-wrap">
+ {['07:30', '08:00', '09:00'].map(presetT => (
+ <button
+ key={presetT}
+ type="button"
+ onClick={() => setUntimedTimeDraft(presetT)}
+ className={`px-2.5 py-1.5 rounded-lg text-xs font-bold border transition cursor-pointer ${
+ untimedTimeDraft === presetT
+ ? 'bg-amber-400 text-slate-950 border-amber-400'
+ : darkMode
+ ? 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
+ : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200'
+ }`}
+ >
+ {presetT}
+ </button>
+ ))}
+ </div>
+ </div>
+ </div>
+
+ <div className={`p-3.5 rounded-xl border space-y-2 ${bgSubCard}`}>
+ <label className={`block text-xs font-extrabold ${textStrong}`}>
+ 2. Időponttal rendelkező tételek előtti értesítés (perc)
+ </label>
+ <p className={`text-[11px] leading-relaxed ${textMuted}`}>
+ Minden időponttal rendelkező óra (előadás, gyakorlat) előtt hány perccel küldjön emlékeztetőt (alapértelmezett: 20 perc)?
+ </p>
+ <div className="grid grid-cols-5 gap-1.5 pt-1">
+ {[5, 10, 15, 20, 30].map(mins => {
+ const isSelected = String(leadMinutesDraft) === String(mins);
+ return (
+ <button
+ key={mins}
+ type="button"
+ onClick={() => setLeadMinutesDraft(String(mins))}
+ className={`py-2 px-1 rounded-xl text-xs font-extrabold border transition cursor-pointer ${
+ isSelected
+ ? 'bg-sky-500 text-white border-sky-500 shadow-xs'
+ : darkMode
+ ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
+ : 'bg-white hover:bg-slate-100 text-slate-800 border-slate-200'
+ }`}
+ >
+ {mins} p
+ </button>
+ );
+ })}
+ </div>
+ <div className="flex items-center gap-2 pt-1.5">
+ <input
+ type="number"
+ min="0"
+ max="240"
+ step="1"
+ required
+ placeholder="Pl. 20"
+ value={leadMinutesDraft}
+ onChange={(e) => setLeadMinutesDraft(e.target.value)}
+ className={`w-28 border rounded-xl px-3 py-2 font-extrabold focus:outline-none ${inputStyle}`}
+ />
+ <span className={`text-xs font-semibold ${textMuted}`}>perccel a kezdés előtt (0–240 perc)</span>
+ </div>
+ </div>
+
+ <div className="flex justify-end gap-2 pt-1">
+ <button
+ data-no-glass="true"
+ type="button"
+ disabled={isSavingNotifPrefs}
+ onClick={() => setIsNotifSettingsModalOpen(false)}
+ className={`px-4 py-2 text-sm rounded-lg cursor-pointer ${textMuted}`}
+ >
+ Mégse
+ </button>
+ <button
+ type="submit"
+ disabled={isSavingNotifPrefs || (() => {
+ const n = parseInt(String(leadMinutesDraft).trim(), 10);
+ return isNaN(n) || n < 0 || n > 240;
+ })()}
+ className="px-4 py-2 text-sm font-bold bg-amber-400 hover:bg-amber-300 disabled:opacity-45 text-slate-950 rounded-lg cursor-pointer"
+ >
+ {isSavingNotifPrefs ? 'Mentés...' : 'Beállítások mentése'}
+ </button>
+ </div>
+ </form>
  </div>
  </div>
  )}

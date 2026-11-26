@@ -704,11 +704,19 @@ function buildTemplatesForMajor(majorId) {
 
 const APP_RELEASES = [
   {
+    version: 'v3.5.0',
+    date: '2026. 11. 26.',
+    changes: [
+      'Interaktív „Automatikus kitöltés” megerősítő felugró sáv az alkalmazás minden táblázatos / soros felületén (Jelenlét fülön a gyakorlatoknál és az előadásoknál, a pontszám tételeknél — ZH-k, Pluszpontok, Egyéb gyűjtők — valamint a múltbéli félévek varázslójában)',
+      'Intelligens várakozó működés: ha a felugró ablakban a „Nem” gombra nyomsz, az elrejtőzik és várakozik, majd automatikusan újra felugrik, amint egy újabb sort kitöltesz; ha pedig az „Igen” gombot választod, a felismert minta (lépésköz, időpont, max pontszám) alapján kitölti a többi üres sort és eltűnik'
+    ]
+  },
+  {
     version: 'v3.4.0',
     date: '2026. 11. 26.',
     changes: [
       'Dátum és kezdési időpont megadása Joker ZH-hoz és vizsgához is: a Joker ZH kiválasztásakor és pontbeírásakor megadható az újraírás dátuma és időpontja, valamint a vizsgáknál (mind a vizsgakurzusoknál, mind az automatikus vizsgáknál) is rögzíthető a pontos vizsgaidőpont — mindkettő automatikusan megjelenik a „Ma esedékes” ablakban',
-      'Megerősítéses sorozatkitöltés (auto-fill) a Jelenlét fülön: legalább 2 kitöltött alkalom dátuma után felugró megerősítő gomb kérdezi meg, hogy alkalmazza-e az automatikus kitöltést — „Nem” esetén várakozik és új sor kitöltésekor újra felugrik, „Igen” esetén pedig kitölti a többi sort, majd eltűnik',
+      'Intelligens Excel-szerű sorozatkitöltés (auto-fill) a Jelenlét fülön: ha a gyakorlatoknál vagy az előadásoknál kézzel beírod az első két alkalom dátumát (és opcionálisan időpontját), a rendszer felismeri a két dátum közötti lépésközt (pl. heti 7 nap vagy kétheti 14 nap), és automatikusan kitölti az összes többi üres sort a megfelelő dátumokkal és kezdési időponttal',
       'Automatikus összecsukás a „Ma esedékes” ablakban: amint a mai napra esedékes összes teendőt rögzítetted, az ablak automatikusan becsukódik (és bármikor újra lenyitható, ha visszanéznéd vagy módosítanád)',
       'Félévszintű duplikált sablon-tárgyfelvétel tiltása: a tárgyfelvétel ablak sablonlistája az adott féléven belül ellenőrzi a már felvett tantárgyakat, így ugyanabban a félévben nem engedi kétszer felvenni ugyanazt a tárgyat, de egy másik félévben (pl. tárgyismétlésnél) szabadon felvehető'
     ]
@@ -4363,16 +4371,11 @@ export default function App() {
  };
  }, []);
  const [isAttendanceDashboardExpanded, setIsAttendanceDashboardExpanded] = useState(false);
- const [autoFillPromptState, setAutoFillPromptState] = useState(null);
- const [isApplyingAutoFillPrompt, setIsApplyingAutoFillPrompt] = useState(false);
-
- useEffect(() => {
-  setAutoFillPromptState(null);
- }, [activeSubjectId, detailTab, attendanceSubTab]);
 
  const [activeSubjectId, setActiveSubjectId] = useState(null);
  const [detailTab, setDetailTab] = useState('points');
  const [attendanceSubTab, setAttendanceSubTab] = useState('practice');
+ const [dismissedAutoFillSigs, setDismissedAutoFillSigs] = useState({});
  const detailModalBodyRef = useRef(null);
 
  useEffect(() => {
@@ -6719,6 +6722,48 @@ export default function App() {
  r.rowId === rowId ? { ...r, [field]: value } : r
  )
  }));
+ };
+
+ const detectWizardSemSeriesProposal = (semCode) => {
+  const rows = wizardEntriesBySem[semCode] || [];
+  if (rows.length < 3) return null;
+
+  const filledCreditIndices = [];
+  const emptyCreditIndices = [];
+  rows.forEach((r, idx) => {
+   const credStr = String(r.credits ?? '').trim();
+   if (credStr !== '' && !isNaN(Number(credStr)) && Number(credStr) > 0) {
+    filledCreditIndices.push(idx);
+   } else if (credStr === '') {
+    emptyCreditIndices.push(idx);
+   }
+  });
+
+  if (filledCreditIndices.length < 2 || emptyCreditIndices.length === 0) return null;
+  const c1 = Number(rows[filledCreditIndices[filledCreditIndices.length - 2]].credits);
+  const c2 = Number(rows[filledCreditIndices[filledCreditIndices.length - 1]].credits);
+  if (c1 !== c2) return null;
+
+  return {
+   commonCredits: String(c2),
+   affectedCount: emptyCreditIndices.length,
+   signature: `wiz_${semCode}_${filledCreditIndices.join(',')}_${c2}_${emptyCreditIndices.length}`
+  };
+ };
+
+ const handleApplyWizardSemAutoFill = (semCode, proposal) => {
+  if (!proposal) return;
+  setWizardEntriesBySem(prev => ({
+   ...prev,
+   [semCode]: (prev[semCode] || []).map(r => {
+    const credStr = String(r.credits ?? '').trim();
+    if (credStr === '') {
+     return { ...r, credits: proposal.commonCredits };
+    }
+    return r;
+   })
+  }));
+  showToast(`Automatikus kitöltés: ${proposal.affectedCount} sor kreditszáma (${proposal.commonCredits} kr.) kitöltve!`);
  };
 
  const handleRemoveWizardSubjectRow = (semCode, rowId) => {
@@ -9133,12 +9178,213 @@ export default function App() {
  }
  };
 
- const computeSeriesAutoFillResult = (sessionsList, preferredAnchorIdx = null) => {
-  const nextList = sessionsList.map((s) => ({ ...s }));
-  if (nextList.length < 3) {
-   return { updated: nextList, autoFilledCount: 0, filledCount: 0, stepDays: 0 };
+ const detectAttendanceSeriesProposal = (sessionsList) => {
+  const list = Array.isArray(sessionsList) ? sessionsList : [];
+  if (list.length < 3) return null;
+
+  const filledIndices = [];
+  for (let i = 0; i < list.length; i++) {
+   if (normalizeDateToIso(list[i]?.date)) {
+    filledIndices.push(i);
+   }
+  }
+  if (filledIndices.length < 2) return null;
+
+  const emptyIndices = [];
+  for (let i = 0; i < list.length; i++) {
+   if (!normalizeDateToIso(list[i]?.date)) {
+    emptyIndices.push(i);
+   }
+  }
+  if (emptyIndices.length === 0) return null;
+
+  const idx1 = filledIndices[filledIndices.length - 2];
+  const idx2 = filledIndices[filledIndices.length - 1];
+  const indexGap = idx2 - idx1;
+  if (indexGap <= 0) return null;
+
+  const firstIso = normalizeDateToIso(list[idx1]?.date);
+  const secondIso = normalizeDateToIso(list[idx2]?.date);
+  if (!firstIso || !secondIso) return null;
+
+  const [y1, m1, d1] = firstIso.split('-').map(Number);
+  const [y2, m2, d2] = secondIso.split('-').map(Number);
+  const utc1 = Date.UTC(y1, m1 - 1, d1);
+  const utc2 = Date.UTC(y2, m2 - 1, d2);
+  const diffMs = utc2 - utc1;
+  if (diffMs <= 0) return null;
+
+  const stepMsPerSlot = diffMs / indexGap;
+  const stepDays = Math.round(stepMsPerSlot / 86400000);
+  const t1 = (list[idx1]?.time || '').trim();
+  const t2 = (list[idx2]?.time || '').trim();
+  const commonTime = t2 || t1 || '';
+
+  const previewItems = [];
+  const nextList = list.map((item, i) => {
+   const curDate = normalizeDateToIso(item?.date);
+   if (curDate) return { ...item };
+
+   const targetUtc = new Date(Math.round(utc1 + (i - idx1) * stepMsPerSlot));
+   const iso = `${targetUtc.getUTCFullYear()}-${String(targetUtc.getUTCMonth() + 1).padStart(2, '0')}-${String(targetUtc.getUTCDate()).padStart(2, '0')}`;
+   const curTime = (item?.time || '').trim();
+   const finalTime = curTime || commonTime;
+   previewItems.push({ index: i + 1, date: iso, time: finalTime });
+   return {
+    ...item,
+    date: iso,
+    time: finalTime
+   };
+  });
+
+  if (previewItems.length === 0) return null;
+
+  return {
+   updatedList: nextList,
+   autoFilledCount: previewItems.length,
+   stepDays,
+   commonTime,
+   sampleRows: previewItems.slice(0, 3),
+   signature: `${filledIndices.join(',')}|${firstIso}|${secondIso}|${commonTime}|${emptyIndices.length}`
+  };
+ };
+
+ const detectAssessmentSeriesProposal = (itemsList, categoryLabel = 'Tétel') => {
+  const list = Array.isArray(itemsList) ? itemsList : [];
+  if (list.length < 2) return null;
+
+  // Detect patterns across the ordered items in this collector:
+  // Pattern A: Date progression (when >= 2 items have dates and >= 1 item has empty date)
+  // Pattern B: Max points repetition (when >= 2 items have the exact same max points and >= 1 item has empty max)
+  // Pattern C: Time repetition (when >= 1 item with date has time and target dated items lack time)
+  const datedIndices = [];
+  const maxFilledIndices = [];
+  const timedIndices = [];
+
+  list.forEach((it, idx) => {
+   if (normalizeDateToIso(it?.date)) datedIndices.push(idx);
+   if (it?.max !== null && it?.max !== undefined && it?.max !== '' && !isNaN(Number(it.max))) {
+    maxFilledIndices.push(idx);
+   }
+   if ((it?.time || '').trim()) timedIndices.push(idx);
+  });
+
+  let hasDatePattern = false;
+  let utc1 = 0;
+  let idx1 = 0;
+  let stepMsPerSlot = 0;
+  let stepDays = 0;
+
+  if (datedIndices.length >= 2 && datedIndices.length < list.length) {
+   const dIdx1 = datedIndices[datedIndices.length - 2];
+   const dIdx2 = datedIndices[datedIndices.length - 1];
+   const gap = dIdx2 - dIdx1;
+   if (gap > 0) {
+    const iso1 = normalizeDateToIso(list[dIdx1]?.date);
+    const iso2 = normalizeDateToIso(list[dIdx2]?.date);
+    if (iso1 && iso2) {
+     const [y1, m1, d1] = iso1.split('-').map(Number);
+     const [y2, m2, d2] = iso2.split('-').map(Number);
+     const u1 = Date.UTC(y1, m1 - 1, d1);
+     const u2 = Date.UTC(y2, m2 - 1, d2);
+     if (u2 > u1) {
+      hasDatePattern = true;
+      utc1 = u1;
+      idx1 = dIdx1;
+      stepMsPerSlot = (u2 - u1) / gap;
+      stepDays = Math.round(stepMsPerSlot / 86400000);
+     }
+    }
+   }
   }
 
+  let hasMaxPattern = false;
+  let commonMax = null;
+  if (maxFilledIndices.length >= 2 && maxFilledIndices.length < list.length) {
+   const m1 = Number(list[maxFilledIndices[maxFilledIndices.length - 2]].max);
+   const m2 = Number(list[maxFilledIndices[maxFilledIndices.length - 1]].max);
+   if (!isNaN(m1) && !isNaN(m2) && m1 === m2 && m1 > 0) {
+    hasMaxPattern = true;
+    commonMax = m2;
+   }
+  }
+
+  const commonTime = timedIndices.length > 0
+   ? (list[timedIndices[timedIndices.length - 1]]?.time || '').trim()
+   : '';
+
+  if (!hasDatePattern && !hasMaxPattern) return null;
+
+  const updatesById = {};
+  const previewParts = [];
+  let affectedCount = 0;
+
+  list.forEach((it, i) => {
+   const patch = {};
+   let changed = false;
+
+   if (hasDatePattern && !normalizeDateToIso(it?.date)) {
+    const targetUtc = new Date(Math.round(utc1 + (i - idx1) * stepMsPerSlot));
+    const iso = `${targetUtc.getUTCFullYear()}-${String(targetUtc.getUTCMonth() + 1).padStart(2, '0')}-${String(targetUtc.getUTCDate()).padStart(2, '0')}`;
+    patch.date = iso;
+    if (!(it?.time || '').trim() && commonTime) {
+     patch.time = commonTime;
+    }
+    changed = true;
+   } else if (commonTime && normalizeDateToIso(it?.date) && !(it?.time || '').trim()) {
+    patch.time = commonTime;
+    changed = true;
+   }
+
+   if (hasMaxPattern && (it?.max === null || it?.max === undefined || it?.max === '')) {
+    patch.max = commonMax;
+    changed = true;
+   }
+
+   if (changed && it?.id) {
+    updatesById[it.id] = patch;
+    affectedCount += 1;
+    if (previewParts.length < 3) {
+     const descBits = [];
+     if (patch.date) descBits.push(`${patch.date}${patch.time ? ` ${patch.time}` : ''}`);
+     else if (patch.time) descBits.push(patch.time);
+     if (patch.max !== undefined) descBits.push(`max ${formatHu(patch.max)} p`);
+     previewParts.push(`${it.title || `${i + 1}. ${categoryLabel}`}: ${descBits.join(', ')}`);
+    }
+   }
+  });
+
+  if (affectedCount === 0) return null;
+
+  const patternLabels = [];
+  if (hasDatePattern) patternLabels.push(`${stepDays} napos dátumlépésköz`);
+  if (hasMaxPattern) patternLabels.push(`egységes ${formatHu(commonMax)} p max pont`);
+
+  return {
+   updatesById,
+   affectedCount,
+   patternSummary: patternLabels.join(' + '),
+   previewParts,
+   signature: `${list.map(x => `${x.id}:${x.date || ''}:${x.time || ''}:${x.max ?? ''}`).join(';')}`
+  };
+ };
+
+ const applyExcelSeriesAutoFill = (sessionsList, editedIdx, changes) => {
+  const nextList = sessionsList.map((s, idx) =>
+   idx === editedIdx ? { ...s, ...changes } : { ...s }
+  );
+
+  // Csak akkor indul el, ha a felhasználó dátumot módosít (és pontosan 2 alkalom dátuma van kitöltve)
+  if (!Object.prototype.hasOwnProperty.call(changes, 'date')) {
+   return { updated: nextList, autoFilledCount: 0 };
+  }
+
+  const newDateIso = normalizeDateToIso(changes.date);
+  if (!newDateIso || nextList.length < 3) {
+   return { updated: nextList, autoFilledCount: 0 };
+  }
+
+  // Gyűjtsük ki az összes eddig dátummal kitöltött alkalmat sorrendben
   const filledIndices = [];
   for (let i = 0; i < nextList.length; i++) {
    if (normalizeDateToIso(nextList[i]?.date)) {
@@ -9146,21 +9392,22 @@ export default function App() {
    }
   }
 
-  if (filledIndices.length < 2) {
-   return { updated: nextList, autoFilledCount: 0, filledCount: filledIndices.length, stepDays: 0 };
+  // Szigorúan megvárjuk, míg pontosan 2 alkalom dátuma van beírva
+  if (filledIndices.length !== 2) {
+   return { updated: nextList, autoFilledCount: 0 };
   }
 
-  const idx1 = filledIndices[filledIndices.length - 2];
-  const idx2 = filledIndices[filledIndices.length - 1];
+  const idx1 = filledIndices[0];
+  const idx2 = filledIndices[1];
   const indexGap = idx2 - idx1;
   if (indexGap <= 0) {
-   return { updated: nextList, autoFilledCount: 0, filledCount: filledIndices.length, stepDays: 0 };
+   return { updated: nextList, autoFilledCount: 0 };
   }
 
   const firstIso = normalizeDateToIso(nextList[idx1]?.date);
   const secondIso = normalizeDateToIso(nextList[idx2]?.date);
   if (!firstIso || !secondIso) {
-   return { updated: nextList, autoFilledCount: 0, filledCount: filledIndices.length, stepDays: 0 };
+   return { updated: nextList, autoFilledCount: 0 };
   }
 
   const [y1, m1, d1] = firstIso.split('-').map(Number);
@@ -9169,22 +9416,17 @@ export default function App() {
   const utc2 = Date.UTC(y2, m2 - 1, d2);
   const diffMs = utc2 - utc1;
   if (diffMs <= 0) {
-   return { updated: nextList, autoFilledCount: 0, filledCount: filledIndices.length, stepDays: 0 };
+   return { updated: nextList, autoFilledCount: 0 };
   }
 
   const stepMsPerSlot = diffMs / indexGap;
-  const stepDays = Math.max(1, Math.round(stepMsPerSlot / (24 * 60 * 60 * 1000)));
   const t1 = (nextList[idx1]?.time || '').trim();
   const t2 = (nextList[idx2]?.time || '').trim();
-  const anchorIdx = (typeof preferredAnchorIdx === 'number' && preferredAnchorIdx >= 0 && preferredAnchorIdx < nextList.length)
-   ? preferredAnchorIdx
-   : idx2;
-  const tAnchor = (nextList[anchorIdx]?.time || '').trim();
-  const commonTime = tAnchor || t2 || t1 || '';
+  const commonTime = (editedIdx === idx2 ? t2 : t1) || t2 || t1 || '';
 
   let autoFilledCount = 0;
   for (let i = 0; i < nextList.length; i++) {
-   if (filledIndices.includes(i)) continue;
+   if (i === idx1 || i === idx2) continue;
    const curDate = normalizeDateToIso(nextList[i]?.date);
    if (curDate) continue;
 
@@ -9200,82 +9442,7 @@ export default function App() {
    autoFilledCount += 1;
   }
 
-  return { updated: nextList, autoFilledCount, filledCount: filledIndices.length, stepDays };
- };
-
- const syncAutoFillPromptForList = (subjectId, kind, nextSessionsList) => {
-  const res = computeSeriesAutoFillResult(nextSessionsList);
-  if (res.filledCount < 2 || res.autoFilledCount <= 0) {
-   setAutoFillPromptState(prev => (prev && prev.subjectId === subjectId && prev.kind === kind ? null : prev));
-   return;
-  }
-
-  setAutoFillPromptState(prev => {
-   if (prev && prev.subjectId === subjectId && prev.kind === kind && prev.dismissedAtFilledCount === res.filledCount) {
-    return prev;
-   }
-   return {
-    subjectId,
-    kind,
-    filledCount: res.filledCount,
-    autoFilledCount: res.autoFilledCount,
-    stepDays: res.stepDays,
-    dismissedAtFilledCount: null
-   };
-  });
- };
-
- const handleDismissAutoFillPrompt = () => {
-  setAutoFillPromptState(prev => {
-   if (!prev) return null;
-   return {
-    ...prev,
-    dismissedAtFilledCount: prev.filledCount
-   };
-  });
- };
-
- const handleConfirmAutoFillPrompt = async () => {
-  if (!user || !activeSubject || !autoFillPromptState || isApplyingAutoFillPrompt) return;
-  const { kind } = autoFillPromptState;
-  const isLecture = kind === 'lecture';
-  const fieldName = isLecture ? 'lectureAttendanceSessions' : 'attendanceSessions';
-  const baseSessions = isLecture
-   ? createDefaultSessions(
-      Math.max(
-       Number(activeSubject.totalClasses) || 0,
-       Number(activeSubject.totalLectures) || 0,
-       (activeSubject.lectureAttendanceSessions || []).length
-      ),
-      activeSubject.lectureAttendanceSessions || []
-     )
-   : createDefaultSessions(
-      activeSubject.totalClasses ?? (activeSubject.attendanceSessions || []).length,
-      activeSubject.attendanceSessions || []
-     );
-
-  const { updated, autoFilledCount } = computeSeriesAutoFillResult(baseSessions);
-  if (autoFilledCount <= 0) {
-   setAutoFillPromptState(null);
-   return;
-  }
-
-  setIsApplyingAutoFillPrompt(true);
-  try {
-   await updateDoc(doc(db, 'users', user.uid, 'subjects', activeSubject.id), {
-    [fieldName]: updated
-   });
-   setAutoFillPromptState(null);
-   showToast(
-    isLecture
-     ? `Automatikus kitöltés alkalmazva: ${autoFilledCount} előadás dátuma kitöltve!`
-     : `Automatikus kitöltés alkalmazva: ${autoFilledCount} gyakorlati alkalom dátuma kitöltve!`
-   );
-  } catch (err) {
-   alert('Hiba az automatikus kitöltés alkalmazásakor: ' + err.message);
-  } finally {
-   setIsApplyingAutoFillPrompt(false);
-  }
+  return { updated: nextList, autoFilledCount };
  };
 
  const handleUpdateSession = async (sessionIdx, changes) => {
@@ -9290,9 +9457,32 @@ export default function App() {
  await updateDoc(doc(db, 'users', user.uid, 'subjects', activeSubject.id), {
  attendanceSessions: updated
  });
- if (Object.prototype.hasOwnProperty.call(changes, 'date')) {
-  syncAutoFillPromptForList(activeSubject.id, 'practice', updated);
- }
+ };
+
+ const handleApplyDetectedAttendanceAutoFill = async (kind, proposal) => {
+ if (!activeSubject || !proposal?.updatedList) return;
+ const fieldName = kind === 'lecture' ? 'lectureAttendanceSessions' : 'attendanceSessions';
+ await updateDoc(doc(db, 'users', user.uid, 'subjects', activeSubject.id), {
+ [fieldName]: proposal.updatedList
+ });
+ showToast(
+ kind === 'lecture'
+  ? `Automatikus kitöltés alkalmazva: ${proposal.autoFilledCount} előadás sora kitöltve!`
+  : `Automatikus kitöltés alkalmazva: ${proposal.autoFilledCount} gyakorlati alkalom sora kitöltve!`
+ );
+ };
+
+ const handleApplyDetectedAssessmentAutoFill = async (collectorLabel, proposal) => {
+ if (!activeSubject || !proposal?.updatesById) return;
+ const existing = toArraySafe(activeSubject.assessments);
+ const updated = existing.map(item => {
+  const patch = proposal.updatesById[item.id];
+  return patch ? { ...item, ...patch } : item;
+ });
+ await updateDoc(doc(db, 'users', user.uid, 'subjects', activeSubject.id), {
+ assessments: updated
+ });
+ showToast(`Automatikus kitöltés alkalmazva (${collectorLabel}): ${proposal.affectedCount} tétel frissítve!`);
  };
 
  const handleUpdateLectureSession = async (sessionIdx, changes) => {
@@ -9311,9 +9501,6 @@ export default function App() {
  await updateDoc(doc(db, 'users', user.uid, 'subjects', activeSubject.id), {
  lectureAttendanceSessions: updated
  });
- if (Object.prototype.hasOwnProperty.call(changes, 'date')) {
-  syncAutoFillPromptForList(activeSubject.id, 'lecture', updated);
- }
  };
 
  const subjectsMissingAttendanceDates = useMemo(() => {
@@ -14672,6 +14859,59 @@ export default function App() {
  </p>
  </div>
 
+ {(() => {
+  const wizProposal = detectWizardSemSeriesProposal(activePastSem.code);
+  if (!wizProposal || dismissedAutoFillSigs[`wiz_${activePastSem.code}`] === wizProposal.signature) return null;
+  return (
+   <div
+    role="region"
+    aria-label="Automatikus kitöltés javaslat"
+    className={`bge-fluid-reveal rounded-2xl border-2 p-3 sm:p-3.5 shadow-lg flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+     darkMode
+      ? 'bg-emerald-950/90 border-emerald-400/70 text-emerald-100'
+      : 'bg-emerald-50/95 border-emerald-400 text-emerald-950'
+    }`}
+   >
+    <div className="flex items-start gap-2.5 min-w-0">
+     <div className="w-8 h-8 rounded-xl bg-emerald-500 text-white flex items-center justify-center shrink-0 mt-0.5">
+      <Sparkles className="w-4 h-4" />
+     </div>
+     <div className="min-w-0">
+      <p className="text-xs sm:text-sm font-extrabold">
+       Alkalmazhatja az automatikus kitöltést a kreditszámoknál?
+      </p>
+      <p className={`text-[11px] ${darkMode ? 'text-slate-300' : 'text-slate-600'}`}>
+       A beírt minta alapján {wizProposal.affectedCount} üres sorhoz beírható a(z) <strong>{wizProposal.commonCredits} kredit</strong> érték.
+      </p>
+     </div>
+    </div>
+    <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+     <button
+      type="button"
+      onClick={() => {
+       setDismissedAutoFillSigs(prev => ({ ...prev, [`wiz_${activePastSem.code}`]: wizProposal.signature }));
+       handleApplyWizardSemAutoFill(activePastSem.code, wizProposal);
+      }}
+      className="px-3.5 py-1.5 rounded-xl text-xs font-extrabold bg-emerald-500 hover:bg-emerald-400 text-white inline-flex items-center gap-1 transition cursor-pointer"
+     >
+      <Check className="w-3.5 h-3.5" /> Igen
+     </button>
+     <button
+      type="button"
+      onClick={() => setDismissedAutoFillSigs(prev => ({ ...prev, [`wiz_${activePastSem.code}`]: wizProposal.signature }))}
+      className={`px-3 py-1.5 rounded-xl text-xs font-bold border inline-flex items-center gap-1 transition cursor-pointer ${
+       darkMode
+        ? 'bg-slate-800/90 hover:bg-slate-700 text-slate-200 border-slate-700'
+        : 'bg-white/90 hover:bg-slate-100 text-slate-700 border-slate-300'
+      }`}
+     >
+      <X className="w-3.5 h-3.5" /> Nem
+     </button>
+    </div>
+   </div>
+  );
+ })()}
+
  <div className="space-y-3">
  {activeRows.map((row, rIdx) => {
  const isFail = Number(row.grade) === 1;
@@ -18124,6 +18364,87 @@ export default function App() {
  const egyebSummaryPct = formatPct(st.egyebElert, st.egyebMax);
  const osszSummaryPct = formatPct(st.osszElert, st.osszMax);
 
+ const renderAutoFillPromptBanner = ({ promptKey, signature, title, subtitle, sampleText, accent = 'amber', onAccept }) => {
+  if (!signature || dismissedAutoFillSigs[promptKey] === signature) return null;
+
+  const toneClasses = accent === 'sky'
+   ? darkMode
+    ? 'bg-sky-950/90 border-sky-400/70 text-sky-100 shadow-sky-950/50'
+    : 'bg-sky-50/95 border-sky-400 text-sky-950 shadow-sky-900/10'
+   : accent === 'emerald'
+   ? darkMode
+    ? 'bg-emerald-950/90 border-emerald-400/70 text-emerald-100 shadow-emerald-950/50'
+    : 'bg-emerald-50/95 border-emerald-400 text-emerald-950 shadow-emerald-900/10'
+   : darkMode
+    ? 'bg-slate-900/95 border-amber-400/80 text-amber-100 shadow-black/50'
+    : 'bg-amber-50/95 border-amber-400 text-slate-900 shadow-amber-900/10';
+
+  const iconBg = accent === 'sky'
+   ? 'bg-sky-500 text-white'
+   : accent === 'emerald'
+   ? 'bg-emerald-500 text-white'
+   : 'bg-amber-400 text-slate-950';
+
+  const yesBtn = accent === 'sky'
+   ? 'bg-sky-500 hover:bg-sky-400 text-white'
+   : accent === 'emerald'
+   ? 'bg-emerald-500 hover:bg-emerald-400 text-white'
+   : 'bg-amber-400 hover:bg-amber-300 text-slate-950';
+
+  return (
+   <div
+    role="region"
+    aria-label="Automatikus kitöltés javaslat"
+    className={`bge-fluid-reveal rounded-2xl border-2 p-3 sm:p-3.5 shadow-lg backdrop-blur-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${toneClasses}`}
+   >
+    <div className="flex items-start gap-2.5 min-w-0">
+     <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 mt-0.5 shadow-xs ${iconBg}`}>
+      <Sparkles className="w-4 h-4" />
+     </div>
+     <div className="min-w-0 space-y-0.5">
+      <p className="text-xs sm:text-sm font-extrabold leading-snug">
+       {title}
+      </p>
+      <p className={`text-[11px] leading-snug ${darkMode ? 'text-slate-300' : 'text-slate-600'}`}>
+       {subtitle}
+      </p>
+      {sampleText && (
+       <p className={`text-[10px] font-mono truncate pt-0.5 ${darkMode ? 'text-amber-300/90' : 'text-slate-700'}`}>
+        {sampleText}
+       </p>
+      )}
+     </div>
+    </div>
+
+    <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+     <button
+      type="button"
+      onClick={() => {
+       setDismissedAutoFillSigs(prev => ({ ...prev, [promptKey]: signature }));
+       onAccept();
+      }}
+      className={`px-3.5 py-1.5 rounded-xl text-xs font-extrabold inline-flex items-center gap-1 shadow-sm transition cursor-pointer ${yesBtn}`}
+     >
+      <Check className="w-3.5 h-3.5" />
+      <span>Igen</span>
+     </button>
+     <button
+      type="button"
+      onClick={() => setDismissedAutoFillSigs(prev => ({ ...prev, [promptKey]: signature }))}
+      className={`px-3 py-1.5 rounded-xl text-xs font-bold border inline-flex items-center gap-1 transition cursor-pointer ${
+       darkMode
+        ? 'bg-slate-800/90 hover:bg-slate-700 text-slate-200 border-slate-700'
+        : 'bg-white/90 hover:bg-slate-100 text-slate-700 border-slate-300'
+      }`}
+     >
+      <X className="w-3.5 h-3.5" />
+      <span>Nem</span>
+     </button>
+    </div>
+   </div>
+  );
+ };
+
  const renderItemRow = (item, capMeta = null) => {
  const eff = getEffectiveScore(item);
  const hasScore = eff !== null && eff !== undefined && eff !== '' && !isNaN(Number(eff));
@@ -18910,6 +19231,24 @@ export default function App() {
  </div>
  </div>
 
+ {(() => {
+  const zhProposal = detectAssessmentSeriesProposal(zhItems, 'ZH');
+  if (!zhProposal) return null;
+  return (
+   <div className="mb-2.5">
+    {renderAutoFillPromptBanner({
+     promptKey: `zh_${activeSubject.id}`,
+     signature: zhProposal.signature,
+     title: 'Alkalmazhatja az automatikus kitöltést a ZH-knál?',
+     subtitle: `Felismert minta (${zhProposal.patternSummary}) alapján ${zhProposal.affectedCount} további ZH sor kitölthető.`,
+     sampleText: zhProposal.previewParts.join(' • '),
+     accent: 'amber',
+     onAccept: () => handleApplyDetectedAssessmentAutoFill('ZH-k', zhProposal)
+    })}
+   </div>
+  );
+ })()}
+
  {zhItems.length === 0 ? (
  <p className={`text-xs italic ${textMuted}`}>Még nincs rögzített ZH.</p>
  ) : (
@@ -18952,6 +19291,25 @@ export default function App() {
  </button>
  </div>
  </div>
+
+ {(() => {
+  const pluszRawItems = st.pluszProcessed.map(p => p.item);
+  const pluszProposal = detectAssessmentSeriesProposal(pluszRawItems, 'Pluszpont');
+  if (!pluszProposal) return null;
+  return (
+   <div className="mb-2.5">
+    {renderAutoFillPromptBanner({
+     promptKey: `plusz_${activeSubject.id}`,
+     signature: pluszProposal.signature,
+     title: 'Alkalmazhatja az automatikus kitöltést a pluszpontoknál?',
+     subtitle: `Felismert minta (${pluszProposal.patternSummary}) alapján ${pluszProposal.affectedCount} további pluszpont sor kitölthető.`,
+     sampleText: pluszProposal.previewParts.join(' • '),
+     accent: 'emerald',
+     onAccept: () => handleApplyDetectedAssessmentAutoFill('Pluszpontok', pluszProposal)
+    })}
+   </div>
+  );
+ })()}
 
  {st.pluszProcessed.length === 0 ? (
  <p className={`text-xs italic ${textMuted}`}>Még nincs rögzített pluszpont.</p>
@@ -19053,6 +19411,25 @@ export default function App() {
  </div>
  </div>
 
+ {(() => {
+  const bucketRawItems = bStats.processed.map(p => p.item);
+  const bucketProposal = detectAssessmentSeriesProposal(bucketRawItems, bucket.title);
+  if (!bucketProposal) return null;
+  return (
+   <div>
+    {renderAutoFillPromptBanner({
+     promptKey: `bucket_${activeSubject.id}_${bucket.id}`,
+     signature: bucketProposal.signature,
+     title: `Alkalmazhatja az automatikus kitöltést („${bucket.title}”)?`,
+     subtitle: `Felismert minta (${bucketProposal.patternSummary}) alapján ${bucketProposal.affectedCount} további tétel kitölthető.`,
+     sampleText: bucketProposal.previewParts.join(' • '),
+     accent: 'sky',
+     onAccept: () => handleApplyDetectedAssessmentAutoFill(bucket.title, bucketProposal)
+    })}
+   </div>
+  );
+ })()}
+
  {bStats.processed.length === 0 ? (
  <p className={`text-xs italic ${textMuted}`}>Még nincs tétel ebben a gyűjtőben.</p>
  ) : (
@@ -19084,6 +19461,25 @@ export default function App() {
  </div>
  {renderCollectorSortMenu('unassigned', 'Besorolatlan egyéb tételek', st.unassignedEgyebEval.processed.map(p => p.item))}
  </div>
+ {(() => {
+  const unassignedRawItems = st.unassignedEgyebEval.processed.map(p => p.item);
+  const unassignedProposal = detectAssessmentSeriesProposal(unassignedRawItems, 'Tétel');
+  if (!unassignedProposal) return null;
+  return (
+   <div>
+    {renderAutoFillPromptBanner({
+     promptKey: `unassigned_${activeSubject.id}`,
+     signature: unassignedProposal.signature,
+     title: 'Alkalmazhatja az automatikus kitöltést a tételeknél?',
+     subtitle: `Felismert minta (${unassignedProposal.patternSummary}) alapján ${unassignedProposal.affectedCount} további tétel kitölthető.`,
+     sampleText: unassignedProposal.previewParts.join(' • '),
+     accent: 'sky',
+     onAccept: () => handleApplyDetectedAssessmentAutoFill('Egyéb tételek', unassignedProposal)
+    })}
+   </div>
+  );
+ })()}
+
  <div className="space-y-2.5">
  {st.unassignedEgyebEval.processed.map(({ item, capMeta }) => renderItemRow(item, capMeta))}
  </div>
@@ -19278,18 +19674,38 @@ export default function App() {
  </p>
  ) : (
  <div className="space-y-2.5">
- {sessions.length >= 3 && (
- <div className={`px-3 py-2 rounded-xl border text-[11px] flex items-center gap-2 ${
- darkMode
- ? 'bg-amber-400/10 border-amber-400/30 text-amber-200/90'
- : 'bg-amber-50/90 border-amber-300/80 text-amber-950'
- }`}>
- <Sparkles className="w-3.5 h-3.5 text-amber-500 shrink-0" />
- <span>
- <strong>Tipp (Excel-szerű kitöltés):</strong> Írd be az <strong>1. és 2. gyakorlat</strong> dátumát (és opcionálisan időpontját), és a rendszer a két dátum közötti lépésköz alapján automatikusan kitölti a többi sort is!
- </span>
- </div>
- )}
+ {(() => {
+  const pracProposal = detectAttendanceSeriesProposal(sessions);
+  if (pracProposal) {
+   const sampleStr = pracProposal.sampleRows
+    .map(r => `${r.index}. alk.: ${r.date}${r.time ? ` (${r.time})` : ''}`)
+    .join(' • ');
+   return renderAutoFillPromptBanner({
+    promptKey: `att_prac_${activeSubject.id}`,
+    signature: pracProposal.signature,
+    title: 'Alkalmazhatja az automatikus kitöltést a gyakorlatoknál?',
+    subtitle: `Felismert ${pracProposal.stepDays} napos lépésköz alapján ${pracProposal.autoFilledCount} üres gyakorlati sor kitölthető.`,
+    sampleText: sampleStr,
+    accent: 'amber',
+    onAccept: () => handleApplyDetectedAttendanceAutoFill('practice', pracProposal)
+   });
+  }
+  if (sessions.length >= 3) {
+   return (
+    <div className={`px-3 py-2 rounded-xl border text-[11px] flex items-center gap-2 ${
+     darkMode
+      ? 'bg-amber-400/10 border-amber-400/30 text-amber-200/90'
+      : 'bg-amber-50/90 border-amber-300/80 text-amber-950'
+    }`}>
+     <Sparkles className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+     <span>
+      <strong>Tipp (Excel-szerű kitöltés):</strong> Írd be két gyakorlat dátumát (és opcionálisan időpontját), és megjelenik az automatikus sorozatkitöltés gomb!
+     </span>
+    </div>
+   );
+  }
+  return null;
+ })()}
  {sessions.map((sess, idx) => (
  <div
  key={sess.id || idx}
@@ -19301,50 +19717,7 @@ export default function App() {
  : darkMode ? 'border-slate-800 bg-slate-800/40' : 'border-slate-200 bg-white'
  }`}
  >
- {autoFillPromptState &&
- autoFillPromptState.subjectId === activeSubject.id &&
- autoFillPromptState.kind === 'practice' &&
- autoFillPromptState.dismissedAtFilledCount !== autoFillPromptState.filledCount && (
- <div className={`bge-fluid-reveal p-3.5 rounded-xl border-2 border-amber-400/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-md ${
-  darkMode
-   ? 'bg-amber-400/15 text-amber-100'
-   : 'bg-amber-50 text-slate-900'
- }`}>
-  <div className="min-w-0">
-   <p className="text-xs sm:text-sm font-extrabold flex items-center gap-1.5">
-    <Sparkles className="w-4 h-4 text-amber-500 shrink-0" />
-    <span>Alkalmazzam az automatikus kitöltést?</span>
-   </p>
-   <p className={`text-[11px] mt-0.5 ${textMuted}`}>
-    {autoFillPromptState.stepDays} napos lépésköz alapján kitölt <strong>{autoFillPromptState.autoFilledCount}</strong> további gyakorlati alkalmat.
-   </p>
-  </div>
-  <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
-   <button
-    type="button"
-    disabled={isApplyingAutoFillPrompt}
-    onClick={handleDismissAutoFillPrompt}
-    className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition cursor-pointer disabled:opacity-50 ${
-     darkMode
-      ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-white/15'
-      : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-300'
-    }`}
-   >
-    Nem
-   </button>
-   <button
-    type="button"
-    disabled={isApplyingAutoFillPrompt}
-    onClick={handleConfirmAutoFillPrompt}
-    className="px-3.5 py-1.5 rounded-lg text-xs font-extrabold bg-amber-400 hover:bg-amber-300 text-slate-950 shadow-xs transition cursor-pointer disabled:opacity-50"
-   >
-    {isApplyingAutoFillPrompt ? 'Kitöltés...' : 'Igen'}
-   </button>
-  </div>
- </div>
-)}
-
-<div className="flex items-center gap-2 min-w-0 flex-wrap sm:flex-nowrap">
+ <div className="flex items-center gap-2 min-w-0 flex-wrap sm:flex-nowrap">
  <span className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold shrink-0 ${
  darkMode ? 'bg-slate-800 text-slate-300' : 'bg-slate-100 text-slate-700'
  }`}>
@@ -19479,18 +19852,38 @@ export default function App() {
  </div>
  ) : (
  <div className="space-y-2.5">
- {lectureSessions.length >= 3 && (
- <div className={`px-3 py-2 rounded-xl border text-[11px] flex items-center gap-2 ${
- darkMode
- ? 'bg-sky-500/10 border-sky-500/30 text-sky-200/90'
- : 'bg-sky-50/90 border-sky-300/80 text-sky-950'
- }`}>
- <Sparkles className="w-3.5 h-3.5 text-sky-500 shrink-0" />
- <span>
- <strong>Tipp (Excel-szerű kitöltés):</strong> Írd be az <strong>1. és 2. előadás</strong> dátumát (és opcionálisan időpontját), és a rendszer a két dátum közötti lépésköz alapján automatikusan kitölti a többi sort is!
- </span>
- </div>
- )}
+ {(() => {
+  const lecProposal = detectAttendanceSeriesProposal(lectureSessions);
+  if (lecProposal) {
+   const sampleStr = lecProposal.sampleRows
+    .map(r => `${r.index}. ea.: ${r.date}${r.time ? ` (${r.time})` : ''}`)
+    .join(' • ');
+   return renderAutoFillPromptBanner({
+    promptKey: `att_lec_${activeSubject.id}`,
+    signature: lecProposal.signature,
+    title: 'Alkalmazhatja az automatikus kitöltést az előadásoknál?',
+    subtitle: `Felismert ${lecProposal.stepDays} napos lépésköz alapján ${lecProposal.autoFilledCount} üres előadás sor kitölthető.`,
+    sampleText: sampleStr,
+    accent: 'sky',
+    onAccept: () => handleApplyDetectedAttendanceAutoFill('lecture', lecProposal)
+   });
+  }
+  if (lectureSessions.length >= 3) {
+   return (
+    <div className={`px-3 py-2 rounded-xl border text-[11px] flex items-center gap-2 ${
+     darkMode
+      ? 'bg-sky-500/10 border-sky-500/30 text-sky-200/90'
+      : 'bg-sky-50/90 border-sky-300/80 text-sky-950'
+    }`}>
+     <Sparkles className="w-3.5 h-3.5 text-sky-500 shrink-0" />
+     <span>
+      <strong>Tipp (Excel-szerű kitöltés):</strong> Írd be két előadás dátumát (és opcionálisan időpontját), és megjelenik az automatikus sorozatkitöltés gomb!
+     </span>
+    </div>
+   );
+  }
+  return null;
+ })()}
  {lectureSessions.map((sess, idx) => (
  <div
  key={sess.id || idx}
@@ -19502,50 +19895,7 @@ export default function App() {
  : darkMode ? 'border-slate-800 bg-slate-800/40' : 'border-slate-200 bg-white'
  }`}
  >
- {autoFillPromptState &&
- autoFillPromptState.subjectId === activeSubject.id &&
- autoFillPromptState.kind === 'lecture' &&
- autoFillPromptState.dismissedAtFilledCount !== autoFillPromptState.filledCount && (
- <div className={`bge-fluid-reveal p-3.5 rounded-xl border-2 border-sky-400/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-md ${
-  darkMode
-   ? 'bg-sky-500/15 text-sky-100'
-   : 'bg-sky-50 text-slate-900'
- }`}>
-  <div className="min-w-0">
-   <p className="text-xs sm:text-sm font-extrabold flex items-center gap-1.5">
-    <Sparkles className="w-4 h-4 text-sky-500 shrink-0" />
-    <span>Alkalmazzam az automatikus kitöltést?</span>
-   </p>
-   <p className={`text-[11px] mt-0.5 ${textMuted}`}>
-    {autoFillPromptState.stepDays} napos lépésköz alapján kitölt <strong>{autoFillPromptState.autoFilledCount}</strong> további előadást.
-   </p>
-  </div>
-  <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
-   <button
-    type="button"
-    disabled={isApplyingAutoFillPrompt}
-    onClick={handleDismissAutoFillPrompt}
-    className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition cursor-pointer disabled:opacity-50 ${
-     darkMode
-      ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-white/15'
-      : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-300'
-    }`}
-   >
-    Nem
-   </button>
-   <button
-    type="button"
-    disabled={isApplyingAutoFillPrompt}
-    onClick={handleConfirmAutoFillPrompt}
-    className="px-3.5 py-1.5 rounded-lg text-xs font-extrabold bg-sky-500 hover:bg-sky-400 text-white shadow-xs transition cursor-pointer disabled:opacity-50"
-   >
-    {isApplyingAutoFillPrompt ? 'Kitöltés...' : 'Igen'}
-   </button>
-  </div>
- </div>
-)}
-
-<div className="flex items-center gap-2 min-w-0 flex-wrap sm:flex-nowrap">
+ <div className="flex items-center gap-2 min-w-0 flex-wrap sm:flex-nowrap">
  <span className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold shrink-0 ${
  darkMode ? 'bg-slate-800 text-sky-300' : 'bg-sky-50 text-sky-700'
  }`}>

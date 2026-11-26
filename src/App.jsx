@@ -1778,6 +1778,7 @@ async function parseNeptunTimetableWorkbook(arrayBuffer) {
 function matchTimetableToSemesterSubjects(parsedTimetable, semSubjects) {
  const courses = parsedTimetable?.courses || [];
  const matched = [];
+ const unmatchedSubjects = [];
  const usedCourseKeys = new Set();
 
  (semSubjects || []).forEach((subj) => {
@@ -1804,15 +1805,22 @@ function matchTimetableToSemesterSubjects(parsedTimetable, semSubjects) {
     subjectId: subj.id,
     subjectName: subj.name,
     excelCourseName: bestCourse.name,
+    excelNormalizedName: bestCourse.normalizedName,
     practice: bestCourse.practice,
     lecture: bestCourse.lecture,
+    hasLectures: subj.hasLectures !== false
+   });
+  } else {
+   unmatchedSubjects.push({
+    subjectId: subj.id,
+    subjectName: subj.name,
     hasLectures: subj.hasLectures !== false
    });
   }
  });
 
  const unmatchedExcelCourses = courses.filter(c => !usedCourseKeys.has(c.normalizedName));
- return { matched, unmatchedExcelCourses };
+ return { matched, unmatchedSubjects, unmatchedExcelCourses, allExcelCourses: courses };
 }
 
 function buildSemesterFromStartInput(yearInput, season) {
@@ -4457,10 +4465,12 @@ export default function App() {
  const neptunExcelInputRef = useRef(null);
 
  const [isTimetableImportModalOpen, setIsTimetableImportModalOpen] = useState(false);
+ const [timetableImportStep, setTimetableImportStep] = useState('upload'); // 'upload' | 'review'
  const [timetableImportError, setTimetableImportError] = useState('');
  const [isParsingTimetableExcel, setIsParsingTimetableExcel] = useState(false);
  const [isSavingTimetableImport, setIsSavingTimetableImport] = useState(false);
  const [timetableImportPreview, setTimetableImportPreview] = useState(null);
+ const [manualTimetableMap, setManualTimetableMap] = useState({});
  const timetableExcelInputRef = useRef(null);
 
  const [isSemesterModalOpen, setIsSemesterModalOpen] = useState(false);
@@ -9023,8 +9033,10 @@ export default function App() {
  const hasMissingAttendanceDates = subjectsMissingAttendanceDates.length > 0;
 
  const handleOpenTimetableImportModal = () => {
+  setTimetableImportStep('upload');
   setTimetableImportError('');
   setTimetableImportPreview(null);
+  setManualTimetableMap({});
   setIsTimetableImportModalOpen(true);
  };
 
@@ -9038,6 +9050,7 @@ export default function App() {
   setIsParsingTimetableExcel(true);
   setTimetableImportError('');
   setTimetableImportPreview(null);
+  setManualTimetableMap({});
 
   try {
    const buffer = await file.arrayBuffer();
@@ -9051,9 +9064,10 @@ export default function App() {
    }
 
    const matchResult = matchTimetableToSemesterSubjects(parsed, semesterSubjects);
-   if (matchResult.matched.length === 0) {
+   const eligibleSubjectsCount = matchResult.matched.length + matchResult.unmatchedSubjects.length;
+   if (eligibleSubjectsCount === 0) {
     setTimetableImportError(
-     'Az órarendet sikeresen beolvastuk, de egyetlen tárgynév sem egyezett a jelenlegi féléved tárgyaival. Ellenőrizd, hogy a megfelelő félév dashboardján vagy-e!'
+     'Ebben a félévben nincs olyan tárgyad, amelyhez jelenléti alkalmakat lehetne rendelni (vizsgakurzusokhoz nem tartozik jelenlét).'
     );
     return;
    }
@@ -9062,8 +9076,11 @@ export default function App() {
     fileName: file.name,
     totalEvents: parsed.totalEvents,
     matched: matchResult.matched,
-    unmatchedExcelCourses: matchResult.unmatchedExcelCourses
+    unmatchedSubjects: matchResult.unmatchedSubjects,
+    unmatchedExcelCourses: matchResult.unmatchedExcelCourses,
+    allExcelCourses: matchResult.allExcelCourses
    });
+   setTimetableImportStep('review');
   } catch (err) {
    console.error('Órarend Excel feldolgozási hiba:', err);
    setTimetableImportError(
@@ -9076,7 +9093,27 @@ export default function App() {
 
  const handleApplyTimetableImport = async () => {
   if (!user || !timetableImportPreview || isSavingTimetableImport) return;
-  const matchedItems = timetableImportPreview.matched || [];
+  const autoMatchedItems = timetableImportPreview.matched || [];
+  const allExcelCourses = timetableImportPreview.allExcelCourses || [];
+  const manuallyPairedItems = (timetableImportPreview.unmatchedSubjects || [])
+   .map((uSubj) => {
+    const chosenNormName = manualTimetableMap[uSubj.subjectId];
+    if (!chosenNormName) return null;
+    const foundExcel = allExcelCourses.find(c => c.normalizedName === chosenNormName);
+    if (!foundExcel) return null;
+    return {
+     subjectId: uSubj.subjectId,
+     subjectName: uSubj.subjectName,
+     excelCourseName: foundExcel.name,
+     excelNormalizedName: foundExcel.normalizedName,
+     practice: foundExcel.practice,
+     lecture: foundExcel.lecture,
+     hasLectures: uSubj.hasLectures
+    };
+   })
+   .filter(Boolean);
+
+  const matchedItems = [...autoMatchedItems, ...manuallyPairedItems];
   if (matchedItems.length === 0) return;
 
   setIsSavingTimetableImport(true);
@@ -9162,7 +9199,9 @@ export default function App() {
 
    await batch.commit();
    setIsTimetableImportModalOpen(false);
+   setTimetableImportStep('upload');
    setTimetableImportPreview(null);
+   setManualTimetableMap({});
    setTimetableImportError('');
    showToast(`Órarend importálva: ${updatedSubjectsCount} tárgynál összesen ${totalFilledSessions} időpont beírva!`);
   } catch (err) {
@@ -14610,6 +14649,20 @@ export default function App() {
    'Kattints a Naptár exportálása gombra, és exportáld ki az órarendet Excel (.xlsx) formátumban!'
   ];
 
+  const isReviewStep = timetableImportStep === 'review' && Boolean(timetableImportPreview);
+  const autoMatchedList = timetableImportPreview?.matched || [];
+  const unmatchedSubjectsList = timetableImportPreview?.unmatchedSubjects || [];
+  const allExcelCoursesList = timetableImportPreview?.allExcelCourses || [];
+
+  const manualPairedCount = unmatchedSubjectsList.filter(u => {
+   const chosen = manualTimetableMap[u.subjectId];
+   return chosen && allExcelCoursesList.some(c => c.normalizedName === chosen);
+  }).length;
+  const totalReadySubjectsCount = autoMatchedList.length + manualPairedCount;
+
+  // Courses already paired automatically or chosen for another subject
+  const autoMatchedCourseKeys = new Set(autoMatchedList.map(m => m.excelNormalizedName));
+
   return (
   <div
    data-top-modal="true"
@@ -14618,7 +14671,7 @@ export default function App() {
   >
    <div
     onClick={(e) => e.stopPropagation()}
-    className={`rounded-2xl max-w-lg w-full max-h-[92dvh] flex flex-col shadow-2xl overflow-hidden border-2 border-amber-400 ${modalCard}`}
+    className={`rounded-2xl max-w-xl w-full max-h-[92dvh] flex flex-col shadow-2xl overflow-hidden border-2 border-amber-400 ${modalCard}`}
    >
     <div className={`px-4 sm:px-6 py-3.5 sm:py-4 flex justify-between items-center shrink-0 ${modalHeader}`}>
      <div className="flex items-center gap-2.5 min-w-0">
@@ -14626,11 +14679,17 @@ export default function App() {
        <FileSpreadsheet className="w-5 h-5" />
       </div>
       <div className="min-w-0">
-       <h2 className="font-extrabold text-sm sm:text-base leading-tight truncate">
-        Neptun órarend importálása (Excel)
-       </h2>
+       <div className="flex items-center gap-2 flex-wrap">
+        <h2 className="font-extrabold text-sm sm:text-base leading-tight truncate">
+         {isReviewStep ? 'Tárgyak párosítása és megerősítés' : 'Neptun órarend importálása (Excel)'}
+        </h2>
+        <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-400/20 text-amber-500 border border-amber-400/40 shrink-0">
+         {isReviewStep ? '2 / 2. lépés' : '1 / 2. lépés'}
+        </span>
+       </div>
        <p className={`text-[11px] font-semibold truncate ${modalHeaderAmber}`}>
         Aktuális félév: {formatSemesterLabel(selectedSemester)}
+        {isReviewStep && timetableImportPreview?.fileName ? ` • ${timetableImportPreview.fileName}` : ''}
        </p>
       </div>
      </div>
@@ -14646,154 +14705,302 @@ export default function App() {
     </div>
 
     <div className="p-4 sm:p-6 overflow-y-auto overscroll-contain space-y-4 flex-1 min-h-0">
-     <div className={`p-3.5 sm:p-4 rounded-2xl border space-y-3 ${
-      darkMode
-       ? 'bg-amber-400/10 border-amber-400/35 text-amber-100'
-       : 'bg-amber-50/90 border-amber-300 text-slate-800'
-     }`}>
-      <div className="flex items-center gap-2">
-       <HelpCircle className="w-4 h-4 text-amber-500 shrink-0" />
-       <p className="text-xs sm:text-sm font-extrabold text-amber-500">
-        Hogyan exportáld ki az órarendet a Neptunból?
-       </p>
-      </div>
-
-      <div className={`px-3 py-2 rounded-xl border text-[11px] sm:text-xs font-extrabold leading-relaxed ${
-       darkMode
-        ? 'bg-slate-900/90 border-slate-700 text-amber-300'
-        : 'bg-white border-amber-300 text-slate-900'
-      }`}>
-       Neptun belépés &gt; Menü &gt; Naptár &gt; Naptár kezelése &gt; Naptár exportálása &gt; Excel (.xlsx)
-      </div>
-
-      <ol className="space-y-2 pt-0.5">
-       {timetableExportSteps.map((stepTxt, idx) => (
-        <li key={idx} className="flex items-start gap-2.5 text-xs leading-relaxed">
-         <span className="w-5 h-5 rounded-full bg-amber-400 text-slate-950 font-extrabold text-[11px] flex items-center justify-center shrink-0 mt-0.5">
-          {idx + 1}
-         </span>
-         <span className={darkMode ? 'text-slate-200' : 'text-slate-700'}>{stepTxt}</span>
-        </li>
-       ))}
-      </ol>
-     </div>
-
-     <div className={`p-3.5 rounded-xl border space-y-1.5 text-xs ${bgSubCard}`}>
-      <p className={`font-bold ${textStrong}`}>Mit olvas be és ír be automatikusan az alkalmazás?</p>
-      <p className={textMuted}>
-       Az exportált Excelből kinyerjük a tantárgyak <strong>kezdési dátumát és időpontját</strong> (év, hónap, nap, óra, perc), majd a <em>Kurzus típus</em> alapján az <strong>Elmélet / Előadás</strong> alkalmakat az <strong>Előadásokhoz</strong>, a <strong>Gyakorlat</strong> alkalmakat pedig a <strong>Gyakorlatokhoz</strong> írjuk be — a korábban rögzített jelenléteid megőrzésével.
-      </p>
-     </div>
-
-     {timetableImportError && (
-      <div className={`p-3 rounded-xl border text-xs font-semibold flex items-start gap-2 ${
-       darkMode
-        ? 'bg-rose-950/40 border-rose-500/60 text-rose-200'
-        : 'bg-rose-50 border-rose-300 text-rose-800'
-      }`}>
-       <AlertTriangle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
-       <span>{timetableImportError}</span>
-      </div>
-     )}
-
-     <button
-      type="button"
-      disabled={isParsingTimetableExcel || isSavingTimetableImport}
-      onClick={() => timetableExcelInputRef.current?.click()}
-      className="w-full py-3.5 px-4 rounded-2xl text-xs sm:text-sm font-extrabold bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-white shadow-lg flex items-center justify-center gap-2 transition cursor-pointer"
-     >
-      <Upload className="w-5 h-5" />
-      <span>
-       {isParsingTimetableExcel
-        ? 'Órarend elemzése...'
-        : timetableImportPreview
-         ? 'Másik Excel fájl kiválasztása'
-         : 'Neptun órarend Excel (.xlsx) kiválasztása'}
-      </span>
-     </button>
-
-     {timetableImportPreview && (
-      <div className={`bge-fluid-reveal p-3.5 sm:p-4 rounded-2xl border space-y-3 ${
-       darkMode
-        ? 'bg-emerald-950/25 border-emerald-500/45'
-        : 'bg-emerald-50/75 border-emerald-300'
-      }`}>
-       <div className="flex items-center justify-between gap-2 flex-wrap">
-        <div className="flex items-center gap-2 min-w-0">
-         <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
-         <p className={`text-xs sm:text-sm font-extrabold truncate ${textStrong}`}>
-          Párosított tárgyak ({timetableImportPreview.matched.length} db)
+     {!isReviewStep ? (
+      <>
+       <div className={`p-3.5 sm:p-4 rounded-2xl border space-y-3 ${
+        darkMode
+         ? 'bg-amber-400/10 border-amber-400/35 text-amber-100'
+         : 'bg-amber-50/90 border-amber-300 text-slate-800'
+       }`}>
+        <div className="flex items-center gap-2">
+         <HelpCircle className="w-4 h-4 text-amber-500 shrink-0" />
+         <p className="text-xs sm:text-sm font-extrabold text-amber-500">
+          Hogyan exportáld ki az órarendet a Neptunból?
          </p>
         </div>
-        <span className={`text-[11px] font-semibold truncate max-w-[180px] ${textMuted}`}>
-         {timetableImportPreview.fileName}
+
+        <div className={`px-3 py-2 rounded-xl border text-[11px] sm:text-xs font-extrabold leading-relaxed ${
+         darkMode
+          ? 'bg-slate-900/90 border-slate-700 text-amber-300'
+          : 'bg-white border-amber-300 text-slate-900'
+        }`}>
+         Neptun belépés &gt; Menü &gt; Naptár &gt; Naptár kezelése &gt; Naptár exportálása &gt; Excel (.xlsx)
+        </div>
+
+        <ol className="space-y-2 pt-0.5">
+         {timetableExportSteps.map((stepTxt, idx) => (
+          <li key={idx} className="flex items-start gap-2.5 text-xs leading-relaxed">
+           <span className="w-5 h-5 rounded-full bg-amber-400 text-slate-950 font-extrabold text-[11px] flex items-center justify-center shrink-0 mt-0.5">
+            {idx + 1}
+           </span>
+           <span className={darkMode ? 'text-slate-200' : 'text-slate-700'}>{stepTxt}</span>
+          </li>
+         ))}
+        </ol>
+       </div>
+
+       <div className={`p-3.5 rounded-xl border space-y-1.5 text-xs ${bgSubCard}`}>
+        <p className={`font-bold ${textStrong}`}>Mit olvas be az alkalmazás?</p>
+        <p className={textMuted}>
+         Az exportált Excelből kinyerjük a tantárgyak <strong>kezdési dátumát és időpontját</strong> (év, hónap, nap, óra, perc), majd a következő lépésben az automatikusan felismert tárgyak mellett a <strong>eltérő nevű tárgyakat is kézzel párosíthatod</strong> egy legördülő listából.
+        </p>
+       </div>
+
+       {timetableImportError && (
+        <div className={`p-3 rounded-xl border text-xs font-semibold flex items-start gap-2 ${
+         darkMode
+          ? 'bg-rose-950/40 border-rose-500/60 text-rose-200'
+          : 'bg-rose-50 border-rose-300 text-rose-800'
+        }`}>
+         <AlertTriangle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
+         <span>{timetableImportError}</span>
+        </div>
+       )}
+
+       <button
+        type="button"
+        disabled={isParsingTimetableExcel || isSavingTimetableImport}
+        onClick={() => timetableExcelInputRef.current?.click()}
+        className="w-full py-3.5 px-4 rounded-2xl text-xs sm:text-sm font-extrabold bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-white shadow-lg flex items-center justify-center gap-2 transition cursor-pointer"
+       >
+        <Upload className="w-5 h-5" />
+        <span>
+         {isParsingTimetableExcel
+          ? 'Órarend elemzése...'
+          : 'Neptun órarend Excel (.xlsx) kiválasztása'}
+        </span>
+       </button>
+      </>
+     ) : (
+      <div className="bge-fluid-reveal space-y-4">
+       <div className={`p-3 rounded-xl border text-xs flex items-center justify-between gap-2 flex-wrap ${bgSubCard}`}>
+        <span className={textMuted}>
+         Beolvasott tárgyak az Excelben: <strong className={textStrong}>{allExcelCoursesList.length} db</strong> ({timetableImportPreview.totalEvents} alkalom)
+        </span>
+        <span className="font-extrabold text-emerald-500">
+         Készen áll: {totalReadySubjectsCount} tárgy
         </span>
        </div>
 
-       <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
-        {timetableImportPreview.matched.map((m) => (
-         <div
-          key={m.subjectId}
-          className={`p-2.5 rounded-xl border flex flex-col gap-1 text-xs ${bgSubCard}`}
-         >
-          <p className={`font-bold truncate ${textStrong}`}>{m.subjectName}</p>
-          <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
-           {m.practice.length > 0 && (
-            <span className={`px-2 py-0.5 rounded-md font-bold ${
-             darkMode ? 'bg-amber-400/20 text-amber-300' : 'bg-amber-100 text-amber-900'
-            }`}>
-             Gyakorlat: {m.practice.length} alkalom ({m.practice[0].date}{m.practice[0].time ? ` ${m.practice[0].time}` : ''} – {m.practice[m.practice.length - 1].date})
-            </span>
-           )}
-           {m.lecture.length > 0 && (
-            <span className={`px-2 py-0.5 rounded-md font-bold ${
-             darkMode ? 'bg-sky-500/20 text-sky-300' : 'bg-sky-100 text-sky-900'
-            }`}>
-             Előadás: {m.lecture.length} alkalom ({m.lecture[0].date}{m.lecture[0].time ? ` ${m.lecture[0].time}` : ''} – {m.lecture[m.lecture.length - 1].date})
-            </span>
-           )}
+       {/* 1. NEM FELISMERT TÁRGYAK KÉZI PÁROSÍTÁSA */}
+       {unmatchedSubjectsList.length > 0 && (
+        <div className={`p-3.5 sm:p-4 rounded-2xl border-2 space-y-3 ${
+         darkMode
+          ? 'bg-amber-400/10 border-amber-400/50'
+          : 'bg-amber-50/90 border-amber-300'
+        }`}>
+         <div className="flex items-start gap-2">
+          <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+          <div className="min-w-0 space-y-0.5">
+           <p className={`text-xs sm:text-sm font-extrabold ${textStrong}`}>
+            Nem felismert tárgyak ({unmatchedSubjectsList.length} db) — párosítás az Excelből
+           </p>
+           <p className={`text-[11px] leading-relaxed ${textMuted}`}>
+            Ha egy tárgyadat máshogy nevezted el az appban, mint ahogy a Neptun Excelben szerepel (pl. <em>Üzleti angol</em>), válaszd ki a legördülő listából a hozzá tartozó Excel tárgynevet:
+           </p>
           </div>
          </div>
-        ))}
-       </div>
 
-       {timetableImportPreview.unmatchedExcelCourses.length > 0 && (
-        <p className={`text-[11px] leading-snug ${textMuted}`}>
-         Kimaradt (nincs ilyen tárgyad ebben a félévben):{' '}
-         {timetableImportPreview.unmatchedExcelCourses.map(c => c.name).join(', ')}
-        </p>
+         <div className="space-y-2.5">
+          {unmatchedSubjectsList.map((uSubj) => {
+           const chosenNorm = manualTimetableMap[uSubj.subjectId] || '';
+           const chosenExcelCourse = chosenNorm
+            ? allExcelCoursesList.find(c => c.normalizedName === chosenNorm) || null
+            : null;
+           const otherChosenNorms = new Set(
+            Object.entries(manualTimetableMap)
+             .filter(([sId, val]) => sId !== uSubj.subjectId && Boolean(val))
+             .map(([, val]) => val)
+           );
+
+           return (
+            <div
+             key={uSubj.subjectId}
+             className={`p-3 rounded-xl border space-y-2 transition ${
+              chosenExcelCourse
+               ? darkMode
+                ? 'bg-emerald-950/30 border-emerald-500/50'
+                : 'bg-white border-emerald-400 shadow-2xs'
+               : bgSubCard
+             }`}
+            >
+             <div className="flex items-center justify-between gap-2">
+              <span className={`text-xs sm:text-sm font-extrabold truncate ${textStrong}`}>
+               {uSubj.subjectName}
+              </span>
+              {chosenExcelCourse ? (
+               <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-500/20 text-emerald-500 border border-emerald-500/35 shrink-0">
+                Párosítva
+               </span>
+              ) : (
+               <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0 ${
+                darkMode ? 'bg-slate-800 text-slate-400' : 'bg-slate-200/80 text-slate-600'
+               }`}>
+                Nincs párosítva
+               </span>
+              )}
+             </div>
+
+             <div>
+              <label className={`block text-[10px] font-bold uppercase tracking-wider mb-1 ${textMuted}`}>
+               Excelben felismert tárgy kiválasztása
+              </label>
+              <select
+               value={chosenNorm}
+               onChange={(e) => {
+                const nextVal = e.target.value;
+                setManualTimetableMap(prev => ({
+                 ...prev,
+                 [uSubj.subjectId]: nextVal
+                }));
+               }}
+               className={`w-full border rounded-xl px-3 py-2 text-xs sm:text-sm font-semibold focus:outline-none cursor-pointer ${inputStyle}`}
+              >
+               <option value="">— Nem párosítom (kimarad) —</option>
+               {allExcelCoursesList.map((c) => {
+                const isAlreadyUsed = autoMatchedCourseKeys.has(c.normalizedName) || otherChosenNorms.has(c.normalizedName);
+                const countsLabel = [
+                 c.practice.length > 0 ? `${c.practice.length} gyak.` : '',
+                 c.lecture.length > 0 ? `${c.lecture.length} ea.` : ''
+                ].filter(Boolean).join(', ');
+                return (
+                 <option key={c.normalizedName} value={c.normalizedName}>
+                  {c.name}{countsLabel ? ` (${countsLabel})` : ''}{isAlreadyUsed ? ' • [már párosítva]' : ''}
+                 </option>
+                );
+               })}
+              </select>
+             </div>
+
+             {chosenExcelCourse && (
+              <div className="flex flex-wrap items-center gap-1.5 text-[11px] pt-0.5">
+               {chosenExcelCourse.practice.length > 0 && (
+                <span className={`px-2 py-0.5 rounded-md font-bold ${
+                 darkMode ? 'bg-amber-400/20 text-amber-300' : 'bg-amber-100 text-amber-900'
+                }`}>
+                 Gyakorlat: {chosenExcelCourse.practice.length} alkalom ({chosenExcelCourse.practice[0].date}{chosenExcelCourse.practice[0].time ? ` ${chosenExcelCourse.practice[0].time}` : ''} – {chosenExcelCourse.practice[chosenExcelCourse.practice.length - 1].date})
+                </span>
+               )}
+               {chosenExcelCourse.lecture.length > 0 && (
+                <span className={`px-2 py-0.5 rounded-md font-bold ${
+                 darkMode ? 'bg-sky-500/20 text-sky-300' : 'bg-sky-100 text-sky-900'
+                }`}>
+                 Előadás: {chosenExcelCourse.lecture.length} alkalom ({chosenExcelCourse.lecture[0].date}{chosenExcelCourse.lecture[0].time ? ` ${chosenExcelCourse.lecture[0].time}` : ''} – {chosenExcelCourse.lecture[chosenExcelCourse.lecture.length - 1].date})
+                </span>
+               )}
+              </div>
+             )}
+            </div>
+           );
+          })}
+         </div>
+        </div>
+       )}
+
+       {/* 2. AUTOMATIKUSAN FELISMERT TÁRGYAK */}
+       {autoMatchedList.length > 0 && (
+        <div className={`p-3.5 sm:p-4 rounded-2xl border space-y-2.5 ${
+         darkMode
+          ? 'bg-emerald-950/25 border-emerald-500/45'
+          : 'bg-emerald-50/75 border-emerald-300'
+        }`}>
+         <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+           <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+           <p className={`text-xs sm:text-sm font-extrabold truncate ${textStrong}`}>
+            Automatikusan felismert tárgyak ({autoMatchedList.length} db)
+           </p>
+          </div>
+         </div>
+
+         <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+          {autoMatchedList.map((m) => (
+           <div
+            key={m.subjectId}
+            className={`p-2.5 rounded-xl border flex flex-col gap-1 text-xs ${bgSubCard}`}
+           >
+            <div className="flex items-center justify-between gap-2">
+             <p className={`font-bold truncate ${textStrong}`}>{m.subjectName}</p>
+             {m.excelCourseName && normalizeCourseNameForTimetable(m.excelCourseName) !== normalizeCourseNameForTimetable(m.subjectName) && (
+              <span className={`text-[10px] truncate max-w-[160px] ${textMuted}`}>
+               Excel: {m.excelCourseName}
+              </span>
+             )}
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+             {m.practice.length > 0 && (
+              <span className={`px-2 py-0.5 rounded-md font-bold ${
+               darkMode ? 'bg-amber-400/20 text-amber-300' : 'bg-amber-100 text-amber-900'
+              }`}>
+               Gyakorlat: {m.practice.length} alkalom ({m.practice[0].date}{m.practice[0].time ? ` ${m.practice[0].time}` : ''} – {m.practice[m.practice.length - 1].date})
+              </span>
+             )}
+             {m.lecture.length > 0 && (
+              <span className={`px-2 py-0.5 rounded-md font-bold ${
+               darkMode ? 'bg-sky-500/20 text-sky-300' : 'bg-sky-100 text-sky-900'
+              }`}>
+               Előadás: {m.lecture.length} alkalom ({m.lecture[0].date}{m.lecture[0].time ? ` ${m.lecture[0].time}` : ''} – {m.lecture[m.lecture.length - 1].date})
+              </span>
+             )}
+            </div>
+           </div>
+          ))}
+         </div>
+        </div>
        )}
       </div>
      )}
     </div>
 
-    <div className={`px-4 sm:px-6 py-3 border-t flex items-center justify-end gap-2 shrink-0 ${
+    <div className={`px-4 sm:px-6 py-3 border-t flex items-center justify-between gap-2 shrink-0 ${
      darkMode ? 'border-slate-800 bg-slate-900/75' : 'border-slate-200 bg-slate-50'
     }`}>
-     <button
-      data-no-glass="true"
-      type="button"
-      disabled={isParsingTimetableExcel || isSavingTimetableImport}
-      onClick={() => setIsTimetableImportModalOpen(false)}
-      className={`px-4 py-2 text-xs sm:text-sm font-semibold rounded-xl cursor-pointer ${textMuted}`}
-     >
-      Mégse
-     </button>
-     {timetableImportPreview && timetableImportPreview.matched.length > 0 && (
+     {isReviewStep ? (
       <button
+       data-no-glass="true"
        type="button"
-       disabled={isSavingTimetableImport}
-       onClick={handleApplyTimetableImport}
-       className="px-4 py-2 text-xs sm:text-sm font-extrabold bg-amber-400 hover:bg-amber-300 disabled:opacity-50 text-slate-950 rounded-xl flex items-center gap-1.5 shadow-md transition cursor-pointer"
+       disabled={isParsingTimetableExcel || isSavingTimetableImport}
+       onClick={() => {
+        setTimetableImportStep('upload');
+        setTimetableImportError('');
+       }}
+       className={`px-3 py-2 text-xs sm:text-sm font-bold rounded-xl inline-flex items-center gap-1.5 cursor-pointer ${
+        darkMode ? 'text-slate-300 hover:text-white' : 'text-slate-700 hover:text-slate-950'
+       }`}
       >
-       <Check className="w-4 h-4" />
-       <span>
-        {isSavingTimetableImport
-         ? 'Mentés...'
-         : `Időpontok beírása (${timetableImportPreview.matched.length} tárgy)`}
-       </span>
+       <ArrowLeft className="w-4 h-4" />
+       <span>Másik fájl</span>
       </button>
+     ) : (
+      <span />
      )}
+
+     <div className="flex items-center gap-2">
+      <button
+       data-no-glass="true"
+       type="button"
+       disabled={isParsingTimetableExcel || isSavingTimetableImport}
+       onClick={() => setIsTimetableImportModalOpen(false)}
+       className={`px-4 py-2 text-xs sm:text-sm font-semibold rounded-xl cursor-pointer ${textMuted}`}
+      >
+       Mégse
+      </button>
+      {isReviewStep && (
+       <button
+        type="button"
+        disabled={isSavingTimetableImport || totalReadySubjectsCount === 0}
+        onClick={handleApplyTimetableImport}
+        className="px-4 py-2 text-xs sm:text-sm font-extrabold bg-amber-400 hover:bg-amber-300 disabled:opacity-50 text-slate-950 rounded-xl flex items-center gap-1.5 shadow-md transition cursor-pointer"
+       >
+        <Check className="w-4 h-4" />
+        <span>
+         {isSavingTimetableImport
+          ? 'Mentés...'
+          : `Megerősítés és hozzárendelés (${totalReadySubjectsCount} tárgy)`}
+        </span>
+       </button>
+      )}
+     </div>
     </div>
    </div>
   </div>

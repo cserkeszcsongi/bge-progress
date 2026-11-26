@@ -708,7 +708,7 @@ const APP_RELEASES = [
     date: '2026. 11. 26.',
     changes: [
       'Dátum és kezdési időpont megadása Joker ZH-hoz és vizsgához is: a Joker ZH kiválasztásakor és pontbeírásakor megadható az újraírás dátuma és időpontja, valamint a vizsgáknál (mind a vizsgakurzusoknál, mind az automatikus vizsgáknál) is rögzíthető a pontos vizsgaidőpont — mindkettő automatikusan megjelenik a „Ma esedékes” ablakban',
-      'Intelligens Excel-szerű sorozatkitöltés (auto-fill) a Jelenlét fülön: ha a gyakorlatoknál vagy az előadásoknál kézzel beírod az első két alkalom dátumát (és opcionálisan időpontját), a rendszer felismeri a két dátum közötti lépésközt (pl. heti 7 nap vagy kétheti 14 nap), és automatikusan kitölti az összes többi üres sort a megfelelő dátumokkal és kezdési időponttal',
+      'Megerősítéses sorozatkitöltés (auto-fill) a Jelenlét fülön: legalább 2 kitöltött alkalom dátuma után felugró megerősítő gomb kérdezi meg, hogy alkalmazza-e az automatikus kitöltést — „Nem” esetén várakozik és új sor kitöltésekor újra felugrik, „Igen” esetén pedig kitölti a többi sort, majd eltűnik',
       'Automatikus összecsukás a „Ma esedékes” ablakban: amint a mai napra esedékes összes teendőt rögzítetted, az ablak automatikusan becsukódik (és bármikor újra lenyitható, ha visszanéznéd vagy módosítanád)',
       'Félévszintű duplikált sablon-tárgyfelvétel tiltása: a tárgyfelvétel ablak sablonlistája az adott féléven belül ellenőrzi a már felvett tantárgyakat, így ugyanabban a félévben nem engedi kétszer felvenni ugyanazt a tárgyat, de egy másik félévben (pl. tárgyismétlésnél) szabadon felvehető'
     ]
@@ -4363,6 +4363,12 @@ export default function App() {
  };
  }, []);
  const [isAttendanceDashboardExpanded, setIsAttendanceDashboardExpanded] = useState(false);
+ const [autoFillPromptState, setAutoFillPromptState] = useState(null);
+ const [isApplyingAutoFillPrompt, setIsApplyingAutoFillPrompt] = useState(false);
+
+ useEffect(() => {
+  setAutoFillPromptState(null);
+ }, [activeSubjectId, detailTab, attendanceSubTab]);
 
  const [activeSubjectId, setActiveSubjectId] = useState(null);
  const [detailTab, setDetailTab] = useState('points');
@@ -9127,22 +9133,12 @@ export default function App() {
  }
  };
 
- const applyExcelSeriesAutoFill = (sessionsList, editedIdx, changes) => {
-  const nextList = sessionsList.map((s, idx) =>
-   idx === editedIdx ? { ...s, ...changes } : { ...s }
-  );
-
-  // Csak akkor indul el, ha a felhasználó dátumot módosít (és pontosan 2 alkalom dátuma van kitöltve)
-  if (!Object.prototype.hasOwnProperty.call(changes, 'date')) {
-   return { updated: nextList, autoFilledCount: 0 };
+ const computeSeriesAutoFillResult = (sessionsList, preferredAnchorIdx = null) => {
+  const nextList = sessionsList.map((s) => ({ ...s }));
+  if (nextList.length < 3) {
+   return { updated: nextList, autoFilledCount: 0, filledCount: 0, stepDays: 0 };
   }
 
-  const newDateIso = normalizeDateToIso(changes.date);
-  if (!newDateIso || nextList.length < 3) {
-   return { updated: nextList, autoFilledCount: 0 };
-  }
-
-  // Gyűjtsük ki az összes eddig dátummal kitöltött alkalmat sorrendben
   const filledIndices = [];
   for (let i = 0; i < nextList.length; i++) {
    if (normalizeDateToIso(nextList[i]?.date)) {
@@ -9150,22 +9146,21 @@ export default function App() {
    }
   }
 
-  // Szigorúan megvárjuk, míg pontosan 2 alkalom dátuma van beírva
-  if (filledIndices.length !== 2) {
-   return { updated: nextList, autoFilledCount: 0 };
+  if (filledIndices.length < 2) {
+   return { updated: nextList, autoFilledCount: 0, filledCount: filledIndices.length, stepDays: 0 };
   }
 
-  const idx1 = filledIndices[0];
-  const idx2 = filledIndices[1];
+  const idx1 = filledIndices[filledIndices.length - 2];
+  const idx2 = filledIndices[filledIndices.length - 1];
   const indexGap = idx2 - idx1;
   if (indexGap <= 0) {
-   return { updated: nextList, autoFilledCount: 0 };
+   return { updated: nextList, autoFilledCount: 0, filledCount: filledIndices.length, stepDays: 0 };
   }
 
   const firstIso = normalizeDateToIso(nextList[idx1]?.date);
   const secondIso = normalizeDateToIso(nextList[idx2]?.date);
   if (!firstIso || !secondIso) {
-   return { updated: nextList, autoFilledCount: 0 };
+   return { updated: nextList, autoFilledCount: 0, filledCount: filledIndices.length, stepDays: 0 };
   }
 
   const [y1, m1, d1] = firstIso.split('-').map(Number);
@@ -9174,17 +9169,22 @@ export default function App() {
   const utc2 = Date.UTC(y2, m2 - 1, d2);
   const diffMs = utc2 - utc1;
   if (diffMs <= 0) {
-   return { updated: nextList, autoFilledCount: 0 };
+   return { updated: nextList, autoFilledCount: 0, filledCount: filledIndices.length, stepDays: 0 };
   }
 
   const stepMsPerSlot = diffMs / indexGap;
+  const stepDays = Math.max(1, Math.round(stepMsPerSlot / (24 * 60 * 60 * 1000)));
   const t1 = (nextList[idx1]?.time || '').trim();
   const t2 = (nextList[idx2]?.time || '').trim();
-  const commonTime = (editedIdx === idx2 ? t2 : t1) || t2 || t1 || '';
+  const anchorIdx = (typeof preferredAnchorIdx === 'number' && preferredAnchorIdx >= 0 && preferredAnchorIdx < nextList.length)
+   ? preferredAnchorIdx
+   : idx2;
+  const tAnchor = (nextList[anchorIdx]?.time || '').trim();
+  const commonTime = tAnchor || t2 || t1 || '';
 
   let autoFilledCount = 0;
   for (let i = 0; i < nextList.length; i++) {
-   if (i === idx1 || i === idx2) continue;
+   if (filledIndices.includes(i)) continue;
    const curDate = normalizeDateToIso(nextList[i]?.date);
    if (curDate) continue;
 
@@ -9200,7 +9200,82 @@ export default function App() {
    autoFilledCount += 1;
   }
 
-  return { updated: nextList, autoFilledCount };
+  return { updated: nextList, autoFilledCount, filledCount: filledIndices.length, stepDays };
+ };
+
+ const syncAutoFillPromptForList = (subjectId, kind, nextSessionsList) => {
+  const res = computeSeriesAutoFillResult(nextSessionsList);
+  if (res.filledCount < 2 || res.autoFilledCount <= 0) {
+   setAutoFillPromptState(prev => (prev && prev.subjectId === subjectId && prev.kind === kind ? null : prev));
+   return;
+  }
+
+  setAutoFillPromptState(prev => {
+   if (prev && prev.subjectId === subjectId && prev.kind === kind && prev.dismissedAtFilledCount === res.filledCount) {
+    return prev;
+   }
+   return {
+    subjectId,
+    kind,
+    filledCount: res.filledCount,
+    autoFilledCount: res.autoFilledCount,
+    stepDays: res.stepDays,
+    dismissedAtFilledCount: null
+   };
+  });
+ };
+
+ const handleDismissAutoFillPrompt = () => {
+  setAutoFillPromptState(prev => {
+   if (!prev) return null;
+   return {
+    ...prev,
+    dismissedAtFilledCount: prev.filledCount
+   };
+  });
+ };
+
+ const handleConfirmAutoFillPrompt = async () => {
+  if (!user || !activeSubject || !autoFillPromptState || isApplyingAutoFillPrompt) return;
+  const { kind } = autoFillPromptState;
+  const isLecture = kind === 'lecture';
+  const fieldName = isLecture ? 'lectureAttendanceSessions' : 'attendanceSessions';
+  const baseSessions = isLecture
+   ? createDefaultSessions(
+      Math.max(
+       Number(activeSubject.totalClasses) || 0,
+       Number(activeSubject.totalLectures) || 0,
+       (activeSubject.lectureAttendanceSessions || []).length
+      ),
+      activeSubject.lectureAttendanceSessions || []
+     )
+   : createDefaultSessions(
+      activeSubject.totalClasses ?? (activeSubject.attendanceSessions || []).length,
+      activeSubject.attendanceSessions || []
+     );
+
+  const { updated, autoFilledCount } = computeSeriesAutoFillResult(baseSessions);
+  if (autoFilledCount <= 0) {
+   setAutoFillPromptState(null);
+   return;
+  }
+
+  setIsApplyingAutoFillPrompt(true);
+  try {
+   await updateDoc(doc(db, 'users', user.uid, 'subjects', activeSubject.id), {
+    [fieldName]: updated
+   });
+   setAutoFillPromptState(null);
+   showToast(
+    isLecture
+     ? `Automatikus kitöltés alkalmazva: ${autoFilledCount} előadás dátuma kitöltve!`
+     : `Automatikus kitöltés alkalmazva: ${autoFilledCount} gyakorlati alkalom dátuma kitöltve!`
+   );
+  } catch (err) {
+   alert('Hiba az automatikus kitöltés alkalmazásakor: ' + err.message);
+  } finally {
+   setIsApplyingAutoFillPrompt(false);
+  }
  };
 
  const handleUpdateSession = async (sessionIdx, changes) => {
@@ -9209,12 +9284,14 @@ export default function App() {
  activeSubject.totalClasses ?? (activeSubject.attendanceSessions || []).length,
  activeSubject.attendanceSessions || []
  );
- const { updated, autoFilledCount } = applyExcelSeriesAutoFill(baseSessions, sessionIdx, changes);
+ const updated = baseSessions.map((s, idx) =>
+  idx === sessionIdx ? { ...s, ...changes } : { ...s }
+ );
  await updateDoc(doc(db, 'users', user.uid, 'subjects', activeSubject.id), {
  attendanceSessions: updated
  });
- if (autoFilledCount > 0) {
- showToast(`Automatikus sorozatkitöltés: ${autoFilledCount} további gyakorlati alkalom dátuma kitöltve!`);
+ if (Object.prototype.hasOwnProperty.call(changes, 'date')) {
+  syncAutoFillPromptForList(activeSubject.id, 'practice', updated);
  }
  };
 
@@ -9228,12 +9305,14 @@ export default function App() {
  ),
  activeSubject.lectureAttendanceSessions || []
  );
- const { updated, autoFilledCount } = applyExcelSeriesAutoFill(baseLectureSessions, sessionIdx, changes);
+ const updated = baseLectureSessions.map((s, idx) =>
+  idx === sessionIdx ? { ...s, ...changes } : { ...s }
+ );
  await updateDoc(doc(db, 'users', user.uid, 'subjects', activeSubject.id), {
  lectureAttendanceSessions: updated
  });
- if (autoFilledCount > 0) {
- showToast(`Automatikus sorozatkitöltés: ${autoFilledCount} további előadás dátuma kitöltve!`);
+ if (Object.prototype.hasOwnProperty.call(changes, 'date')) {
+  syncAutoFillPromptForList(activeSubject.id, 'lecture', updated);
  }
  };
 
@@ -19222,7 +19301,50 @@ export default function App() {
  : darkMode ? 'border-slate-800 bg-slate-800/40' : 'border-slate-200 bg-white'
  }`}
  >
- <div className="flex items-center gap-2 min-w-0 flex-wrap sm:flex-nowrap">
+ {autoFillPromptState &&
+ autoFillPromptState.subjectId === activeSubject.id &&
+ autoFillPromptState.kind === 'practice' &&
+ autoFillPromptState.dismissedAtFilledCount !== autoFillPromptState.filledCount && (
+ <div className={`bge-fluid-reveal p-3.5 rounded-xl border-2 border-amber-400/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-md ${
+  darkMode
+   ? 'bg-amber-400/15 text-amber-100'
+   : 'bg-amber-50 text-slate-900'
+ }`}>
+  <div className="min-w-0">
+   <p className="text-xs sm:text-sm font-extrabold flex items-center gap-1.5">
+    <Sparkles className="w-4 h-4 text-amber-500 shrink-0" />
+    <span>Alkalmazzam az automatikus kitöltést?</span>
+   </p>
+   <p className={`text-[11px] mt-0.5 ${textMuted}`}>
+    {autoFillPromptState.stepDays} napos lépésköz alapján kitölt <strong>{autoFillPromptState.autoFilledCount}</strong> további gyakorlati alkalmat.
+   </p>
+  </div>
+  <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+   <button
+    type="button"
+    disabled={isApplyingAutoFillPrompt}
+    onClick={handleDismissAutoFillPrompt}
+    className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition cursor-pointer disabled:opacity-50 ${
+     darkMode
+      ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-white/15'
+      : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-300'
+    }`}
+   >
+    Nem
+   </button>
+   <button
+    type="button"
+    disabled={isApplyingAutoFillPrompt}
+    onClick={handleConfirmAutoFillPrompt}
+    className="px-3.5 py-1.5 rounded-lg text-xs font-extrabold bg-amber-400 hover:bg-amber-300 text-slate-950 shadow-xs transition cursor-pointer disabled:opacity-50"
+   >
+    {isApplyingAutoFillPrompt ? 'Kitöltés...' : 'Igen'}
+   </button>
+  </div>
+ </div>
+)}
+
+<div className="flex items-center gap-2 min-w-0 flex-wrap sm:flex-nowrap">
  <span className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold shrink-0 ${
  darkMode ? 'bg-slate-800 text-slate-300' : 'bg-slate-100 text-slate-700'
  }`}>
@@ -19380,7 +19502,50 @@ export default function App() {
  : darkMode ? 'border-slate-800 bg-slate-800/40' : 'border-slate-200 bg-white'
  }`}
  >
- <div className="flex items-center gap-2 min-w-0 flex-wrap sm:flex-nowrap">
+ {autoFillPromptState &&
+ autoFillPromptState.subjectId === activeSubject.id &&
+ autoFillPromptState.kind === 'lecture' &&
+ autoFillPromptState.dismissedAtFilledCount !== autoFillPromptState.filledCount && (
+ <div className={`bge-fluid-reveal p-3.5 rounded-xl border-2 border-sky-400/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-md ${
+  darkMode
+   ? 'bg-sky-500/15 text-sky-100'
+   : 'bg-sky-50 text-slate-900'
+ }`}>
+  <div className="min-w-0">
+   <p className="text-xs sm:text-sm font-extrabold flex items-center gap-1.5">
+    <Sparkles className="w-4 h-4 text-sky-500 shrink-0" />
+    <span>Alkalmazzam az automatikus kitöltést?</span>
+   </p>
+   <p className={`text-[11px] mt-0.5 ${textMuted}`}>
+    {autoFillPromptState.stepDays} napos lépésköz alapján kitölt <strong>{autoFillPromptState.autoFilledCount}</strong> további előadást.
+   </p>
+  </div>
+  <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+   <button
+    type="button"
+    disabled={isApplyingAutoFillPrompt}
+    onClick={handleDismissAutoFillPrompt}
+    className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition cursor-pointer disabled:opacity-50 ${
+     darkMode
+      ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-white/15'
+      : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-300'
+    }`}
+   >
+    Nem
+   </button>
+   <button
+    type="button"
+    disabled={isApplyingAutoFillPrompt}
+    onClick={handleConfirmAutoFillPrompt}
+    className="px-3.5 py-1.5 rounded-lg text-xs font-extrabold bg-sky-500 hover:bg-sky-400 text-white shadow-xs transition cursor-pointer disabled:opacity-50"
+   >
+    {isApplyingAutoFillPrompt ? 'Kitöltés...' : 'Igen'}
+   </button>
+  </div>
+ </div>
+)}
+
+<div className="flex items-center gap-2 min-w-0 flex-wrap sm:flex-nowrap">
  <span className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold shrink-0 ${
  darkMode ? 'bg-slate-800 text-sky-300' : 'bg-sky-50 text-sky-700'
  }`}>

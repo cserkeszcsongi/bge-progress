@@ -2629,7 +2629,8 @@ function mergeSubjectWithTemplate(subj, tpl, tplUpdatedMs) {
  templateItemId: ta.id,
  category: ta.category,
  title: ta.title,
- date: (match.date && String(match.date).trim() !== '') ? match.date : (ta.date || ''),
+ date: (match.date && String(match.date).trim() !== '') ? match.date : '',
+ time: (match.time && String(match.time).trim() !== '') ? match.time : '',
  max: tplHasMax ? Number(ta.max) : (match.max ?? null),
  achieved: match.achieved !== undefined ? match.achieved : null
  };
@@ -2646,7 +2647,8 @@ function mergeSubjectWithTemplate(subj, tpl, tplUpdatedMs) {
  templateItemId: ta.id,
  category: ta.category,
  title: ta.title,
- date: ta.date || '',
+ date: '',
+ time: '',
  max: tplHasMax ? Number(ta.max) : null,
  achieved: null
  };
@@ -6301,7 +6303,8 @@ export default function App() {
  templateItemId: a.id,
  category: a.category,
  title: a.title,
- date: a.date || '',
+ date: '',
+ time: '',
  max: a.max !== undefined && a.max !== null && a.max !== ''
  ? Number(a.max)
  : null,
@@ -7093,7 +7096,8 @@ export default function App() {
  id: a.id,
  category: a.category,
  title: a.title,
- date: a.date || '',
+ date: '',
+ time: '',
  max: a.max !== undefined && a.max !== null && a.max !== ''
  ? Number(a.max)
  : null,
@@ -7219,7 +7223,8 @@ export default function App() {
  templateItemId: a.id,
  category: a.category,
  title: a.title,
- date: a.date || '',
+ date: '',
+ time: '',
  max: a.max !== undefined && a.max !== null && a.max !== ''
  ? Number(a.max)
  : null,
@@ -8504,6 +8509,7 @@ export default function App() {
  category: 'ZH',
  title: 'Vizsga',
  date: existingExamItem?.date || '',
+ time: existingExamItem?.time || '',
  max: 100,
  achieved: existingExamItem?.achieved !== undefined ? existingExamItem.achieved : null
  }
@@ -8853,8 +8859,11 @@ export default function App() {
  [autoExamItemId]: parsedAchieved === null ? undefined : parsedAchieved
  }));
  } else {
+ const normalizedAutoExamTime = itemModal.time ? (parseKeyboardAttendanceTime(itemModal.time) || normalizeTimeHHMM(itemModal.time, '')) : '';
  const updatePayload = {
- autoExamScore: parsedAchieved
+ autoExamScore: parsedAchieved,
+ autoExamDate: itemModal.date || '',
+ autoExamTime: normalizedAutoExamTime
  };
  if (parsedAchieved !== null && parsedAchieved >= 59.5 && activeSubject.isFailed) {
  updatePayload.isFailed = false;
@@ -8910,11 +8919,13 @@ export default function App() {
  pendingForSubjSem.assessmentId === itemId
  );
 
+ const normalizedItemTime = itemModal.time ? (parseKeyboardAttendanceTime(itemModal.time) || normalizeTimeHHMM(itemModal.time, '')) : '';
  const formattedItem = {
  id: itemId,
  category: itemModal.category,
  title: finalTitle,
  date: itemModal.date || '',
+ time: normalizedItemTime,
  max: parsedMax,
  achieved: parsedAchieved,
  ...(itemModal.category === 'ZH' && activeSubject.courseKind !== 'exam' ? { bonusPoints: parsedBonus } : {}),
@@ -9427,6 +9438,7 @@ export default function App() {
       assessmentId: a.id,
       category: a.category,
       title: a.title || (a.category === 'ZH' ? 'ZH' : 'Tétel'),
+      time: a.time || '',
       badgeLabel,
       badgeTone,
       max: (a.max !== null && a.max !== undefined && a.max !== '' && !isNaN(Number(a.max))) ? Number(a.max) : null,
@@ -9435,6 +9447,30 @@ export default function App() {
       isCompleted: hasValue
      });
     });
+
+    const stForToday = subjectStatsMap[subj.id];
+    if (!isExamCourse && stForToday?.needsAutoExam && normalizeDateToIso(subj.autoExamDate) === todayIso) {
+     const autoExamId = `auto_exam_${subj.id}`;
+     const effAuto = getEffectiveScore({ id: autoExamId, achieved: subj.autoExamScore });
+     const hasAutoVal = effAuto !== null && effAuto !== undefined && effAuto !== '' && !isNaN(Number(effAuto));
+     items.push({
+      key: `autoexam_${subj.id}`,
+      kind: 'auto_exam',
+      priority: 0,
+      subjectId: subj.id,
+      subjectName: subj.name || 'Névtelen tárgy',
+      assessmentId: autoExamId,
+      category: 'ZH',
+      title: 'Vizsga',
+      time: subj.autoExamTime || '',
+      badgeLabel: 'Vizsga',
+      badgeTone: 'orange',
+      max: 100,
+      achieved: hasAutoVal ? Number(effAuto) : null,
+      hasValue: hasAutoVal,
+      isCompleted: hasAutoVal
+     });
+    }
    }
 
    if (!disablePointCalc && !isExamCourse) {
@@ -9729,7 +9765,8 @@ export default function App() {
    return;
   }
 
-  const itemKey = `assess_${subjectId}_${assessmentId}`;
+  const isAutoExamTarget = String(assessmentId || '').startsWith('auto_exam_');
+  const itemKey = isAutoExamTarget ? `autoexam_${subjectId}` : `assess_${subjectId}_${assessmentId}`;
 
   if (isSim) {
    setSimScores(prev => ({
@@ -9751,6 +9788,25 @@ export default function App() {
 
   setSavingTodayItemKey(itemKey);
   try {
+   if (isAutoExamTarget) {
+    const updatePayload = { autoExamScore: parsedVal };
+    if (parsedVal !== null && parsedVal >= 59.5 && subj.isFailed) {
+     updatePayload.isFailed = false;
+    }
+    await updateDoc(doc(db, 'users', user.uid, 'subjects', subj.id), updatePayload);
+    setTodayScoreDrafts(prev => {
+     const next = { ...prev };
+     delete next[assessmentId];
+     return next;
+    });
+    showToast(
+     parsedVal === null
+      ? 'Vizsgapontszám törölve.'
+      : `Vizsgapontszám mentve: ${formatHu(parsedVal)} p`
+    );
+    return;
+   }
+
    const existing = toArraySafe(subj.assessments);
    const prevItem = existing.find(a => a.id === assessmentId);
    if (!prevItem) return;
@@ -12815,8 +12871,13 @@ export default function App() {
            <p className={`text-xs sm:text-sm font-bold truncate group-hover:text-amber-500 transition ${textStrong}`}>
             {item.subjectName}
            </p>
-           <p className={`text-[11px] truncate ${textMuted}`}>
-            {item.title}{item.max !== null ? ` • max ${formatHu(item.max)} p` : ''}
+           <p className={`text-[11px] truncate flex items-center gap-1.5 ${textMuted}`}>
+            <span>{item.title}{item.max !== null ? ` • max ${formatHu(item.max)} p` : ''}</span>
+            {item.time && (
+             <span className="inline-flex items-center gap-0.5 font-bold text-amber-500">
+              • <Clock className="w-3 h-3 shrink-0" /> {item.time}
+             </span>
+            )}
            </p>
           </div>
          </button>
@@ -17681,7 +17742,16 @@ export default function App() {
  </span>
  )}
  </div>
- {item.date && <p className={`text-xs mt-1 ${textMuted}`}>{item.date}</p>}
+ {(item.date || item.time) && (
+ <p className={`text-xs mt-1 flex items-center gap-1.5 flex-wrap ${textMuted}`}>
+ {item.date && <span>{item.date}</span>}
+ {item.time && (
+ <span className="inline-flex items-center gap-1 font-semibold text-amber-500">
+ {item.date ? '• ' : ''}<Clock className="w-3 h-3 shrink-0" /> {item.time}
+ </span>
+ )}
+ </p>
+ )}
 
  {item.isJokerRewritten && (
  <div className={`mt-2 inline-flex flex-wrap items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-[11px] font-semibold ${
@@ -17757,6 +17827,7 @@ export default function App() {
  bucketId: item.bucketId || '',
  title: item.title,
  date: item.date || '',
+ time: item.time || '',
  max: item.max ?? '',
  achieved: eff ?? '',
  bonusPoints: item.bonusPoints ?? '',
@@ -18083,6 +18154,7 @@ export default function App() {
  bucketId: '',
  title: 'Vizsga',
  date: '',
+ time: '',
  max: 100,
  achieved: '',
  bonusPoints: ''
@@ -18276,6 +18348,12 @@ export default function App() {
  <div>
  <div className="flex items-center gap-2 flex-wrap">
  <p className={`text-sm font-extrabold ${textStrong}`}>Vizsgaeredmény</p>
+ {(activeSubject.autoExamDate || activeSubject.autoExamTime) && (
+ <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-amber-500/15 text-amber-500 border border-amber-500/30">
+ <Clock className="w-3 h-3 shrink-0" />
+ {activeSubject.autoExamDate || ''}{activeSubject.autoExamDate && activeSubject.autoExamTime ? ' • ' : ''}{activeSubject.autoExamTime || ''}
+ </span>
+ )}
  {st.hasAutoExamScore && st.osszElert >= 59.5 && st.projectedGrade && (
  <span className="px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-emerald-500 text-white">
  Vizsgajegy: {st.projectedGrade}
@@ -18317,7 +18395,8 @@ export default function App() {
  category: 'ZH',
  bucketId: '',
  title: 'Vizsga',
- date: '',
+ date: activeSubject.autoExamDate || '',
+ time: activeSubject.autoExamTime || '',
  max: 100,
  achieved: st.hasAutoExamScore ? st.osszElert : '',
  bonusPoints: ''
@@ -18372,6 +18451,7 @@ export default function App() {
  bucketId: '',
  title: getNextZhTitle(activeSubject.assessments),
  date: '',
+ time: '',
  max: '',
  achieved: '',
  bonusPoints: ''
@@ -18418,7 +18498,7 @@ export default function App() {
  <div className="flex items-center gap-1.5 flex-wrap shrink-0">
  {renderCollectorSortMenu('Pluszpont', 'Pluszpontok', st.pluszProcessed.map(p => p.item))}
  <button
- onClick={() => setItemModal({ category: 'Pluszpont', bucketId: '', title: '', date: '', max: '', achieved: '' })}
+ onClick={() => setItemModal({ category: 'Pluszpont', bucketId: '', title: '', date: '', time: '', max: '', achieved: '' })}
  className={`px-3 py-1.5 text-xs font-semibold rounded-lg flex items-center gap-1 cursor-pointer shrink-0 ${
  darkMode ? 'bg-slate-800 hover:bg-slate-700 text-emerald-400' : 'bg-emerald-600 hover:bg-emerald-500 text-white'
  }`}
@@ -18502,7 +18582,7 @@ export default function App() {
  <div className="flex items-center gap-1.5 flex-wrap">
  {renderCollectorSortMenu(`bucket_${bucket.id}`, bucket.title, bStats.processed.map(p => p.item))}
  <button
- onClick={() => setItemModal({ category: 'Egyeb', bucketId: bucket.id, title: '', date: '', max: '', achieved: '' })}
+ onClick={() => setItemModal({ category: 'Egyeb', bucketId: bucket.id, title: '', date: '', time: '', max: '', achieved: '' })}
  className={`px-2.5 py-1.5 sm:py-1 text-xs font-semibold rounded-lg flex items-center gap-1 cursor-pointer ${
  darkMode ? 'bg-slate-800 hover:bg-slate-700 text-sky-400' : 'bg-slate-900 hover:bg-slate-800 text-white'
  }`}
@@ -19090,7 +19170,6 @@ export default function App() {
  </div>
  <form noValidate onSubmit={handleSaveItemModal} className="p-4 sm:p-6 overflow-y-auto overscroll-contain space-y-4 flex-1 min-h-0">
  {!itemModal.isAutoExam && activeSubject?.courseKind !== 'exam' && (
- <>
  <div>
  <label className={`block text-xs font-semibold mb-1 ${textMuted}`}>
  Megnevezés {itemModal.category === 'ZH' && <span className="font-normal">(üresen hagyva: {getNextZhTitle(activeSubject?.assessments)})</span>}
@@ -19104,17 +19183,60 @@ export default function App() {
  className={`w-full border rounded-lg px-3 py-2.5 sm:py-2 focus:outline-none ${inputStyle}`}
  />
  </div>
+ )}
+
+ <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
  <div>
  <label className={`block text-xs font-semibold mb-1 ${textMuted}`}>Dátum (opcionális)</label>
  <input
  type="date"
- value={itemModal.date}
+ value={itemModal.date || ''}
  onChange={e => setItemModal({ ...itemModal, date: e.target.value })}
  className={`w-full border rounded-lg px-3 py-2.5 sm:py-2 focus:outline-none ${inputStyle}`}
  />
  </div>
- </>
+ <div>
+ <label className={`block text-xs font-semibold mb-1 ${textMuted}`}>Időpont (óra:perc, opcionális)</label>
+ <div className="relative flex items-center">
+ <input
+ type="text"
+ inputMode="numeric"
+ autoComplete="off"
+ spellCheck={false}
+ maxLength={5}
+ placeholder="ÓÓ:PP (pl. 10:15)"
+ title="Időpont megadása (pl. 10:15, 08:20 vagy 1015)"
+ value={itemModal.time || ''}
+ onChange={e => setItemModal({ ...itemModal, time: e.target.value })}
+ onBlur={e => {
+ const raw = String(e.target.value || '').trim();
+ if (!raw) return;
+ const parsed = parseKeyboardAttendanceTime(raw);
+ if (parsed) {
+ setItemModal(prev => prev ? { ...prev, time: parsed } : prev);
+ }
+ }}
+ className={`w-full border rounded-lg pl-3 pr-8 py-2.5 sm:py-2 font-mono focus:outline-none ${inputStyle}`}
+ />
+ {itemModal.time ? (
+ <button
+ type="button"
+ data-no-glass="true"
+ tabIndex={-1}
+ onClick={() => setItemModal(prev => prev ? { ...prev, time: '' } : prev)}
+ title="Időpont törlése"
+ className={`absolute right-2 p-0.5 rounded transition cursor-pointer ${
+ darkMode ? 'text-slate-400 hover:text-rose-400' : 'text-slate-400 hover:text-rose-500'
+ }`}
+ >
+ <X className="w-3.5 h-3.5" />
+ </button>
+ ) : (
+ <Clock className={`pointer-events-none absolute right-2.5 w-3.5 h-3.5 ${darkMode ? 'text-slate-500' : 'text-slate-400'}`} />
  )}
+ </div>
+ </div>
+ </div>
 
  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
  <div>

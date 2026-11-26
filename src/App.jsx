@@ -2685,13 +2685,11 @@ function mergeSubjectWithTemplate(subj, tpl, tplUpdatedMs) {
  ? []
  : Array.from({ length: finalTotalClasses }, (_, idx) => {
  const ex = existingSessions[idx];
- const tplDate = tpl.attendanceSessions?.[idx]?.date || '';
- const tplTime = tpl.attendanceSessions?.[idx]?.time || '';
  return {
  id: ex?.id || `att_${idx + 1}_${now}_${rand()}`,
  index: idx + 1,
- date: (ex?.date && String(ex.date).trim() !== '') ? ex.date : tplDate,
- time: (ex?.time && String(ex.time).trim() !== '') ? ex.time : tplTime,
+ date: (ex?.date && String(ex.date).trim() !== '') ? ex.date : '',
+ time: (ex?.time && String(ex.time).trim() !== '') ? ex.time : '',
  status: ex?.status ?? null
  };
  });
@@ -2708,13 +2706,11 @@ function mergeSubjectWithTemplate(subj, tpl, tplUpdatedMs) {
  const mergedLectureSessions = hasLectures
  ? Array.from({ length: finalTotalLectures }, (_, idx) => {
  const ex = existingLecSessions[idx];
- const tplDate = tpl.lectureAttendanceSessions?.[idx]?.date || '';
- const tplTime = tpl.lectureAttendanceSessions?.[idx]?.time || '';
  return {
  id: ex?.id || `lec_${idx + 1}_${now}_${rand()}`,
  index: idx + 1,
- date: (ex?.date && String(ex.date).trim() !== '') ? ex.date : tplDate,
- time: (ex?.time && String(ex.time).trim() !== '') ? ex.time : tplTime,
+ date: (ex?.date && String(ex.date).trim() !== '') ? ex.date : '',
+ time: (ex?.time && String(ex.time).trim() !== '') ? ex.time : '',
  status: ex?.status ?? null
  };
  })
@@ -6320,7 +6316,8 @@ export default function App() {
  const newSessions = Array.from({ length: totalClasses }, (_, sIdx) => ({
  id: `att_${sIdx + 1}_${now + idx}_${rand()}`,
  index: sIdx + 1,
- date: tpl.attendanceSessions?.[sIdx]?.date || '',
+ date: '',
+ time: '',
  status: null
  }));
 
@@ -6330,7 +6327,8 @@ export default function App() {
  ? Array.from({ length: totalLectures }, (_, lIdx) => ({
  id: `lec_${lIdx + 1}_${now + idx}_${rand()}`,
  index: lIdx + 1,
- date: tpl.lectureAttendanceSessions?.[lIdx]?.date || '',
+ date: '',
+ time: '',
  status: null
  }))
  : [];
@@ -7108,8 +7106,8 @@ export default function App() {
  const sanitizedSessions = Array.from({ length: totalClasses }, (_, idx) => ({
  id: `att_${idx + 1}`,
  index: idx + 1,
- date: subj.attendanceSessions?.[idx]?.date || '',
- time: subj.attendanceSessions?.[idx]?.time || '',
+ date: '',
+ time: '',
  status: null
  }));
 
@@ -7119,8 +7117,8 @@ export default function App() {
  ? Array.from({ length: totalLectures }, (_, idx) => ({
  id: `lec_${idx + 1}`,
  index: idx + 1,
- date: subj.lectureAttendanceSessions?.[idx]?.date || '',
- time: subj.lectureAttendanceSessions?.[idx]?.time || '',
+ date: '',
+ time: '',
  status: null
  }))
  : [];
@@ -7236,7 +7234,8 @@ export default function App() {
  const newSessions = Array.from({ length: totalClasses }, (_, idx) => ({
  id: `att_${idx + 1}_${now}_${rand()}`,
  index: idx + 1,
- date: tpl.attendanceSessions?.[idx]?.date || '',
+ date: '',
+ time: '',
  status: null
  }));
 
@@ -7246,7 +7245,8 @@ export default function App() {
  ? Array.from({ length: totalLectures }, (_, idx) => ({
  id: `lec_${idx + 1}_${now}_${rand()}`,
  index: idx + 1,
- date: tpl.lectureAttendanceSessions?.[idx]?.date || '',
+ date: '',
+ time: '',
  status: null
  }))
  : [];

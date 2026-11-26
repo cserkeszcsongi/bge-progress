@@ -18,9 +18,6 @@ import {
 } from 'lucide-react';
 import { getMessaging, getToken, onMessage, isSupported as isMessagingSupported } from 'firebase/messaging';
 import { auth, googleProvider, db } from './firebase';
-import './styles/glassAndAnimations.css';
-import { APP_RELEASES } from './data/releases';
-import { TUTORIAL_SLIDES } from './data/tutorialSlides';
 
 let cachedXlsxLib = null;
 async function getXlsxLib() {
@@ -693,7 +690,718 @@ function buildTemplatesForMajor(majorId) {
  minAttendanceMegajanlott,
  minAttendanceMegajanlottPct,
  attendanceSessions: [],
- hasépernyőre.'
+ hasLectures: true,
+ totalLectures: totalClasses,
+ lectureAttendanceSessions: [],
+ customBuckets: [],
+ assessments
+ });
+ });
+ });
+
+ return results;
+}
+
+const APP_RELEASES = [
+  {
+    version: 'v3.3.0',
+    date: '2026. 11. 26.',
+    changes: [
+      'Push értesítések és élő emlékeztető rendszer: értesítést kapsz, ha új közérdekű közlemény kerül fel a Faliújságra (csak az érintett szaknak vagy mindenkinek), valamint emlékeztetőt a ma esedékes óráidról (előadás, gyakorlat), ZH-król, vizsgákról és pluszpontokról',
+      'Új „Értesítések és emlékeztetők” kártya a Menü és beállítások oldalon: egyetlen kattintással engedélyezhetők a böngésző / mobil push értesítések (FCM + Service Worker + háttér-ütemezés szinkronizálással) és tesztértesítés is küldhető',
+      'Testreszabható emlékeztető időzítések a Menüben: külön beállítható, hogy hány órakor érkezzen értesítés az időpont nélküli napi tételekről (pl. pluszpontok, határidők — alapértelmezetten 08:00), valamint hogy hány perccel korábban figyelmeztessen az időponttal rendelkező órák előtt (alapértelmezetten 20 perccel korábban)'
+    ]
+  },
+  {
+    version: 'v3.2.0',
+    date: '2026. 11. 26.',
+    changes: [
+      'Automatikus „Órarend import” felugró gomb a féléves dashboard bal alsó sarkában: automatikusan megjelenik, amint bármelyik tárgynál hiányzik a jelenléti alkalmak dátuma, és eltűnik, amint minden alkalom ki van töltve',
+      'Neptun naptár Excel (.xlsx / .xls) órarend-importáló ablak beépített lépésről lépésre útmutatóval (Menü → Naptár → Naptár kezelése → Naptár exportálása → Excel): elemzi az exportált órarendet, kinyeri a kezdési dátumot és időpontot (év, hónap, nap, óra, perc), majd automatikusan párosítja és beírja minden tárgy előadásaihoz és gyakorlataihoz a meglévő jelenlétek megőrzésével',
+      'Kezdési időpont (óra:perc) mező hozzáadása a Jelenlét fül gyakorlat és előadás soraihoz, valamint az időpontok megjelenítése és időrendi rendezése a „Ma esedékes” ablakban'
+    ]
+  },
+  {
+    version: 'v3.1.0',
+    date: '2026. 11. 26.',
+    changes: [
+      'Új „Ma esedékes” Frosted Glass ablak a féléves dashboard tetején: automatikusan összegyűjti és rendszerezi az adott napra dátummal rögzített összes gyakorlatot, előadást, ZH-t, vizsgát, pluszpontot és egyéni gyűjtő tételt',
+      'Azonnali, helyben történő értékadás a napi teendőkhöz: jelenléteknél egyetlen kattintással jelölhető az „Ott voltam” (pipa) vagy „Hiányzás” (X) állapot, ZH-knál, vizsgáknál, pluszpontoknál és egyéb tételeknél pedig közvetlenül beírható és menthető az elért pontszám (Szimulátor és várakozó Joker ZH támogatással)',
+      'Élő napi teljesítési számláló („X / Y rögzítve” / „Minden rögzítve”), összecsukható nézet és egykattintásos ugrás bármelyik sorról az adott tantárgy megfelelő fülére'
+    ]
+  },
+  {
+    version: 'v3.0.0',
+    date: '2026. 11. 23.',
+    changes: [
+      'Teljes alkalmazásszintű, letisztult Frosted Glass megjelenés: minden kártya, gomb, grafika, ragadós (sticky) felső fejléc, modális ablak és háttérréteg áttetsző, elmosott üveghatást kapott világos és sötét módban egyaránt',
+      'Új alsó Frosted Glass navigációs kapszula (Főoldal • Jelenlegi félév • Menü): telefonon és asztali nézetben is mindig látható az oldal alján, rugalmasan csúszó aktív fülkiemeléssel és irányhelyes (slide) nézetváltással',
+      'Teljesen új, különálló „Menü és beállítások” oldal: a régi felugró menü helyett átlátható, animált szekciókártyákba rendezve érhető el a Hallgatói profil (egyéni becenévvel és szakváltással), a Megjelenés és nézet (Világos/Sötét, Színes/Monokróm, Egyszerű/Részletes), a Tanulmányi beállítások (Átsorolási küszöb, Képzési kreditek, Szimulátor mód), az Információk & Eszközök és a Kijelentkezés',
+      'Dinamikus, napszakhoz igazodó személyes köszönés a főoldalon (Jó reggelt / Szia / Szép estét) a profilban beállított beceneveddel, a felső sávban pedig a Visszajelzés és a Faliújság (csengő) gomb minden nézetben közvetlenül elérhető',
+      'Lenyitható „Jelenlét és ZH statisztika” blokk a féléves dashboardon: külön kártyákon láthatók a gyakorlatok és előadások jelenlétei, hiányzásai és hátralévő alkalmai, mellette pedig részletes táblázatos ZH statisztika mutatja a tárgyankénti és ZH-nkénti pontokat és százalékos arányt',
+      'Előadás jelenlét adminisztráció minden tárgynál: a Jelenlét fülön külön-külön felületen követhető a gyakorlatokon és az előadásokon való részvétel (az előadásoknál nincs kötelező minimum, így nem veszélyezteti az aláírást)',
+      'Új iOS Liquid Glass lebegő gyűjtő kapszula a féléves dashboardon (JOKER ZH, Átlagszámoló, Új tantárgy +) és a főoldalon (Múltbéli félévek feltöltése, Új félév létrehozása), rugalmas nyitás- és becsukásanimációval, valamint élő JOKER ZH kijelzéssel',
+      'Alkalmazásszintű fluid animációk minden megnyitáskor, becsukáskor, fül- és oldalváltáskor, valamint új, hullámos „fill-up” effektussal feltöltődő logós betöltőképernyő'
+    ]
+  },
+  {
+    version: 'v2.5.5',
+    date: '2026. 11. 23.',
+    changes: [
+      'A féléves dashboard felső sávjából eltávolítva a külön Főoldal (házikó) gomb, mivel ezt már az alsó navigációs sáv Főoldal gombja látja el',
+      'A Visszajelzés gomb felkerült a felső sávba, így a főoldalon és a féléves dashboardon is mindig közvetlenül elérhető a csengő gomb mellett'
+    ]
+  },
+  {
+    version: 'v2.5.4',
+    date: '2026. 11. 23.',
+    changes: [
+      'Alsó Menü megnyitásakor lágy elmosódott háttér (backdrop-blur) jelenik meg az oldal felett, amelyre koppintva a menü azonnal bezárható',
+      'Háttérgörgetés teljes tiltása nyitott alsó Menü esetén (overscroll-behavior: contain + body scroll lock), így a menü aljára görgetve sem mozdul el a háttérben lévő dashboard'
+    ]
+  },
+  {
+    version: 'v2.5.3',
+    date: '2026. 11. 23.',
+    changes: [
+      'Mobil vízszintes túlcsordulás (overflow-x: clip) és iOS Safari viewport-szélesedés javítása: a „Jelenlegi félév” nézetre váltáskor az alsó navigációs kapszula és a jobb oldali lebegő gyűjtő gomb többé nem nagyítódik/csúszik ki oldalra, és pontosan ugyanúgy viselkedik, mint a Főoldal gomb'
+    ]
+  },
+  {
+    version: 'v2.5.2',
+    date: '2026. 11. 23.',
+    changes: [
+      'A lebegő (floating) gyűjtő gomb és a főoldali „+” gomb kikerült a slide-animált nézetkonténeren kívülre, így valódi, stabil viewport-rögzített (fixed) pozícióban, közvetlenül az alsó navigációs sáv felett helyezkedik el elcsúszás nélkül',
+      'Az alsó navigációs sáv gombjai mentesülnek a globális gombnyomás-skálázástól (active:scale), így a nézetek közötti váltás teljesen stabil és sima marad'
+    ]
+  },
+  {
+    version: 'v2.5.1',
+    date: '2026. 11. 23.',
+    changes: [
+      'Alsó navigációs sáv „Jelenlegi félév” gombjának villogás-/elcsúszásmentesítése: az aktív gomb-állapot mostantól nem módosítja a méretet/elrendezést váltáskor, és a nézetváltás (slide) nem indítja újra a belső kártya-animációkat',
+      'Felső „Menü” gomb eltávolítása a főoldal és a féléves dashboard felső sávjából, mivel a teljes menü az alsó frosted glass navigációs sávban érhető el'
+    ]
+  },
+  {
+    version: 'v2.5.0',
+    date: '2026. 11. 23.',
+    changes: [
+      'Új alsó navigációs sáv (Főoldal, Jelenlegi félév, Menü): hosszúkás, frosted glass kapszula kialakítású lebegő sáv az oldal alján, amely telefonon a teljes szélességet lefedi és görgetés közben is mindig látható marad',
+      'Fluid slide animáció a nézetek és a menü közötti gyors váltáskor, valamint rugalmas aktív fülkiemelés az alsó navigációs sávban'
+    ]
+  },
+  {
+    version: 'v2.4.5',
+    date: '2026. 11. 23.',
+    changes: [
+      'Dinamikus, napszakhoz igazodó személyes köszönés a főoldalon a belépést követően (pl. Jó reggelt / Szia / Szép estét, [Becenév]!), amely a profilban beállított beceneveden szólít'
+    ]
+  },
+  {
+    version: 'v2.4.4',
+    date: '2026. 11. 23.',
+    changes: [
+      'Bővített Hallgatói profil a Menüben: megjelenik a bejelentkezett e-mail cím és a Teljes név (Google-fiókból), valamint szabadon beállítható vagy törölhető egyéni becenév is',
+      'Az elmentett becenév megjelenik a hallgatói profilban és a felső sávban is, és felhőben szinkronizálódik a fiókodhoz'
+    ]
+  },
+  {
+    version: 'v2.4.3',
+    date: '2026. 11. 23.',
+    changes: [
+      'Minden gomb a felső sávban bekerült a menű gomb alá',
+      'A Faliújság értesítési csengő gombja már a főoldal felső sávjában is közvetlenül elérhető a Menü gomb mellett',
+      'Féléves dashboard felső sáv finomhangolása: külön Főoldal (ház) ikon gomb a gyors visszalépéshez',
+      'Jelenlét statisztikák bővítése: a Gyakorlatok és Előadások kártyákon a jelenlétek mellett külön jelvény mutatja a hiányzások és a még hátralévő alkalmak számát is',
+      'ZH statisztika táblázat átalakítása: tárgyankénti és ZH-nkénti részletes sorok pontszámokkal és százalékos aránnyal'
+    ]
+  },
+  {
+    version: 'v2.4.2',
+    date: '2026. 11. 23.',
+    changes: [
+      'iOS Liquid Glass animáció a dashboard alsó gyűjtő kapszulájához: rugalmas (spring) kibontás, finom üveges fénytörés/blur és lépcsőzetes (staggered) gombmegjelenés nyitáskor és becsukáskor',
+      'Minden megnyitásra és becsukásra kiterjedő animáció: modális ablakok, legördülő menük, lenyitható szekciók és gombnyomások sima, fluid átmenettel'
+    ]
+  },
+  {
+    version: 'v2.4.1',
+    date: '2026. 11. 23.',
+    changes: [
+      'ZH statisztika táblázat margó és oszlopigazítás: a Pont és Arány oszlopok közelebb kerültek az első oszlophoz, jobb oldali margóval, hogy ne fussanak ki a kártyából / scrollbar alá',
+      'Alkalmazásszintű fluid animációk: sima átmenetek gombnyomásra (active press), kártyákra és lenyitható szekciókra (tiszteletben tartva a prefers-reduced-motion beállítást)'
+    ]
+  },
+  {
+    version: 'v2.4.0',
+    date: '2026. 11. 23.',
+    changes: [
+      'Lenyitható „Jelenlét és ZH statisztika” blokk a féléves dashboardon (alapértelmezettként becsukva a mobil helytakarékosság érdekében)',
+      '3., táblázatos ZH statisztika nézet tárgyankénti és ZH-nkénti pontokkal, valamint a teljes ZH-teljesítés %-os arányával'
+    ]
+  },
+  {
+    version: 'v2.3.1',
+    date: '2026. 11. 23.',
+    changes: [
+      'Lenyitható részletes jelenlét statisztika a féléves dashboardon alapértelmezetten becsukott állapotban'
+    ]
+  },
+  {
+    version: 'v2.3.0',
+    date: '2026. 11. 23.',
+    changes: [
+      'Előadás jelenlét adminisztráció minden tárgynál: a Jelenlét fülön külön-külön felületen követhető a gyakorlati jelenlét és az előadásokon való részvétel (az előadásoknál nincs kötelező minimum, így nem veszélyezteti az aláírást)',
+      'Új lebegő menügomb, ami csoportosítja a gombokat a féléves dashboard jobb alsó sarkában: megnyitásakor előugrik a JOKER ZH, az Átlagszámoló és az Új tantárgy (+) gomb',
+      'Frissített Adatvédelmi tájékoztató (GDPR v2.3.0) és 9 lépéses interaktív Bemutató az új funkciókkal'
+    ]
+  },
+ {
+ version: 'v2.2.4',
+ date: '2026. 11. 20.',
+ changes: [
+ 'App statisztika szakbontás visszamenőleges szinkronizáció: az app statisztika mostantól a már korábban szakot választott hallgatók mentett profilbeállításaiból (preferences) is beolvassa és automatikusan összesíti a szakokat'
+ ]
+ },
+ {
+ version: 'v2.2.3',
+ date: '2026. 11. 20.',
+ changes: [
+ 'App statisztika mobil elrendezés javítása: a lenyitható „Szakok szerinti bontás” mostantól telefonon és asztali nézetben is közvetlenül a „Regisztráltak” kártya alatt (az élő munkamenet / „Jelenleg aktív” blokk felett) nyílik le',
+ 'Kötelező szakválasztás és visszamenőleges szinkronizáció: minden felhasználónak egyszer kötelezően ki kell választania a szakját belépéskor (ha még nincs rögzítve), a korábban választott szakok pedig automatikusan rögzítésre kerülnek a profilban, a személyre szabott hirdetményeknél és az app statisztikában'
+ ]
+ },
+ {
+ version: 'v2.2.2',
+ date: '2026. 11. 20.',
+ changes: [
+ 'Bővített App statisztika: az összes regisztrált felhasználó száma alatt lenyitható nézetben megtekinthető, hogy melyik BGE szakról hány hallgató regisztrált az alkalmazásba'
+ ]
+ },
+ {
+ version: 'v2.2.1',
+ date: '2026. 11. 20.',
+ changes: [
+ 'JOKER ZH menü finomhangolása: közérthető magyarázó tájékoztató került a ZH-összefoglaló táblázat fölé, amely bemutatja, hogyan választható ki kattintással az újraírandó ZH, és hogyan rögzíthető később az elért eredmény'
+ ]
+ },
+ {
+ version: 'v2.2.0',
+ date: '2026. 11. 20.',
+ changes: [
+ 'Megújult JOKER ZH menü összefoglaló táblázattal: áttekinthető táblázatban mutatja minden ZH-val rendelkező tárgy 1. ZH, 2. ZH és 3. ZH eredményét (hiányzó eredménynél „?”, nem létező ZH oszlopnál szürke „—”)',
+ 'Top 3 legalacsonyabb pontszámú ZH automatikus kiemelése a táblázatban (tárgyanként legfeljebb 1 ZH kiemelésével), alatta pedig megjelenik, hány ponttal kell jobbnak lennie a kiemelt ZH-nak a megajánlott jegyhez vagy a következő jobb jegyhez',
+ 'Kétlépcsős Joker ZH folyamat és élő várakozó jelzés a lebegő gombon: miután kiválasztottad és elmentetted, melyik tárgy melyik ZH-ját írod újra, a JOKER ZH lebegő gomb jelzi, hogy eredményre vár, újranyitáskor pedig közvetlenül a pontszám-beíró párbeszédablak nyílik meg'
+ ]
+ },
+ {
+ version: 'v2.1.3',
+ date: '2026. 11. 20.',
+ changes: [
+ 'Egyszerűsített megajánlott jegy ponthatár-kijelzés a kártyákon és az „Összesen” rubrikában: két külön szám helyett kizárólag a nagyobbik (ténylegesen szükséges) hiányzó pontszámot mutatja (a ZH-minimum és az összpontszám-hiány közül a nagyobbat)',
+ 'Aláírás feltételeinek pontosítása: aláírás akkor is jár a megfelelő gyakorlati jelenlét mellett, ha az 1. ZH eredménye legalább 50%-os VAGY az összpontszám eléri az aláírási minimumot (pl. 40 pontot)'
+ ]
+ },
+ {
+ version: 'v2.1.2',
+ date: '2026. 11. 20.',
+ changes: [
+ 'Neptun Excel import javítása múltbéli féléveknél: ha egy adott tantárgynál üres az érdemjegy / eredmény cella (nincs beírva teljesítés), az alkalmazás mostantól 5-ös helyett automatikusan 1-esként (bukott tárgyként) olvassa be'
+ ]
+ },
+ {
+ version: 'v2.1.1',
+ date: '2026. 11. 19.',
+ changes: [
+ 'ZH-kból még szükséges pontok kijelzése az „Összesen” pontszám kártyán: minden tárgy részletes nézetében az összpontszám és a megajánlott jegyhez hiányzó pontok mellett egyből látszik, hány ZH pont kell még a megajánlott jegy ZH-minimumához'
+ ]
+ },
+ {
+ version: 'v2.1.0',
+ date: '2026. 11. 19.',
+ changes: [
+ 'Új Maintenance (karbantartás) mód kapcsoló az admin számára a főoldalon: bekapcsoláskor kizárólag az admin férhet hozzá az alkalmazáshoz, minden más látogató pedig egy egyedi karbantartási grafikát és tájékoztató üzenetet lát',
+ 'Beépített klasszikus Chrome No-Internet Dino minijáték a karbantartási képernyőn: billentyűzettel (Szóköz / Fel nyíl) vagy érintéssel játszható, élő pontszámmal és rekordmentéssel, amíg tart a frissítés',
+ 'Automatikus „Oldal frissítése” gomb: amint véget ér a karbantartás és kikapcsolásra kerül a Maintenance mód, a várakozó felhasználóknak azonnal megjelenik a frissítés gomb, amellyel egy kattintással folytathatják az app használatát'
+ ]
+ },
+ {
+ version: 'v2.0.3.1',
+ date: '2026. 11. 19.',
+ changes: [
+ 'Kötelező szakválasztás bejelentkezés után (új és korábbi felhasználóknak egyaránt): a BGE alapszakjai közül kiválasztott szakod elmentődik a profilodba, megjelenik a jobb felső Menüben, és szakváltás esetén ott bármikor módosítható',
+ 'Célzott Faliújság közlemények: adminként minden új közleménynél kiválasztható, hogy az csak a Gazdaságinformatikus hallgatóknak vagy szaktól függetlenül minden felhasználónak jelenjen meg',
+ 'Frissített adatvédelmi tájékoztató (GDPR): átláthatóan rögzíti, hogy a kiválasztott szakadatot sem gyűjti vagy adja tovább a rendszer, kizárólag a személyre szabott funkciók (pl. szakspecifikus hirdetmények) működtetéséhez tárolja biztonságosan'
+ ]
+ },
+ {
+ version: 'v2.0.3',
+ date: '2026. 11. 19.',
+ changes: [
+ 'Pontszám tételek szerkesztésének és törlésének összevonása: a két külön ceruza és kuka ikon helyett egyetlen szélesebb gomb (ceruza / kuka) nyitja meg a tétel szerkesztőablakát, amelynek alján kétlépcsős megerősítéssel biztonságosan törölhető az adott tétel',
+ 'Új Faliújság funkció a felső sávban (kis csengő ikon a Menü gomb mellett): az admin által közzétett közérdekű közlemények belépéskor nagy felugró ablakban is megjelennek „Elolvasva / Bezárás” gombbal, később pedig dátummal ellátva bármikor visszanézhetők a faliújságon'
+ ]
+ },
+ {
+ version: 'v2.0.2',
+ date: '2026. 11. 19.',
+ changes: [
+ 'Adatvédelmi tájékoztató (GDPR) bevezetése: bejelentkezés után minden új és korábbi felhasználónak egyszer el kell fogadnia az adatkezelési tájékoztatót, amely átláthatóan leírja a Firebase-alapú adattárolást és azt, hogy az adatok semmilyen más célra nem kerülnek felhasználásra',
+ 'Az adatvédelmi tájékoztató bármikor újra megnyitható az oldal alján található „Adatvédelem (GDPR)” gombbal'
+ ]
+ },
+ {
+ version: 'v2.0.1',
+ date: '2026. 11. 19.',
+ changes: [
+ 'Jelenlét fül görgetésének javítása: a tantárgy részletei ablakban a Jelenlét fülre váltáskor mostantól mindig a lista legtetejéről indul a nézet',
+ 'Új tárgy felvétele / beállítások szövegezésének pontosítása: a „Pontszámítás kikapcsolása (csak jegy)” kapcsoló helyett az „Intenzív heti kurzus?” opció jelenik meg egyértelmű magyarázattal'
+ ]
+ },
+ {
+ version: 'v2.0.0',
+ date: '2026. 11. 18.',
+ changes: [
+ 'Publikálás előtti nagy frissítés & mobil nézet finomhangolása: a főoldali „Összes teljesített kredit” kártyán telefonon is minden esetben a kártya jobb felső sarkában jelenik meg a százalékos jelvény (nem csúszik át balra), a kártyák elrendezése és a felső sáv gombjai pedig még letisztultabb mobil megjelenést kaptak',
+ 'Közvetlenebb, barátságosabb bemutatkozás a Köszöntő ablakban'
+ ]
+ },
+ {
+ version: 'v1.37.0',
+ date: '2026. 11. 18.',
+ changes: [
+ 'Részletes szürke számláló kártyák a tantárgy Jelenlét fülén: egyetlen pillantással látható az eddigi jelenlétek és hiányzások száma, valamint pontosan hány alkalommal kell még jelen lenni az aláíráshoz és a megajánlott jegyhez'
+ ]
+ },
+ {
+ version: 'v1.36.0',
+ date: '2026. 11. 18.',
+ changes: [
+ 'Megajánlott jegyhez (és vizsgajegyhez) hiányzó pontok jelzése a tantárgy részletei nézet „Összesen” rubrikájában: a százalékos érték alatt kicsiben azonnal látható, hány pont hiányzik még a megajánlott 2-eshez (vagy a következő jegyhez / már megvan-e)'
+ ]
+ },
+ {
+ version: 'v1.35.0',
+ date: '2026. 11. 18.',
+ changes: [
+ 'ZH minimum pontszámláló a tantárgy részletei nézetben: a „ZH-k (Zárthelyi dolgozatok)” gyűjtő tetején, az összesített ZH pontszám mellett kicsiben megjelenik, hogy hány ZH pont hiányzik még a megajánlott jegyhez előírt ZH minimumponthoz (vagy hogy a ZH minimum már teljesült)'
+ ]
+ },
+ {
+ version: 'v1.34.0',
+ date: '2026. 11. 18.',
+ changes: [
+ 'Testreszabható képzési kreditszámok a főoldalon: mostantól külön szerkesztheted a szakon előírt kötelező kreditek és a szabadon választott kreditek számát, amelyek összegéből az alkalmazás automatikusan kiszámolja a teljes diplomakreditszámot (pl. 180 vagy 210 kredit)'
+ ]
+ },
+ {
+ version: 'v1.33.0',
+ date: '2026. 11. 17.',
+ changes: [
+ 'Összesítő pontszámláló jelvények minden tantárgy gyűjtő szekciójának tetején: a ZH-k (Zárthelyi dolgozatok), a Pluszpontok, valamint az Egyéb számonkérések / Gyűjtők főcíme mellett is azonnal látszik az elért / maximum pontszám és a százalékos teljesítés'
+ ]
+ },
+ {
+ version: 'v1.32.0',
+ date: '2026. 11. 16.',
+ changes: [
+ 'Sikeres vizsga felülírja a manuálisan vagy korábban beállított „Megbuktam☹️” állapotot: ha egy vizsgás tárgyból a vizsgapontszám eléri az 59,5%-ot (59,5 pontot), a kártya nem lesz kipirosozva a dashboardon, a félévközi ZH-k/pontgyűjtők szürkén maradnak, és a kártya jobb felső sarkába felkerül a nagy „Vizsgajegy” jelvény',
+ 'Vizsgaeredmény rögzítésekor automatikus bukott-jelölés törlés az adatbázisban is, hogy a kártya állapota mindig összhangban maradjon a vizsgaeredménnyel'
+ ]
+ },
+ {
+ version: 'v1.31.0',
+ date: '2026. 11. 16.',
+ changes: [
+ 'Vizsgás tárgyak érdemjegyeinek egységesítése: ha egy sima kurzus automatikus vizsgamódba kerül, és a vizsgapontszám eléri az 59,5%-ot (59,5 pontot), a rendszer ugyanúgy „Vizsgajegy: 2” (és 69,5-től 3, 79,5-től 4, 89,5-től 5) minősítést és nagy vizsgajegy jelvényt ad, mint a vizsgakurzusoknál',
+ 'Konzisztens kártyanézet vizsgás tárgyaknál: vizsgás állapotban a dashboard kártya tetején már nem csak a megajánlott jegynél ugrik be a nagy jegyjelvény, hanem sikeres (≥ 59,5%) vizsgaeredménynél is „Vizsgajegy” felirattal jelenik meg, alatta pedig a vizsga 100 pontos sávjával'
+ ]
+ },
+ {
+ version: 'v1.30.0',
+ date: '2026. 11. 16.',
+ changes: [
+ 'Aláírás hiányának (39,5 pont / aláírási küszöb alatti félévközi eredmény) pontos kezelése: ha minden ZH eredmény rögzítve lett, de nem érted el az aláírási ponthatárt (pl. 39,5 pontot 40 helyett) vagy elfogytak a hiányzásaid, a tárgy automatikusan „Megbuktam☹️” állapotba vált',
+ 'Vizsga tételsor elrejtése aláírás nélkül: aláírás hiányában nem jelenik meg a vizsga pontbeíró tételsor, helyette egyértelmű figyelmeztetés jelzi, hogy nincs aláírásod, ezért vizsgázni sem mehetsz el, és a tárgyat egy évvel később újra fel kell venned'
+ ]
+ },
+ {
+ version: 'v1.29.0',
+ date: '2026. 11. 16.',
+ changes: [
+ 'Mobil parancsikon (PWA) letöltés ikon a felső menüsávban: ha telefonról nyitod meg a webalkalmazást, egyetlen koppintással telepítheted / kirakhatod a főképernyőre (Androidon közvetlen telepítéssel, iOS-en lépésről lépésre útmutatóval)',
+ 'Kicsi felugró emlékeztető ablak mobilon, amely figyelmeztet a parancsikonként való letöltés lehetőségére',
+ 'Automatikus elrejtés telepítés után: amint parancsikonként telepítetted vagy főképernyőről nyitod meg az appot, a letöltés ikon és az emlékeztető ablak többé nem jelenik meg'
+ ]
+ },
+ {
+ version: 'v1.28.0',
+ date: '2026. 11. 16.',
+ changes: [
+ 'Új megajánlott jegy jelvény: ha a pontok alapján megszerzed a megajánlott jegyet, a kártya jobb felső sarkában ugyanúgy nagyban jelenik meg, mint a kézi jegybeírásnál',
+ 'Jegyhatárok szövegezésének javítása a kártyák alján (pl. 3-ashoz)',
+ 'Vizsgakurzusoknál a jegyek elnevezése mostantól „Vizsgajegy” a „Megajánlott jegy” helyett'
+ ]
+ },
+ {
+ version: 'v1.27.0',
+ date: '2026. 11. 16.',
+ changes: [
+ 'Neptun Excel fájl (.xlsx / .xls) automatikus importálása a „Múltbéli félévek feltöltése” varázslóban: egyetlen kattintással beolvassa a tárgyak nevét, kreditszámát, besorolását és a szöveges érdemjegyekből kinyert 1–5-ös számértéket',
+ 'Beépített Neptun exportálási útmutató ablak: pontos lépésről lépésre leírással, hol találod a Törzslap exportálási gombot a Neptunban'
+ ]
+ },
+ {
+ version: 'v1.26.0',
+ date: '2026. 11. 16.',
+ changes: [
+ 'Új „Múltbéli félévek feltöltése” gomb a főoldali „+” menüben: a jelenlegi féléved sorszámából és a mai dátumból automatikusan visszaszámolja és csoportosítja a korábbi féléveidet',
+ 'Félévenkénti gyors tárgy- és jegyrögzítő varázsló: add meg a tárgy nevét, kreditszámát és az 1–5-ös jegyet, az app pedig azonnal pontosan számolja a kreditindexet és a súlyozott átlagot'
+ ]
+ },
+ {
+ version: 'v1.25.0',
+ date: '2026. 11. 16.',
+ changes: [
+ 'Pontszámítás nélküli (csak jegy alapú) mód: a tárgy beállításaiban kikapcsolható a pontszámítás, és közvetlenül beállítható a megajánlott / végleges jegy (2–5)',
+ 'Letisztult jegykártya a féléves dashboardon: kikapcsolt pontszámításnál vagy kézi jegy beállításánál a kártyán nem jelenik meg progress bar, csak nagyban a jegy a jobb felső sarokból lenyúlva'
+ ]
+ },
+ {
+ version: 'v1.24.0',
+ date: '2026. 11. 16.',
+ changes: [
+ 'Valós regisztrált és élő aktív felhasználók számlálása: az App statisztika mostantól az összes valaha belépett egyedi fiókot és az éppen aktív hallgatókat mutatja',
+ 'Kényelmes ablakkezelés minden párbeszédablakban: az ablakon kívülre kattintás és az Esc billentyű bezárja az aktív ablakot, az Enter pedig jóváhagyja / menti a bevitelt',
+ 'Tétel hozzáadása és szerkesztése ablak mezősorrendjének cseréje: Elért pont → Max pont → Többletpont sorrendben jelenik meg',
+ 'Megújult Átlagszámoló (számológép menü): a csúszkák helyett közvetlen, színes jegygombok (1 – piros, 2 – narancs, 3 – citrom, 4 – világoszöld, 5 – zöld) segítik a gyors tervezést',
+ 'Bővített szakválasztó új tárgy felvételekor: a Gazdaságinformatikus sablonok mellett elérhető a BGE összes többi alapszakának 2026 novemberében rögzített mintatanterve is'
+ ]
+ },
+ {
+ version: 'v1.23.0',
+ date: '2026. 11. 16.',
+ changes: [
+ 'Új „App statisztika” gomb a felső menüsávban: valós időben megmutatja a regisztrált felhasználók összesített számát, valamint azt, hogy jelenleg hányan használják egyszerre az alkalmazást'
+ ]
+ },
+ {
+ version: 'v1.22.0',
+ date: '2026. 11. 16.',
+ changes: [
+ 'Szimulátor mód bővítése: bekapcsolt szimulátor módban a tárgyak beállításaiban kézzel kiválasztható egy előre meghatározott végleges jegy (2–5) is, ami az adatbázis módosítása nélkül azonnal frissíti az átlagokat és a kreditindexet',
+ 'Teljes visszaállítás a szimulátor sávból: a felső sárga sáv „Visszaállítás” gombja mostantól minden szimulált pontszámot és jegyet visszaállít a szimulátor bekapcsolása előtti állapotra, és automatikusan ki is kapcsolja a szimulátor módot',
+ 'Új lebegő Átlagszámoló gomb a JOKER ZH és a „+” gomb között: megnyit egy külön tervezőfelületet, ahol a félév tárgyaihoz 1–5-ös skálán állítgatva élőben számolhatod a súlyozott átlagot és a kreditindexet'
+ ]
+ },
+ {
+ version: 'v1.21.2',
+ date: '2026. 11. 16.',
+ changes: [
+ 'Tárgysablonok bővítése: adminként történő sablon-közzétételkor a ZH-k maximum pontszámai is mentésre és betöltésre kerülnek a sablonban (az elért pontok továbbra is üresen maradnak)'
+ ]
+ },
+ {
+ version: 'v1.20.1',
+ date: '2026. 11. 16.',
+ changes: [
+ 'Mobilos görgetési pozíció javítása: egy adott félév megnyitásakor az oldal mostantól mindig a dashboard legtetejére ugrik'
+ ]
+ },
+ {
+ version: 'v1.20.0',
+ date: '2026. 11. 14.',
+ changes: [
+ 'Új Rendezés menü a féléves dashboard tetején: A → Z, Z → A, Összesített pontszám (csökkenő / növekvő) és Egyéni sorrend opciókkal',
+ 'Egyéni tárgyrendező párbeszédablak: a tantárgyak neveit egérrel vagy érintéssel szabadon húzogathatod (vagy nyilakkal léptetheted), és a Mentés gombbal rögzítheted a sorrendet',
+ 'Intelligens kredit- és gyakorlatkitöltés új tárgy létrehozásakor: a kredit és a gyakorlati mezők alapértelmezetten üresek; 3 kreditnél automatikusan 6 gyakorlat (3 aláírás min., 4 megajánlott min.), 6 kreditnél pedig 12 gyakorlat (6 aláírás min., 9 megajánlott min.) töltődik ki'
+ ]
+ },
+ {
+ version: 'v1.19.0',
+ date: '2026. 11. 13.',
+ changes: [
+ 'Biztonságos tételszerkesztés: a pontszámokat ezentúl kizárólag a ceruza ikonra kattintva, a felugró szerkesztőablak Mentés gombjával lehet módosítani — a párbeszédablak bezárása (X / Mégse) elveti a változtatásokat, így nem történik véletlen elhalványítás gépelés közben',
+ 'Automatikus vizsgaállapotnál a félévközi tételek elszürkítése mellett a szerkesztés (ceruza) és törlés (kuka) ikonok élénkek maradnak, jelezve, hogy a tételek továbbra is szerkeszthetők'
+ ]
+ },
+ {
+ version: 'v1.18.0',
+ date: '2026. 11. 13.',
+ changes: [
+ 'Vizsgakurzus kártya letisztítása: a dashboardon lévő kártyán kizárólag a bekeretezett összpontszám jelenik meg (ZH pontok és pluszpontok nélkül)',
+ 'Automatikus vizsgaállapot vizuális kiemelése a dashboard kártyákon: ha minden ZH ki van töltve, de nem teljesült a megajánlott jegy, a félévközi pontsáv halvány szürkévé válik, és megjelenik egy kiemelt narancssárgás-barna VIZSGA rubrika a max (100 p) és elért pontszámmal'
+ ]
+ },
+ {
+ version: 'v1.17.0',
+ date: '2026. 11. 13.',
+ changes: [
+ 'Vizsgakurzus állapotkezelés: üres pontszámnál nem jelenik meg progress jelvény; ha a beírt pontszám eléri a 2-est, kiírja a jegyet, ha viszont a 2-es küszöb alatt van, automatikusan aktiválódik a piros „Megbuktam☹️” mód',
+ 'Automatikus vizsga mód sima kurzusnál: ha minden ZH ki van töltve, de nem teljesült a ZH minimum vagy a megajánlott ponthatár, a lista tetején megjelenik egy narancssárgás-barna VIZSGA (max 100 p) tétel, a korábbi ZH-k és pluszpontok pedig elhalványulnak',
+ 'Az új vizsgakurzus és automatikus vizsga szabályok kiemelve a 9 lépéses Bemutatóban is'
+ ]
+ },
+ {
+ version: 'v1.16.1',
+ date: '2026. 11. 13.',
+ changes: [
+ 'Vizsgakurzus egyszerűsítése: létrehozáskor automatikusan egyetlen „Vizsga” tétel készül 100 max ponttal és üres elért pontszámmal, minden más kategória, gyűjtő és hozzáadó gomb nélkül'
+ ]
+ },
+ {
+ version: 'v1.16.0',
+ date: '2026. 11. 13.',
+ changes: [
+ 'Új Sima kurzus / Vizsgakurzus választó tárgyfelvételkor: Vizsgakurzus esetén csak a tantárgy nevét és kreditjét kell megadni',
+ 'Következő megajánlott jegy (2-es, 3-as, 4-es, 5-ös) ponthatárának és a hiányzó pontoknak a folyamatos kijelzése minden tárgykártyán',
+ 'Új Egyszerű / Részletes kártyanézet kapcsoló a Menüben: Egyszerű módban kompakt kártyák jelennek meg csak a tárgy nevével, kreditjével, besorolásával, az összpontszámmal és az állapottal'
+ ]
+ },
+ {
+ version: 'v1.15.0',
+ date: '2026. 11. 13.',
+ changes: [
+ 'Automatikus frissítésfigyelő: ha új verzió jelenik meg miközben meg van nyitva vagy a gyorsítótárban van az app, bármilyen aktivitás észlelésekor figyelmeztet és egy kattintással frissíthető az oldal'
+ ]
+ },
+ {
+ version: 'v1.14.0',
+ date: '2026. 11. 13.',
+ changes: [
+ 'Új „Gazdinfós vagy?” felugró ablak az új felhasználóknak: Igen válasz esetén automatikusan felveszi az aktuális félévet és annak kötelező tárgyait',
+ 'Féléven belüli új tárgy felvételekor is megkérdezi a rendszer, hogy gazdinfós vagy-e: Igen esetén a sablonok listája és a kézi tárgyfelvétel is elérhető, Nem esetén pedig csak a kézi tárgyfelvétel'
+ ]
+ },
+ {
+ version: 'v1.13.0',
+ date: '2026. 11. 13.',
+ changes: [
+ 'Nagy forgalomra optimalizált adatkezelés (500–700 egyidejű felhasználóra tervezve): helyi gyorsítótárazás a tárgysablonokhoz és verziólistához, valamint késleltetett (debounced) pontszámmentés',
+ 'Részletes, 9 lépéses interaktív Bemutató (oktató mód) közvetlen témaválasztóval, lépésről lépésre útmutatókkal és tippekkel'
+ ]
+ },
+ {
+ version: 'v1.12.1',
+ date: '2026. 11. 13.',
+ changes: [
+ 'Háttérgörgetés teljes tiltása nyitott párbeszédablakoknál: bármelyik ablak megnyitásakor mobilon és gépen is kizárólag az aktív ablak görgethető, a háttérben lévő dashboard nem mozdul el'
+ ]
+ },
+ {
+ version: 'v1.12.0',
+ date: '2026. 11. 13.',
+ changes: [
+ 'Mobil menü javítása a féléves dashboardon: a Menü lenyíló gomb opciói (Világos/Sötét mód, Színes/Monokróm, Átsorolási küszöb, Szimulátor, Kijelentkezés) mostantól telefonon is hibátlanul kattinthatók',
+ 'Tágasabb elrendezés minden tantárgy részletes ablakában: a pontszámmezők, százalékok, szerkesztőgombok és a gyakorlati jelenlét („Jelen” / „Hiányzás”) kapcsolói nagyobb helyet és mobilbarát elrendezést kaptak'
+ ]
+ },
+ {
+ version: 'v1.11.1',
+ date: '2026. 11. 13.',
+ changes: [
+ 'Új „Támogasd munkásságom” Revolut (@cserkeszcsongi) gomb az oldal alján található láblécben'
+ ]
+ },
+ {
+ version: 'v1.11.0',
+ date: '2026. 11. 13.',
+ changes: [
+ 'Minden szak számára elérhetővé téve: eltávolítva a „Jelenleg csak: Gazdinfósoknak” felirat',
+ 'Beállítható átsorolási súlyozott átlagküszöb: a főoldalon és a Menüben is szabadon megadható, milyen súlyozott átlag után történik az átsorolás',
+ 'A tanéves összesítő sáv, a státuszjelvények és a tavaszi félévre szükséges minimum átlag automatikusan a beállított küszöbhöz igazodik'
+ ]
+ },
+ {
+ version: 'v1.10.0',
+ date: '2026. 11. 13.',
+ changes: [
+ 'Új „Menü” lenyíló gomb a felső sávban: ide kerültek a Világos/Sötét mód, a Színes/Monokróm színpaletta-választó, a Szimulátor mód és a Kijelentkezés',
+ 'Lebegő (floating) nagy glowing „+” gomb a jobb alsó sarokban (főoldalon új félév, féléven belül új tárgy felvételéhez), felette pedig a lila JOKER ZH gomb',
+ 'Áttervezett kreditelőrehaladás a főoldalon: felül teljes szélességben zöld 210 kredites kártya, alatta elfelezve szürkéskék Kötelező (186) és Szab. választott (12)',
+ 'Tanévek sorszámozása zárójelben a súlyozott átlagos tanéves kártyákon (pl. 1. tanév, 2. tanév)'
+ ]
+ },
+ {
+ version: 'v1.9.1',
+ date: '2026. 11. 13.',
+ changes: [
+ 'Az átsorolási figyelő mostantól a Súlyozott átlagot számolja és figyeli (a bukott tárgyak kizárásával)',
+ 'A főoldali félévkártyákon a Korrigált kreditindex (KKI) jelenik meg nagy kiemeléssel'
+ ]
+ },
+ {
+ version: 'v1.9.0',
+ date: '2026. 11. 13.',
+ changes: [
+ 'Félévre csoportosított tárgysablonok és automatikus ZH-elnevezés (1. ZH, 2. ZH, 3. ZH)',
+ 'Félévek sorszámozása (1–7. félév) zárójelben minden félév neve után',
+ 'Képzési kreditelőrehaladás és „Megbuktam☹️” gomb a tárgy részletei ablak alján'
+ ]
+ },
+ {
+ version: 'v1.8.0',
+ date: '2026. 11. 13.',
+ changes: [
+ 'Félévek évszámának és időszakának (Ősz / Tavasz) utólagos módosítása ceruza ikonnal',
+ 'Aktuális félév automatikus kiemelése és egységes magyar tizedesvessző (,) megjelenítés'
+ ]
+ },
+ {
+ version: 'v1.7.0',
+ date: '2026. 11. 13.',
+ changes: [
+ 'Intelligens félév-létrehozás kezdési év és Ősz / Tavasz választóval, élő előnézettel'
+ ]
+ },
+ {
+ version: 'v1.6.0',
+ date: '2026. 11. 13.',
+ changes: [
+ 'Új Köszöntő ablak és közvetlen Visszajelzés küldési lehetőség a láblécben'
+ ]
+ },
+ {
+ version: 'v1.4.0',
+ date: '2026. 11. 12.',
+ changes: [
+ 'Verziókövető ablak és JOKER ZH funkció a féléves dashboardon'
+ ]
+ },
+ {
+ version: 'v1.1.0',
+ date: '2026. 11. 12.',
+ changes: [
+ 'Mérföldköves pontszám-sáv, egyéni pontgyűjtők, 10 pontos pluszpont-sapka, gyakorlati jelenlét és „Mi lenne, ha?” szimulátor mód'
+ ]
+ }
+];
+
+const TUTORIAL_SLIDES = [
+ {
+ id: 'degree_credits',
+ shortLabel: '1. Kreditek',
+ badge: '1 / 9 • Főoldal & Képzési kreditkövetés',
+ title: 'Személyes főoldal és képzési kreditek követése',
+ description:
+ 'A főoldalon napszakhoz igazodó személyes köszönés fogad, alatta pedig a képzési kreditblokk folyamatosan összesíti a teljesített kreditjeidet — a szakodhoz igazítható célokkal.',
+ steps: [
+ 'A „Kreditek: 198 + 12” gombbal (vagy a kártyákra koppintva, illetve a Menü oldal Tanulmányi beállítások kártyáján) szabadon beállíthatod a kötelező és szabadon választott kreditszámot, a teljes diplomakreditet pedig automatikusan számolja az app.',
+ 'A nagy, zöld kártyán látod az összes megszerzett kreditet százalékos jelvénnyel, alatta két szürkéskék kártyán pedig külön követheted a kötelező és a szabadon választott kreditek állását.',
+ 'Bármelyik tárgykártyán a „Kötelező” vagy „Szabadon választott” címkére koppintva egyetlen mozdulattal átválthatod a besorolását.'
+ ],
+ tip: 'Csak azok a tárgyak növelik a teljesített krediteket, amelyeknél már elérted a megajánlott / vizsgajegyet vagy kézi jegyet adtál meg, és nincsenek „Megbuktam☹️” állapotban.'
+ },
+ {
+ id: 'semesters_kki',
+ shortLabel: '2. Félévek & Excel',
+ badge: '2 / 9 • Félévek & Neptun Excel import',
+ title: 'Félévek (1–7.) kezelése és Neptun Excel importálás',
+ description:
+ 'A főoldalon félévenként külön Frosted Glass kártyán látod a teljesített/felvett krediteket, a Korrigált kreditindexet (KKI) és a súlyozott átlagot.',
+ steps: [
+ 'Új félévhez vagy a korábbi féléveid gyors feltöltéséhez koppints az alsó navigációs sáv felett lebegő „+” gombra, ahol a Liquid Glass menüből választhatsz.',
+ 'A „Múltbéli félévek feltöltése” varázslóban feltöltheted a Neptun Törzslapból kiexportált Excel fájlt (.xlsx), és az app automatikusan beolvassa a tárgyak nevét, kreditjét és érdemjegyét (1–5).',
+ 'Az alsó navigációs sáv „Jelenlegi félév” gombjával bármikor egyetlen koppintással az aktuális féléved dashboardjára ugorhatsz.'
+ ],
+ tip: 'A félévkártya jobb felső sarkában a ceruza ikonnal bármikor átírhatod az évszámot vagy az időszakot, a kukával pedig törölheted a félévet.'
+ },
+ {
+ id: 'threshold_avg',
+ shortLabel: '3. Átsorolás',
+ badge: '3 / 9 • Tanéves súlyozott átlag & Küszöb',
+ title: 'Testreszabható átsorolási átlagküszöb minden szakhoz',
+ description:
+ 'A tanéves összesítő kártyák az őszi (/1) és tavaszi (/2) félévek súlyozott átlagát vetik össze a szakodra vonatkozó ösztöndíjas határral.',
+ steps: [
+ 'Kattints a főoldali „Küszöb: 2,75” gombra (vagy nyisd meg az alsó sávban a Menü oldalt → Tanulmányi beállítások → Átsorolási küszöb), és állítsd be a saját szakodra vonatkozó átlaghatárt.',
+ 'Ha még csak az őszi féléved van meg, a kártya alján az app automatikusan kiszámolja, minimum mekkora súlyozott átlag kell tavasszal a bennmaradáshoz.',
+ 'A „Megbuktam☹️” jelölésű tárgyakat az átlagszámítás automatikusan figyelmen kívül hagyja.'
+ ],
+ tip: 'A beállított küszöb elmentődik a felhőbe a fiókodhoz, így telefonon és laptopon is ugyanazt a határt látod.'
+ },
+ {
+ id: 'templates',
+ shortLabel: '4. Új tárgy & Rendezés',
+ badge: '4 / 9 • Szakválasztó & Rendezés',
+ title: 'Szak szerinti tárgysablonok, Vizsgakurzus és Rendezés',
+ description:
+ 'A féléves dashboard jobb alsó sarkában lévő lebegő gyűjtő kapszulából nyithatod meg az „Új tantárgy (+)” ablakot, ahol bármelyik BGE alapszak tárgyait betöltheted.',
+ steps: [
+ 'Új tárgy felvételekor válaszd ki a szakodat: Gazdaságinformatikus esetén az ellenőrzött sablonok, a többi szakon a BGE mintatanterv szerinti tárgyak tölthetők be.',
+ 'Üres tárgy létrehozásánál 3 kredit megadásakor automatikusan 6 gyakorlat (3 aláírás min., 4 megajánlott min.), 6 kreditnél 12 gyakorlat (6 aláírás min., 9 megajánlott min.) töltődik ki — és Vizsgakurzus vagy Intenzív heti kurzus is választható.',
+ 'A tantárgyak fölötti „Rendezés” gombbal választhatsz A→Z, Z→A, Összesített pontszám vagy húzogatós Egyéni sorrend között.'
+ ],
+ tip: 'Több sablont is felvehetsz egymás után anélkül, hogy bezárnád az ablakot — a „Felvétel” gomb zöld „Hozzáadva” állapotra vált.'
+ },
+ {
+ id: 'progress_bar',
+ shortLabel: '5. Pontsáv & Vizsga',
+ badge: '5 / 9 • Jegyhatárok & Automatikus Vizsga mód',
+ title: 'Következő jegyhatár és automatikus VIZSGA kártya',
+ description:
+ 'Minden tantárgykártya mutatja, hány pont kell még a következő jegyhez, és automatikusan vizsgaállapotba lép, ha a ZH-kból nem lett megajánlott jegy.',
+ steps: [
+ 'A kártyán mindig egyetlen, ténylegesen szükséges pontszám mutatja, hány pont kell még a megajánlott 2-eshez — ha ez megvan, automatikusan mutatja a 3-ashoz, 4-eshez, majd az 5-öshöz szükséges pontot.',
+ 'Ha egy sima kurzusban minden ZH pontszáma ki van töltve, de nem teljesült a ZH minimum vagy a megajánlott küszöb, a kártyán elszürkül a félévközi pontrész, és megjelenik egy kiemelt narancssárgás-barna VIZSGA rubrika a max (100 p) és elért pontszámmal.',
+ 'A Menü oldal → Megjelenés és nézet → Tárgykártyák nézete kapcsolóval bármikor válthatsz Egyszerű (kompakt) és Részletes nézet között.'
+ ],
+ tip: 'Az automatikusan megjelenő VIZSGA tétel pontosan úgy működik, mint egy vizsgakurzus: 59,5 ponttól ad jegyet, alatta pedig automatikusan bukottnak jelöli a tárgyat.'
+ },
+ {
+ id: 'assessments_buckets',
+ shortLabel: '6. ZH-k & Limit',
+ badge: '6 / 9 • Biztonságos tételszerkesztés & Gyűjtők',
+ title: 'Tételek szerkesztése, 10 p sapka és egyéni gyűjtők',
+ description:
+ 'Bármelyik tantárgykártyára koppintva megnyílik a részletes adatlap, ahol rögzítheted a ZH-kat, pluszpontokat és egyéni feladatokat.',
+ steps: [
+ 'Bármelyik felvett tétel (ZH, Pluszpont, Gyűjtő tétel vagy VIZSGA) pontszámát a sor végén található szerkesztés/törlés gombbal módosíthatod — a változtatások csak a Mentés gombra kattintva lépnek életbe, a törlés pedig kétlépcsős megerősítéssel védett.',
+ 'Új ZH hozzáadásakor a megnevezést üresen is hagyhatod: az app automatikusan tudja, hogy ez az 1. ZH, 2. ZH vagy 3. ZH.',
+ 'A Pluszpontok kategóriában automatikusan érvényesül a 10 pontos limit, az „+ Új gyűjtő létrehozása” gombbal pedig saját pontgyűjtőket vehetsz fel.'
+ ],
+ tip: 'Bármelyik párbeszédablakot bezárhatod az ablakon kívülre kattintva vagy az Esc billentyűvel, az Enterrel pedig azonnal menthetsz.'
+ },
+ {
+ id: 'joker_simulator',
+ shortLabel: '7. Gyűjtő & Stat.',
+ badge: '7 / 9 • Liquid Glass kapszula, Joker ZH & ZH statisztika',
+ title: 'Lebegő Gyűjtő kapszula, Joker ZH, Átlagszámoló és Statisztikák',
+ description:
+ 'A féléves dashboard jobb alsó sarkában lebegő kapszula egyetlen érintésre nyitja meg a legfontosabb tervezőeszközöket, felül pedig részletes jelenlét és ZH statisztika segít.',
+ steps: [
+ 'Lebegő Liquid Glass kapszula: megnyomásával előugrik a JOKER ZH, az Átlagszámoló és az Új tantárgy (+) gomb. Kijelölt Joker ZH esetén a gomb alján látszik, melyik tárgy melyik ZH-ja vár eredményre.',
+ 'JOKER ZH összefoglaló táblázat: automatikusan kiemeli a 3 legalacsonyabb pontszámú ZH-t, és megmutatja, hány pont javítás kell a megajánlott vagy következő jobb jegyhez.',
+ 'Lenyitható „Jelenlét és ZH statisztika” blokk a dashboard tetején: egy kattintással megnyílnak a Gyakorlatok, az Előadások és a tárgyankénti/ZH-nkénti részletes ZH statisztika táblázat kártyái.'
+ ],
+ tip: 'Az Átlagszámolóban 1–5-ös színes jegygombokkal élőben szimulálhatod a féléved súlyozott átlagát és korrigált kreditindexét!'
+ },
+ {
+ id: 'failed_attendance_pwa',
+ shortLabel: '8. Jelenlét',
+ badge: '8 / 9 • Gyakorlati & Előadás jelenlét, „Megbuktam☹️”',
+ title: 'Gyakorlati és előadás jelenlétek külön követése',
+ description:
+ 'A tantárgy részletei ablak „Jelenlét” fülén külön-külön felületen adminisztrálhatod a gyakorlatokat és az előadásokat is.',
+ steps: [
+ 'A „Jelenlét” fülön válthatsz a Gyakorlatok és az Előadások külön felülete között: minden alkalomnál rögzítheted a dátumot, és egy gombnyomással jelölheted a Jelenlétet vagy Hiányzást.',
+ 'Gyakorlatoknál a rendszer figyeli az aláíráshoz és megajánlott jegyhez szükséges minimumot, míg az előadásoknál nincs kötelező minimum (nem veszélyezteti az aláírást).',
+ 'Ha egy tárgyból nem sikerült a vizsga vagy az aláírás, nyomd meg az ablak alján a „Megbuktam☹️” gombot: a kártya halvány piros lesz, és nem rontja a súlyozott átlagodat.'
+ ],
+ tip: 'A dashboard tetején lévő lenyitható „Jelenlét és ZH statisztika” kártyákon a jelenlétek mellett a hiányzások és a még hátralévő alkalmak száma is azonnal látható.'
+ },
+ {
+ id: 'menu_pwa',
+ shortLabel: '9. Navigáció & Menü',
+ badge: '9 / 9 • Alsó navigáció, Menü oldal & Mobil app',
+ title: 'Alsó navigációs sáv, különálló Menü oldal és mobil parancsikon',
+ description:
+ 'Az oldal alján lebegő Frosted Glass navigációs sávval egyetlen koppintással válthatsz a Főoldal, a Jelenlegi félév és a teljes képernyős Menü oldal között.',
+ steps: [
+ 'Menü és beállítások oldal: itt kezelheted a Hallgatói profilodat (saját becenév, szakváltás), a Megjelenést (Világos/Sötét, Színes/Monokróm, Egyszerű/Részletes kártyák), a Tanulmányi beállításokat (Átsorolási küszöb, Képzési kreditek, Szimulátor mód) és az Eszközöket (App statisztika, Verziótörténet, GDPR).',
+ 'Felső Frosted Glass sáv: a Visszajelzés és a Faliújság (csengő) gomb minden nézetben közvetlenül elérhető a képernyő tetején.',
+ 'Telefonos parancsikon (PWA): iPhone-on (Safari) a Megosztás → „Főképernyőhöz adás”, Androidon (Chrome) pedig a Menü oldal „Letöltés parancsikonként” gombjával vagy a böngésző ⋮ menüjéből rakhatod ki a főképernyőre.'
  ],
  tip: 'Ha a Hallgatói profilban megadsz egy becenevet, a főoldal személyes köszönése és a felső sáv is ezen fog szólítani!'
  }
@@ -9868,6 +10576,440 @@ export default function App() {
 
  return (
  <div className={`bge-fluid-app relative z-0 min-h-screen pb-32 sm:pb-28 transition-colors duration-300 ${bgPage}`}>
+ <style>{`
+ html, body {
+ overflow-x: clip;
+ max-width: 100%;
+ }
+ .bge-fluid-app {
+ overflow-x: clip;
+ max-width: 100%;
+ width: 100%;
+ }
+ @keyframes bgeFluidEnter {
+ from {
+ opacity: 0;
+ transform: translateY(10px) scale(0.988);
+ }
+ to {
+ opacity: 1;
+ transform: translateY(0) scale(1);
+ }
+ }
+ @keyframes bgeCollapseReveal {
+ from {
+ opacity: 0;
+ transform: translateY(-8px) scale(0.985);
+ }
+ to {
+ opacity: 1;
+ transform: translateY(0) scale(1);
+ }
+ }
+ @keyframes bgeLiquidGlassOpen {
+ 0% {
+ opacity: 0;
+ transform: translateY(16px) scale(0.72);
+ filter: blur(10px) saturate(135%);
+ }
+ 62% {
+ opacity: 1;
+ transform: translateY(-3px) scale(1.025);
+ filter: blur(0px) saturate(165%);
+ }
+ 100% {
+ opacity: 1;
+ transform: translateY(0) scale(1);
+ filter: blur(0px) saturate(145%);
+ }
+ }
+ @keyframes bgeLiquidGlassClose {
+ 0% {
+ opacity: 1;
+ transform: translateY(0) scale(1);
+ filter: blur(0px) saturate(145%);
+ }
+ 100% {
+ opacity: 0;
+ transform: translateY(12px) scale(0.78);
+ filter: blur(8px) saturate(110%);
+ }
+ }
+ @keyframes bgeLiquidItemIn {
+ 0% {
+ opacity: 0;
+ transform: translateY(8px) scale(0.94);
+ }
+ 100% {
+ opacity: 1;
+ transform: translateY(0) scale(1);
+ }
+ }
+ @keyframes bgeBackdropFadeIn {
+ from {
+ opacity: 0;
+ backdrop-filter: blur(0px);
+ }
+ to {
+ opacity: 1;
+ backdrop-filter: blur(4px);
+ }
+ }
+ .bge-fluid-app button:not([data-nav-pill="true"]),
+ .bge-fluid-app [role="button"],
+ .bge-fluid-app a[href] {
+ transition: transform 220ms cubic-bezier(0.34, 1.38, 0.64, 1), background-color 240ms cubic-bezier(0.22, 1, 0.36, 1), border-color 240ms cubic-bezier(0.22, 1, 0.36, 1), color 200ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 260ms cubic-bezier(0.22, 1, 0.36, 1), opacity 220ms cubic-bezier(0.22, 1, 0.36, 1);
+ will-change: transform;
+ }
+ .bge-fluid-app button:not([data-nav-pill="true"]):active:not(:disabled),
+ .bge-fluid-app [role="button"]:active:not([aria-disabled="true"]),
+ .bge-fluid-app a[href]:active {
+ transform: scale(0.955);
+ transition-duration: 110ms;
+ }
+ .bge-fluid-app section,
+ .bge-fluid-app article {
+ animation: bgeFluidEnter 320ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+ }
+ .bge-fluid-reveal {
+ animation: bgeCollapseReveal 300ms cubic-bezier(0.34, 1.25, 0.64, 1) both;
+ transform-origin: top center;
+ }
+ .bge-liquid-glass-panel {
+ position: relative;
+ overflow: hidden;
+ backdrop-filter: blur(22px) saturate(175%);
+ -webkit-backdrop-filter: blur(22px) saturate(175%);
+ transform-origin: bottom right;
+ }
+ .bge-liquid-glass-panel::before {
+ content: "";
+ position: absolute;
+ inset: 0;
+ border-radius: inherit;
+ pointer-events: none;
+ background: linear-gradient(135deg, rgba(255, 255, 255, 0.34) 0%, rgba(255, 255, 255, 0.08) 38%, rgba(255, 255, 255, 0.02) 70%, rgba(251, 191, 36, 0.14) 100%);
+ }
+ .bge-liquid-glass-open {
+ animation: bgeLiquidGlassOpen 380ms cubic-bezier(0.34, 1.38, 0.64, 1) both;
+ }
+ .bge-liquid-glass-closing {
+ animation: bgeLiquidGlassClose 210ms cubic-bezier(0.32, 0.72, 0, 1) forwards;
+ pointer-events: none;
+ }
+ .bge-liquid-item-1 {
+ animation: bgeLiquidItemIn 300ms cubic-bezier(0.34, 1.32, 0.64, 1) 45ms both;
+ }
+ .bge-liquid-item-2 {
+ animation: bgeLiquidItemIn 320ms cubic-bezier(0.34, 1.32, 0.64, 1) 90ms both;
+ }
+ .bge-liquid-item-3 {
+ animation: bgeLiquidItemIn 340ms cubic-bezier(0.34, 1.32, 0.64, 1) 135ms both;
+ }
+ .bge-fluid-app .fixed.inset-0 {
+ animation: bgeBackdropFadeIn 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+ }
+ .bge-fluid-app .fixed.inset-0 > div {
+ animation: bgeFluidEnter 320ms cubic-bezier(0.34, 1.24, 0.64, 1) both;
+ }
+ @keyframes bgeSlideFromRight {
+ 0% {
+ opacity: 0;
+ transform: translate3d(20px, 0, 0);
+ }
+ 100% {
+ opacity: 1;
+ transform: translate3d(0, 0, 0);
+ }
+ }
+ @keyframes bgeSlideFromLeft {
+ 0% {
+ opacity: 0;
+ transform: translate3d(-20px, 0, 0);
+ }
+ 100% {
+ opacity: 1;
+ transform: translate3d(0, 0, 0);
+ }
+ }
+ @keyframes bgeBottomSheetSlideUp {
+ 0% {
+ opacity: 0;
+ transform: translate3d(0, 18px, 0) scale(0.96);
+ filter: blur(8px);
+ }
+ 100% {
+ opacity: 1;
+ transform: translate3d(0, 0, 0) scale(1);
+ filter: blur(0px);
+ }
+ }
+ @keyframes bgeMobileSlideFromRight {
+ 0% {
+ opacity: 0;
+ transform: translate3d(24px, 0, 0);
+ }
+ 100% {
+ opacity: 1;
+ transform: translate3d(0, 0, 0);
+ }
+ }
+ @keyframes bgeMobileSlideFromLeft {
+ 0% {
+ opacity: 0;
+ transform: translate3d(-24px, 0, 0);
+ }
+ 100% {
+ opacity: 1;
+ transform: translate3d(0, 0, 0);
+ }
+ }
+ .bge-view-slide-left {
+ animation: bgeSlideFromRight 300ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+ }
+ .bge-view-slide-right {
+ animation: bgeSlideFromLeft 300ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+ }
+ @media (max-width: 767px) {
+ .bge-view-slide-left {
+ animation: bgeMobileSlideFromRight 280ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+ }
+ .bge-view-slide-right {
+ animation: bgeMobileSlideFromLeft 280ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+ }
+ }
+ .bge-nav-sliding-pill {
+ transition: transform 340ms cubic-bezier(0.34, 1.32, 0.64, 1), box-shadow 260ms cubic-bezier(0.22, 1, 0.36, 1);
+ will-change: transform;
+ }
+ .bge-view-slide-left section,
+ .bge-view-slide-left article,
+ .bge-view-slide-right section,
+ .bge-view-slide-right article {
+ animation: none !important;
+ }
+ .bge-bottom-nav-capsule {
+ backdrop-filter: blur(24px) saturate(185%);
+ -webkit-backdrop-filter: blur(24px) saturate(185%);
+ }
+ .bge-bottom-nav-capsule::before {
+ content: "";
+ position: absolute;
+ inset: 0;
+ border-radius: inherit;
+ pointer-events: none;
+ background: linear-gradient(135deg, rgba(255, 255, 255, 0.36) 0%, rgba(255, 255, 255, 0.08) 45%, rgba(251, 191, 36, 0.14) 100%);
+ }
+ @keyframes bgeMenuCardIn {
+ 0% {
+ opacity: 0;
+ transform: translate3d(0, 14px, 0) scale(0.98);
+ filter: blur(4px);
+ }
+ 100% {
+ opacity: 1;
+ transform: translate3d(0, 0, 0) scale(1);
+ filter: blur(0px);
+ }
+ }
+ .bge-menu-card {
+ animation: bgeMenuCardIn 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
+ will-change: transform, opacity;
+ }
+ .bge-menu-card-1 { animation-delay: 25ms; }
+ .bge-menu-card-2 { animation-delay: 70ms; }
+ .bge-menu-card-3 { animation-delay: 115ms; }
+ .bge-menu-card-4 { animation-delay: 160ms; }
+ .bge-menu-card-5 { animation-delay: 205ms; }
+ /* === TELJES APPLIKÁCIÓS FROSTED GLASS RENDSZER === */
+ .bge-fluid-app header,
+ .bge-fluid-app .rounded-2xl,
+ .bge-fluid-app .rounded-3xl {
+ backdrop-filter: blur(18px) saturate(165%);
+ -webkit-backdrop-filter: blur(18px) saturate(165%);
+ }
+ .bge-fluid-app footer {
+ background-color: transparent !important;
+ backdrop-filter: none !important;
+ -webkit-backdrop-filter: none !important;
+ }
+ .bge-fluid-app.bge-glass-dark header,
+ .bge-fluid-app.bge-glass-dark header.bge-dashboard-header {
+ background-color: rgba(15, 23, 42, 0.48) !important;
+ backdrop-filter: blur(26px) saturate(190%) !important;
+ -webkit-backdrop-filter: blur(26px) saturate(190%) !important;
+ border-bottom: 1px solid rgba(255, 255, 255, 0.14) !important;
+ box-shadow: 0 8px 28px rgba(2, 6, 23, 0.26), inset 0 -1px 0 rgba(255, 255, 255, 0.08) !important;
+ }
+ .bge-fluid-app.bge-glass-light header,
+ .bge-fluid-app.bge-glass-light header.bge-dashboard-header {
+ background-color: rgba(255, 255, 255, 0.44) !important;
+ backdrop-filter: blur(26px) saturate(190%) !important;
+ -webkit-backdrop-filter: blur(26px) saturate(190%) !important;
+ border-bottom: 1px solid rgba(255, 255, 255, 0.72) !important;
+ box-shadow: 0 8px 24px rgba(15, 23, 42, 0.07), inset 0 -1px 0 rgba(255, 255, 255, 0.55) !important;
+ }
+ .bge-fluid-app.bge-glass-dark .bge-frosted-dropdown {
+ background-color: rgba(15, 23, 42, 0.82) !important;
+ backdrop-filter: blur(28px) saturate(190%) !important;
+ -webkit-backdrop-filter: blur(28px) saturate(190%) !important;
+ border: 1px solid rgba(255, 255, 255, 0.18) !important;
+ box-shadow: 0 20px 44px rgba(2, 6, 23, 0.62), inset 0 1px 0 rgba(255, 255, 255, 0.16) !important;
+ }
+ .bge-fluid-app.bge-glass-light .bge-frosted-dropdown {
+ background-color: rgba(255, 255, 255, 0.84) !important;
+ backdrop-filter: blur(28px) saturate(190%) !important;
+ -webkit-backdrop-filter: blur(28px) saturate(190%) !important;
+ border: 1px solid rgba(255, 255, 255, 0.88) !important;
+ box-shadow: 0 18px 40px rgba(15, 23, 42, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.9) !important;
+ }
+ .bge-fluid-app button:not([data-no-glass="true"]):not([data-no-glass="ghost"]),
+ .bge-fluid-app a[href]:not([data-no-glass="true"]):not([data-no-glass="ghost"]) {
+ backdrop-filter: blur(14px) saturate(160%);
+ -webkit-backdrop-filter: blur(14px) saturate(160%);
+ box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.24);
+ }
+ .bge-fluid-app button[data-no-glass="true"],
+ .bge-fluid-app a[href][data-no-glass="true"] {
+ background-color: transparent !important;
+ backdrop-filter: none !important;
+ -webkit-backdrop-filter: none !important;
+ box-shadow: none !important;
+ }
+ .bge-fluid-app button[data-no-glass="ghost"],
+ .bge-fluid-app a[href][data-no-glass="ghost"] {
+ backdrop-filter: none !important;
+ -webkit-backdrop-filter: none !important;
+ box-shadow: none !important;
+ }
+ .bge-fluid-app svg,
+ .bge-fluid-app canvas {
+ filter: drop-shadow(0 4px 12px rgba(15, 23, 42, 0.12));
+ }
+ .bge-fluid-app .rounded-full.overflow-hidden,
+ .bge-fluid-app .rounded-full.overflow-visible {
+ backdrop-filter: blur(10px) saturate(150%);
+ -webkit-backdrop-filter: blur(10px) saturate(150%);
+ box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.14);
+ }
+
+ /* === NYITÁS, BECSUKÁS ÉS ÁLLAPOTVÁLTÁS ANIMÁCIÓK === */
+ @keyframes bgeModalBackdropIn {
+ from { opacity: 0; backdrop-filter: blur(0px); }
+ to { opacity: 1; backdrop-filter: blur(10px); }
+ }
+ @keyframes bgeModalBackdropOut {
+ from { opacity: 1; backdrop-filter: blur(10px); }
+ to { opacity: 0; backdrop-filter: blur(0px); }
+ }
+ @keyframes bgeModalCardIn {
+ from { opacity: 0; transform: translate3d(0, 18px, 0) scale(0.95); filter: blur(6px); }
+ to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); filter: blur(0px); }
+ }
+ @keyframes bgeModalCardOut {
+ from { opacity: 1; transform: translate3d(0, 0, 0) scale(1); filter: blur(0px); }
+ to { opacity: 0; transform: translate3d(0, 16px, 0) scale(0.94); filter: blur(8px); }
+ }
+ @keyframes bgeSheetOut {
+ from { opacity: 1; transform: translate3d(0, 0, 0) scale(1); filter: blur(0px); }
+ to { opacity: 0; transform: translate3d(0, 22px, 0) scale(0.95); filter: blur(10px); }
+ }
+ @keyframes bgeDropdownIn {
+ 0% { opacity: 0; transform: translate3d(0, -8px, 0) scale(0.96); }
+ 100% { opacity: 1; transform: none; }
+ }
+ @keyframes bgeDropdownOut {
+ 0% { opacity: 1; transform: none; }
+ 100% { opacity: 0; transform: translate3d(0, -8px, 0) scale(0.96); }
+ }
+ @keyframes bgeCollapseOut {
+ from { opacity: 1; transform: translate3d(0, 0, 0) scaleY(1); filter: blur(0px); }
+ to { opacity: 0; transform: translate3d(0, -10px, 0) scaleY(0.96); filter: blur(4px); }
+ }
+ @keyframes bgeToastIn {
+ from { opacity: 0; transform: translate3d(0, 14px, 0) scale(0.95); filter: blur(6px); }
+ to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); filter: blur(0px); }
+ }
+ @keyframes bgeToastOut {
+ from { opacity: 1; transform: translate3d(0, 0, 0) scale(1); filter: blur(0px); }
+ to { opacity: 0; transform: translate3d(0, 14px, 0) scale(0.95); filter: blur(6px); }
+ }
+ @keyframes bgeStepMorph {
+ from { opacity: 0; transform: translate3d(12px, 0, 0) scale(0.985); filter: blur(4px); }
+ to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); filter: blur(0px); }
+ }
+
+ .bge-presence-modal-enter > .fixed.inset-0 {
+ animation: bgeModalBackdropIn 240ms cubic-bezier(0.22, 1, 0.36, 1) both;
+ }
+ .bge-presence-modal-enter > .fixed.inset-0 > div {
+ animation: bgeModalCardIn 300ms cubic-bezier(0.34, 1.24, 0.64, 1) both;
+ }
+ .bge-presence-modal-exit > .fixed.inset-0 {
+ animation: bgeModalBackdropOut 230ms cubic-bezier(0.32, 0.72, 0, 1) forwards !important;
+ pointer-events: none !important;
+ }
+ .bge-presence-modal-exit > .fixed.inset-0 > div {
+ animation: bgeModalCardOut 230ms cubic-bezier(0.32, 0.72, 0, 1) forwards !important;
+ pointer-events: none !important;
+ }
+
+ .bge-presence-backdrop-enter > .fixed.inset-0 {
+ animation: bgeModalBackdropIn 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+ }
+ .bge-presence-backdrop-exit > .fixed.inset-0 {
+ animation: bgeModalBackdropOut 220ms cubic-bezier(0.32, 0.72, 0, 1) forwards !important;
+ pointer-events: none !important;
+ }
+
+ .bge-presence-sheet-enter {
+ animation: bgeBottomSheetSlideUp 280ms cubic-bezier(0.34, 1.32, 0.64, 1) both;
+ }
+ .bge-presence-sheet-exit {
+ animation: bgeSheetOut 220ms cubic-bezier(0.32, 0.72, 0, 1) forwards !important;
+ pointer-events: none !important;
+ }
+
+ .bge-presence-dropdown-enter > * {
+ animation: bgeDropdownIn 220ms cubic-bezier(0.34, 1.28, 0.64, 1) backwards;
+ }
+ .bge-presence-dropdown-exit > * {
+ animation: bgeDropdownOut 185ms cubic-bezier(0.32, 0.72, 0, 1) forwards !important;
+ pointer-events: none !important;
+ }
+
+ .bge-presence-collapse-enter {
+ animation: bgeCollapseReveal 280ms cubic-bezier(0.34, 1.25, 0.64, 1) both;
+ transform-origin: top center;
+ }
+ .bge-presence-collapse-exit {
+ animation: bgeCollapseOut 210ms cubic-bezier(0.32, 0.72, 0, 1) forwards !important;
+ transform-origin: top center;
+ pointer-events: none !important;
+ }
+
+ .bge-presence-toast-enter > * {
+ animation: bgeToastIn 260ms cubic-bezier(0.34, 1.28, 0.64, 1) both;
+ }
+ .bge-presence-toast-exit > * {
+ animation: bgeToastOut 210ms cubic-bezier(0.32, 0.72, 0, 1) forwards !important;
+ pointer-events: none !important;
+ }
+
+ .bge-step-enter {
+ animation: bgeStepMorph 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
+ }
+
+ @media (prefers-reduced-motion: reduce) {
+ .bge-fluid-app *,
+ .bge-fluid-app *::before,
+ .bge-fluid-app *::after {
+ animation-duration: 0.01ms !important;
+ animation-iteration-count: 1 !important;
+ transition-duration: 0.01ms !important;
+ }
+ }
+ `}</style>
 
  {/* AMBIENT FROSTED GLASS HÁTTÉRRÉTEG */}
  <div

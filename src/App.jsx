@@ -3257,45 +3257,18 @@ function MaintenanceRepairIllustration({ darkMode }) {
 
 function AnimatedPresence({
  show,
- duration = 240,
  variant = 'modal',
  className = '',
  children
 }) {
- const [shouldRender, setShouldRender] = useState(Boolean(show));
- const [stage, setStage] = useState(show ? 'enter' : 'exit');
- const lastChildrenRef = useRef(null);
-
- if (show && children) {
- lastChildrenRef.current = children;
- }
-
- useEffect(() => {
- if (show) {
- setShouldRender(true);
- setStage('enter');
- return;
- }
- if (!shouldRender) return;
- setStage('exit');
- const timer = setTimeout(() => {
- setShouldRender(false);
- }, duration);
- return () => clearTimeout(timer);
- }, [show, duration, shouldRender]);
-
- const content = show ? children : lastChildrenRef.current;
- if (!shouldRender || !content) return null;
+ if (!show || !children) return null;
 
  const isContentsVariant = variant === 'modal' || variant === 'backdrop' || variant === 'toast' || variant === 'dropdown';
- const stateClass = `bge-presence-${variant}-${stage}`;
+ const stateClass = `bge-presence-${variant}-enter`;
 
  return (
- <div
- className={`${isContentsVariant ? 'contents ' : ''}${stateClass} ${className}`.trim()}
- aria-hidden={stage === 'exit' ? 'true' : undefined}
- >
- {content}
+ <div className={`${isContentsVariant ? 'contents ' : ''}${stateClass} ${className}`.trim()}>
+ {children}
  </div>
  );
 }
@@ -3830,35 +3803,18 @@ export default function App() {
  clearTimeout(collectorCloseTimerRef.current);
  collectorCloseTimerRef.current = null;
  }
- if (isCollectorMenuOpen) {
- setIsCollectorClosing(true);
- collectorCloseTimerRef.current = setTimeout(() => {
- setIsCollectorMenuOpen(false);
  setIsCollectorClosing(false);
- collectorCloseTimerRef.current = null;
- }, 205);
- } else {
- setIsCollectorClosing(false);
- setIsCollectorMenuOpen(true);
- }
+ setIsCollectorMenuOpen(prev => !prev);
  };
 
  const closeCollectorMenuAnimated = (afterClose = null) => {
- if (!isCollectorMenuOpen && !isCollectorClosing) {
- if (afterClose) afterClose();
- return;
- }
  if (collectorCloseTimerRef.current) {
  clearTimeout(collectorCloseTimerRef.current);
  collectorCloseTimerRef.current = null;
  }
- setIsCollectorClosing(true);
- collectorCloseTimerRef.current = setTimeout(() => {
- setIsCollectorMenuOpen(false);
  setIsCollectorClosing(false);
- collectorCloseTimerRef.current = null;
+ setIsCollectorMenuOpen(false);
  if (afterClose) afterClose();
- }, 205);
  };
 
  useEffect(() => {
@@ -3918,35 +3874,18 @@ export default function App() {
  clearTimeout(homePlusCloseTimerRef.current);
  homePlusCloseTimerRef.current = null;
  }
- if (isHomePlusMenuOpen) {
- setIsHomePlusMenuClosing(true);
- homePlusCloseTimerRef.current = setTimeout(() => {
- setIsHomePlusMenuOpen(false);
  setIsHomePlusMenuClosing(false);
- homePlusCloseTimerRef.current = null;
- }, 205);
- } else {
- setIsHomePlusMenuClosing(false);
- setIsHomePlusMenuOpen(true);
- }
+ setIsHomePlusMenuOpen(prev => !prev);
  };
 
  const closeHomePlusMenuAnimated = (afterClose = null) => {
- if (!isHomePlusMenuOpen && !isHomePlusMenuClosing) {
- if (afterClose) afterClose();
- return;
- }
  if (homePlusCloseTimerRef.current) {
  clearTimeout(homePlusCloseTimerRef.current);
  homePlusCloseTimerRef.current = null;
  }
- setIsHomePlusMenuClosing(true);
- homePlusCloseTimerRef.current = setTimeout(() => {
- setIsHomePlusMenuOpen(false);
  setIsHomePlusMenuClosing(false);
- homePlusCloseTimerRef.current = null;
+ setIsHomePlusMenuOpen(false);
  if (afterClose) afterClose();
- }, 205);
  };
 
  useEffect(() => {
@@ -8484,17 +8423,96 @@ export default function App() {
    }
   });
 
-  items.sort((a, b) => {
+  const parseTimeToMinutes = (timeStr) => {
+   if (!timeStr) return null;
+   const m = String(timeStr).trim().match(/^(\d{1,2})[:.](\d{2})$/);
+   if (!m) return null;
+   const hh = parseInt(m[1], 10);
+   const mm = parseInt(m[2], 10);
+   if (isNaN(hh) || isNaN(mm)) return null;
+   return hh * 60 + mm;
+  };
+
+  const bonusItems = [];
+  const primaryItems = [];
+  items.forEach((it) => {
+   if (it.kind === 'assessment' && it.category === 'Pluszpont') {
+    bonusItems.push(it);
+   } else {
+    primaryItems.push(it);
+   }
+  });
+
+  primaryItems.sort((a, b) => {
+   const ta = parseTimeToMinutes(a.time);
+   const tb = parseTimeToMinutes(b.time);
+   if (ta !== null && tb !== null && ta !== tb) return ta - tb;
+   if (ta !== null && tb === null) return -1;
+   if (ta === null && tb !== null) return 1;
    if (a.priority !== b.priority) return a.priority - b.priority;
-   if (a.time && b.time && a.time !== b.time) return a.time.localeCompare(b.time);
-   if (a.time && !b.time) return -1;
-   if (!a.time && b.time) return 1;
    const subjCmp = (a.subjectName || '').localeCompare(b.subjectName || '', 'hu');
    if (subjCmp !== 0) return subjCmp;
    return (a.title || '').localeCompare(b.title || '', 'hu', { numeric: true });
   });
 
-  return items;
+  bonusItems.sort((a, b) => {
+   const subjCmp = (a.subjectName || '').localeCompare(b.subjectName || '', 'hu');
+   if (subjCmp !== 0) return subjCmp;
+   return (a.title || '').localeCompare(b.title || '', 'hu', { numeric: true });
+  });
+
+  const attendanceBySubject = new Map();
+  primaryItems.forEach((it) => {
+   if (it.kind === 'attendance_practice' || it.kind === 'attendance_lecture') {
+    if (!attendanceBySubject.has(it.subjectId)) {
+     attendanceBySubject.set(it.subjectId, []);
+    }
+    attendanceBySubject.get(it.subjectId).push(it);
+   }
+  });
+
+  const attachedByAttendanceKey = new Map();
+  const unattachedBonusItems = [];
+
+  bonusItems.forEach((bItem) => {
+   const subjAttendances = attendanceBySubject.get(bItem.subjectId);
+   if (!subjAttendances || subjAttendances.length === 0) {
+    unattachedBonusItems.push(bItem);
+    return;
+   }
+
+   let targetAtt = subjAttendances[0];
+   if (subjAttendances.length > 1) {
+    const normTitle = normalizeCourseNameForTimetable(bItem.title);
+    if (normTitle.includes('eloadas') || normTitle.includes('elmelet')) {
+     targetAtt = subjAttendances.find(a => a.kind === 'attendance_lecture') || subjAttendances[0];
+    } else if (normTitle.includes('gyakorlat') || normTitle.includes('labor')) {
+     targetAtt = subjAttendances.find(a => a.kind === 'attendance_practice') || subjAttendances[0];
+    }
+   }
+
+   if (!attachedByAttendanceKey.has(targetAtt.key)) {
+    attachedByAttendanceKey.set(targetAtt.key, []);
+   }
+   attachedByAttendanceKey.get(targetAtt.key).push({
+    ...bItem,
+    isGroupedUnderAttendance: true
+   });
+  });
+
+  const orderedItems = [];
+  primaryItems.forEach((it) => {
+   orderedItems.push(it);
+   if (attachedByAttendanceKey.has(it.key)) {
+    orderedItems.push(...attachedByAttendanceKey.get(it.key));
+   }
+  });
+
+  if (unattachedBonusItems.length > 0) {
+   orderedItems.push(...unattachedBonusItems);
+  }
+
+  return orderedItems;
  }, [semesterSubjects, todayIso, isSim, simScores]);
 
  const todayCompletedCount = useMemo(
@@ -9703,97 +9721,77 @@ export default function App() {
  @keyframes bgeFluidEnter {
  from {
  opacity: 0;
- transform: translateY(10px) scale(0.988);
+ transform: translate3d(0, 8px, 0);
  }
  to {
  opacity: 1;
- transform: translateY(0) scale(1);
- }
- }
- @keyframes bgeCollapseReveal {
- from {
- opacity: 0;
- transform: translateY(-8px) scale(0.985);
- }
- to {
- opacity: 1;
- transform: translateY(0) scale(1);
- }
- }
- @keyframes bgeLiquidGlassOpen {
- 0% {
- opacity: 0;
- transform: translateY(16px) scale(0.72);
- filter: blur(10px) saturate(135%);
- }
- 62% {
- opacity: 1;
- transform: translateY(-3px) scale(1.025);
- filter: blur(0px) saturate(165%);
- }
- 100% {
- opacity: 1;
- transform: translateY(0) scale(1);
- filter: blur(0px) saturate(145%);
- }
- }
- @keyframes bgeLiquidGlassClose {
- 0% {
- opacity: 1;
- transform: translateY(0) scale(1);
- filter: blur(0px) saturate(145%);
- }
- 100% {
- opacity: 0;
- transform: translateY(12px) scale(0.78);
- filter: blur(8px) saturate(110%);
- }
- }
- @keyframes bgeLiquidItemIn {
- 0% {
- opacity: 0;
- transform: translateY(8px) scale(0.94);
- }
- 100% {
- opacity: 1;
- transform: translateY(0) scale(1);
+ transform: translate3d(0, 0, 0);
  }
  }
  @keyframes bgeBackdropFadeIn {
  from {
  opacity: 0;
- backdrop-filter: blur(0px);
  }
  to {
  opacity: 1;
- backdrop-filter: blur(4px);
+ }
+ }
+ @keyframes bgeModalCardIn {
+ from {
+ opacity: 0;
+ transform: translate3d(0, 12px, 0) scale(0.975);
+ }
+ to {
+ opacity: 1;
+ transform: translate3d(0, 0, 0) scale(1);
+ }
+ }
+ @keyframes bgeSlideFromRight {
+ 0% {
+ opacity: 0;
+ transform: translate3d(18px, 0, 0);
+ }
+ 100% {
+ opacity: 1;
+ transform: translate3d(0, 0, 0);
+ }
+ }
+ @keyframes bgeSlideFromLeft {
+ 0% {
+ opacity: 0;
+ transform: translate3d(-18px, 0, 0);
+ }
+ 100% {
+ opacity: 1;
+ transform: translate3d(0, 0, 0);
  }
  }
  .bge-fluid-app button:not([data-nav-pill="true"]),
  .bge-fluid-app [role="button"],
  .bge-fluid-app a[href] {
- transition: transform 220ms cubic-bezier(0.34, 1.38, 0.64, 1), background-color 240ms cubic-bezier(0.22, 1, 0.36, 1), border-color 240ms cubic-bezier(0.22, 1, 0.36, 1), color 200ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 260ms cubic-bezier(0.22, 1, 0.36, 1), opacity 220ms cubic-bezier(0.22, 1, 0.36, 1);
- will-change: transform;
+ transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease, opacity 140ms ease;
  }
- .bge-fluid-app button:not([data-nav-pill="true"]):active:not(:disabled),
- .bge-fluid-app [role="button"]:active:not([aria-disabled="true"]),
- .bge-fluid-app a[href]:active {
- transform: scale(0.955);
- transition-duration: 110ms;
- }
+ /* Kártya és szekció megnyíló animáció */
  .bge-fluid-app section,
  .bge-fluid-app article {
- animation: bgeFluidEnter 320ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+ animation: bgeFluidEnter 200ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
  }
- .bge-fluid-reveal {
- animation: bgeCollapseReveal 300ms cubic-bezier(0.34, 1.25, 0.64, 1) both;
- transform-origin: top center;
+ .bge-menu-card {
+ animation: bgeFluidEnter 200ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+ }
+ .bge-fluid-reveal,
+ .bge-presence-collapse-enter,
+ .bge-presence-dropdown-enter > *,
+ .bge-presence-toast-enter > *,
+ .bge-presence-sheet-enter,
+ .bge-step-enter {
+ animation: bgeFluidEnter 180ms cubic-bezier(0.22, 1, 0.36, 1) both;
  }
  .bge-liquid-glass-panel {
  position: relative;
  overflow: hidden;
- backdrop-filter: blur(22px) saturate(175%);
- -webkit-backdrop-filter: blur(22px) saturate(175%);
+ backdrop-filter: blur(20px) saturate(165%);
+ -webkit-backdrop-filter: blur(20px) saturate(165%);
  transform-origin: bottom right;
  }
  .bge-liquid-glass-panel::before {
@@ -9805,96 +9803,24 @@ export default function App() {
  background: linear-gradient(135deg, rgba(255, 255, 255, 0.34) 0%, rgba(255, 255, 255, 0.08) 38%, rgba(255, 255, 255, 0.02) 70%, rgba(251, 191, 36, 0.14) 100%);
  }
  .bge-liquid-glass-open {
- animation: bgeLiquidGlassOpen 380ms cubic-bezier(0.34, 1.38, 0.64, 1) both;
+ animation: bgeModalCardIn 180ms cubic-bezier(0.22, 1, 0.36, 1) both;
  }
- .bge-liquid-glass-closing {
- animation: bgeLiquidGlassClose 210ms cubic-bezier(0.32, 0.72, 0, 1) forwards;
- pointer-events: none;
+ /* Ablak / modal megnyíló animáció */
+ .bge-fluid-app .fixed.inset-0,
+ .bge-presence-modal-enter > .fixed.inset-0,
+ .bge-presence-backdrop-enter > .fixed.inset-0 {
+ animation: bgeBackdropFadeIn 150ms ease-out both;
  }
- .bge-liquid-item-1 {
- animation: bgeLiquidItemIn 300ms cubic-bezier(0.34, 1.32, 0.64, 1) 45ms both;
+ .bge-fluid-app .fixed.inset-0 > div,
+ .bge-presence-modal-enter > .fixed.inset-0 > div {
+ animation: bgeModalCardIn 200ms cubic-bezier(0.22, 1, 0.36, 1) both;
  }
- .bge-liquid-item-2 {
- animation: bgeLiquidItemIn 320ms cubic-bezier(0.34, 1.32, 0.64, 1) 90ms both;
- }
- .bge-liquid-item-3 {
- animation: bgeLiquidItemIn 340ms cubic-bezier(0.34, 1.32, 0.64, 1) 135ms both;
- }
- .bge-fluid-app .fixed.inset-0 {
- animation: bgeBackdropFadeIn 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
- }
- .bge-fluid-app .fixed.inset-0 > div {
- animation: bgeFluidEnter 320ms cubic-bezier(0.34, 1.24, 0.64, 1) both;
- }
- @keyframes bgeSlideFromRight {
- 0% {
- opacity: 0;
- transform: translate3d(20px, 0, 0);
- }
- 100% {
- opacity: 1;
- transform: translate3d(0, 0, 0);
- }
- }
- @keyframes bgeSlideFromLeft {
- 0% {
- opacity: 0;
- transform: translate3d(-20px, 0, 0);
- }
- 100% {
- opacity: 1;
- transform: translate3d(0, 0, 0);
- }
- }
- @keyframes bgeBottomSheetSlideUp {
- 0% {
- opacity: 0;
- transform: translate3d(0, 18px, 0) scale(0.96);
- filter: blur(8px);
- }
- 100% {
- opacity: 1;
- transform: translate3d(0, 0, 0) scale(1);
- filter: blur(0px);
- }
- }
- @keyframes bgeMobileSlideFromRight {
- 0% {
- opacity: 0;
- transform: translate3d(24px, 0, 0);
- }
- 100% {
- opacity: 1;
- transform: translate3d(0, 0, 0);
- }
- }
- @keyframes bgeMobileSlideFromLeft {
- 0% {
- opacity: 0;
- transform: translate3d(-24px, 0, 0);
- }
- 100% {
- opacity: 1;
- transform: translate3d(0, 0, 0);
- }
- }
+ /* Lapozó (oldalváltó) animáció */
  .bge-view-slide-left {
- animation: bgeSlideFromRight 300ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+ animation: bgeSlideFromRight 220ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
  }
  .bge-view-slide-right {
- animation: bgeSlideFromLeft 300ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
- }
- @media (max-width: 767px) {
- .bge-view-slide-left {
- animation: bgeMobileSlideFromRight 280ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
- }
- .bge-view-slide-right {
- animation: bgeMobileSlideFromLeft 280ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
- }
- }
- .bge-nav-sliding-pill {
- transition: transform 340ms cubic-bezier(0.34, 1.32, 0.64, 1), box-shadow 260ms cubic-bezier(0.22, 1, 0.36, 1);
- will-change: transform;
+ animation: bgeSlideFromLeft 220ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
  }
  .bge-view-slide-left section,
  .bge-view-slide-left article,
@@ -9902,9 +9828,14 @@ export default function App() {
  .bge-view-slide-right article {
  animation: none !important;
  }
+ /* Navigációs sáv kiemelt kapszula mozgó animációja */
+ .bge-nav-sliding-pill {
+ transition: transform 280ms cubic-bezier(0.34, 1.28, 0.64, 1);
+ will-change: transform;
+ }
  .bge-bottom-nav-capsule {
- backdrop-filter: blur(24px) saturate(185%);
- -webkit-backdrop-filter: blur(24px) saturate(185%);
+ backdrop-filter: blur(22px) saturate(175%);
+ -webkit-backdrop-filter: blur(22px) saturate(175%);
  }
  .bge-bottom-nav-capsule::before {
  content: "";
@@ -9914,33 +9845,12 @@ export default function App() {
  pointer-events: none;
  background: linear-gradient(135deg, rgba(255, 255, 255, 0.36) 0%, rgba(255, 255, 255, 0.08) 45%, rgba(251, 191, 36, 0.14) 100%);
  }
- @keyframes bgeMenuCardIn {
- 0% {
- opacity: 0;
- transform: translate3d(0, 14px, 0) scale(0.98);
- filter: blur(4px);
- }
- 100% {
- opacity: 1;
- transform: translate3d(0, 0, 0) scale(1);
- filter: blur(0px);
- }
- }
- .bge-menu-card {
- animation: bgeMenuCardIn 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
- will-change: transform, opacity;
- }
- .bge-menu-card-1 { animation-delay: 25ms; }
- .bge-menu-card-2 { animation-delay: 70ms; }
- .bge-menu-card-3 { animation-delay: 115ms; }
- .bge-menu-card-4 { animation-delay: 160ms; }
- .bge-menu-card-5 { animation-delay: 205ms; }
  /* === TELJES APPLIKÁCIÓS FROSTED GLASS RENDSZER === */
  .bge-fluid-app header,
  .bge-fluid-app .rounded-2xl,
  .bge-fluid-app .rounded-3xl {
- backdrop-filter: blur(18px) saturate(165%);
- -webkit-backdrop-filter: blur(18px) saturate(165%);
+ backdrop-filter: blur(16px) saturate(155%);
+ -webkit-backdrop-filter: blur(16px) saturate(155%);
  }
  .bge-fluid-app footer {
  background-color: transparent !important;
@@ -9950,37 +9860,37 @@ export default function App() {
  .bge-fluid-app.bge-glass-dark header,
  .bge-fluid-app.bge-glass-dark header.bge-dashboard-header {
  background-color: rgba(15, 23, 42, 0.48) !important;
- backdrop-filter: blur(26px) saturate(190%) !important;
- -webkit-backdrop-filter: blur(26px) saturate(190%) !important;
+ backdrop-filter: blur(22px) saturate(180%) !important;
+ -webkit-backdrop-filter: blur(22px) saturate(180%) !important;
  border-bottom: 1px solid rgba(255, 255, 255, 0.14) !important;
  box-shadow: 0 8px 28px rgba(2, 6, 23, 0.26), inset 0 -1px 0 rgba(255, 255, 255, 0.08) !important;
  }
  .bge-fluid-app.bge-glass-light header,
  .bge-fluid-app.bge-glass-light header.bge-dashboard-header {
  background-color: rgba(255, 255, 255, 0.44) !important;
- backdrop-filter: blur(26px) saturate(190%) !important;
- -webkit-backdrop-filter: blur(26px) saturate(190%) !important;
+ backdrop-filter: blur(22px) saturate(180%) !important;
+ -webkit-backdrop-filter: blur(22px) saturate(180%) !important;
  border-bottom: 1px solid rgba(255, 255, 255, 0.72) !important;
  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.07), inset 0 -1px 0 rgba(255, 255, 255, 0.55) !important;
  }
  .bge-fluid-app.bge-glass-dark .bge-frosted-dropdown {
  background-color: rgba(15, 23, 42, 0.82) !important;
- backdrop-filter: blur(28px) saturate(190%) !important;
- -webkit-backdrop-filter: blur(28px) saturate(190%) !important;
+ backdrop-filter: blur(24px) saturate(180%) !important;
+ -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
  border: 1px solid rgba(255, 255, 255, 0.18) !important;
  box-shadow: 0 20px 44px rgba(2, 6, 23, 0.62), inset 0 1px 0 rgba(255, 255, 255, 0.16) !important;
  }
  .bge-fluid-app.bge-glass-light .bge-frosted-dropdown {
  background-color: rgba(255, 255, 255, 0.84) !important;
- backdrop-filter: blur(28px) saturate(190%) !important;
- -webkit-backdrop-filter: blur(28px) saturate(190%) !important;
+ backdrop-filter: blur(24px) saturate(180%) !important;
+ -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
  border: 1px solid rgba(255, 255, 255, 0.88) !important;
  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.9) !important;
  }
  .bge-fluid-app button:not([data-no-glass="true"]):not([data-no-glass="ghost"]),
  .bge-fluid-app a[href]:not([data-no-glass="true"]):not([data-no-glass="ghost"]) {
- backdrop-filter: blur(14px) saturate(160%);
- -webkit-backdrop-filter: blur(14px) saturate(160%);
+ backdrop-filter: blur(12px) saturate(150%);
+ -webkit-backdrop-filter: blur(12px) saturate(150%);
  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.24);
  }
  .bge-fluid-app button[data-no-glass="true"],
@@ -9996,122 +9906,9 @@ export default function App() {
  -webkit-backdrop-filter: none !important;
  box-shadow: none !important;
  }
- .bge-fluid-app svg,
- .bge-fluid-app canvas {
- filter: drop-shadow(0 4px 12px rgba(15, 23, 42, 0.12));
- }
  .bge-fluid-app .rounded-full.overflow-hidden,
  .bge-fluid-app .rounded-full.overflow-visible {
- backdrop-filter: blur(10px) saturate(150%);
- -webkit-backdrop-filter: blur(10px) saturate(150%);
  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.14);
- }
-
- /* === NYITÁS, BECSUKÁS ÉS ÁLLAPOTVÁLTÁS ANIMÁCIÓK === */
- @keyframes bgeModalBackdropIn {
- from { opacity: 0; backdrop-filter: blur(0px); }
- to { opacity: 1; backdrop-filter: blur(10px); }
- }
- @keyframes bgeModalBackdropOut {
- from { opacity: 1; backdrop-filter: blur(10px); }
- to { opacity: 0; backdrop-filter: blur(0px); }
- }
- @keyframes bgeModalCardIn {
- from { opacity: 0; transform: translate3d(0, 18px, 0) scale(0.95); filter: blur(6px); }
- to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); filter: blur(0px); }
- }
- @keyframes bgeModalCardOut {
- from { opacity: 1; transform: translate3d(0, 0, 0) scale(1); filter: blur(0px); }
- to { opacity: 0; transform: translate3d(0, 16px, 0) scale(0.94); filter: blur(8px); }
- }
- @keyframes bgeSheetOut {
- from { opacity: 1; transform: translate3d(0, 0, 0) scale(1); filter: blur(0px); }
- to { opacity: 0; transform: translate3d(0, 22px, 0) scale(0.95); filter: blur(10px); }
- }
- @keyframes bgeDropdownIn {
- 0% { opacity: 0; transform: translate3d(0, -8px, 0) scale(0.96); }
- 100% { opacity: 1; transform: none; }
- }
- @keyframes bgeDropdownOut {
- 0% { opacity: 1; transform: none; }
- 100% { opacity: 0; transform: translate3d(0, -8px, 0) scale(0.96); }
- }
- @keyframes bgeCollapseOut {
- from { opacity: 1; transform: translate3d(0, 0, 0) scaleY(1); filter: blur(0px); }
- to { opacity: 0; transform: translate3d(0, -10px, 0) scaleY(0.96); filter: blur(4px); }
- }
- @keyframes bgeToastIn {
- from { opacity: 0; transform: translate3d(0, 14px, 0) scale(0.95); filter: blur(6px); }
- to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); filter: blur(0px); }
- }
- @keyframes bgeToastOut {
- from { opacity: 1; transform: translate3d(0, 0, 0) scale(1); filter: blur(0px); }
- to { opacity: 0; transform: translate3d(0, 14px, 0) scale(0.95); filter: blur(6px); }
- }
- @keyframes bgeStepMorph {
- from { opacity: 0; transform: translate3d(12px, 0, 0) scale(0.985); filter: blur(4px); }
- to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); filter: blur(0px); }
- }
-
- .bge-presence-modal-enter > .fixed.inset-0 {
- animation: bgeModalBackdropIn 240ms cubic-bezier(0.22, 1, 0.36, 1) both;
- }
- .bge-presence-modal-enter > .fixed.inset-0 > div {
- animation: bgeModalCardIn 300ms cubic-bezier(0.34, 1.24, 0.64, 1) both;
- }
- .bge-presence-modal-exit > .fixed.inset-0 {
- animation: bgeModalBackdropOut 230ms cubic-bezier(0.32, 0.72, 0, 1) forwards !important;
- pointer-events: none !important;
- }
- .bge-presence-modal-exit > .fixed.inset-0 > div {
- animation: bgeModalCardOut 230ms cubic-bezier(0.32, 0.72, 0, 1) forwards !important;
- pointer-events: none !important;
- }
-
- .bge-presence-backdrop-enter > .fixed.inset-0 {
- animation: bgeModalBackdropIn 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
- }
- .bge-presence-backdrop-exit > .fixed.inset-0 {
- animation: bgeModalBackdropOut 220ms cubic-bezier(0.32, 0.72, 0, 1) forwards !important;
- pointer-events: none !important;
- }
-
- .bge-presence-sheet-enter {
- animation: bgeBottomSheetSlideUp 280ms cubic-bezier(0.34, 1.32, 0.64, 1) both;
- }
- .bge-presence-sheet-exit {
- animation: bgeSheetOut 220ms cubic-bezier(0.32, 0.72, 0, 1) forwards !important;
- pointer-events: none !important;
- }
-
- .bge-presence-dropdown-enter > * {
- animation: bgeDropdownIn 220ms cubic-bezier(0.34, 1.28, 0.64, 1) backwards;
- }
- .bge-presence-dropdown-exit > * {
- animation: bgeDropdownOut 185ms cubic-bezier(0.32, 0.72, 0, 1) forwards !important;
- pointer-events: none !important;
- }
-
- .bge-presence-collapse-enter {
- animation: bgeCollapseReveal 280ms cubic-bezier(0.34, 1.25, 0.64, 1) both;
- transform-origin: top center;
- }
- .bge-presence-collapse-exit {
- animation: bgeCollapseOut 210ms cubic-bezier(0.32, 0.72, 0, 1) forwards !important;
- transform-origin: top center;
- pointer-events: none !important;
- }
-
- .bge-presence-toast-enter > * {
- animation: bgeToastIn 260ms cubic-bezier(0.34, 1.28, 0.64, 1) both;
- }
- .bge-presence-toast-exit > * {
- animation: bgeToastOut 210ms cubic-bezier(0.32, 0.72, 0, 1) forwards !important;
- pointer-events: none !important;
- }
-
- .bge-step-enter {
- animation: bgeStepMorph 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
  }
 
  @media (prefers-reduced-motion: reduce) {
@@ -11381,6 +11178,8 @@ export default function App() {
         <div
          key={item.key}
          className={`p-2.5 sm:p-3 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 transition ${
+          item.isGroupedUnderAttendance ? 'ml-3 sm:ml-5 border-l-2 border-l-emerald-500/70' : ''
+         } ${
           item.hasValue && !isDirty
            ? darkMode ? 'bg-emerald-500/10 border-emerald-500/35' : 'bg-emerald-50/75 border-emerald-300'
            : bgSubCard

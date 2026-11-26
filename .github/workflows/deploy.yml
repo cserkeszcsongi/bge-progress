@@ -15,7 +15,10 @@ jobs:
           node-version: '20'
           cache: 'npm'
           
-      - run: npm install && npm run build
+      - name: Install and build
+        env:
+          VITE_FIREBASE_VAPID_KEY: ${{ secrets.VITE_FIREBASE_VAPID_KEY }}
+        run: npm install && npm run build
       
       - name: Deploy to Firebase
         run: npx firebase-tools deploy --token "${{ secrets.FIREBASE_TOKEN }}" --non-interactive

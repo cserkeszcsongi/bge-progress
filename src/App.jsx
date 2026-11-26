@@ -19079,10 +19079,7 @@ export default function App() {
  </div>
  </div>
  </div>
- ) : st.isExamCourse ? (() => {
- const examCourseAttempts = (activeSubject.assessments || []).filter(a => a.category === 'ZH');
- const activeAttemptNum = Math.max(1, examCourseAttempts.length);
- return (
+ ) : st.isExamCourse ? (
  <>
  <div className="grid grid-cols-1 gap-3 text-center">
  <div className={`p-4 rounded-xl border-2 ${darkMode ? 'bg-slate-800 border-amber-400/50' : 'bg-amber-50/60 border-amber-400'}`}>
@@ -19091,7 +19088,7 @@ export default function App() {
  <span className={`px-2 py-0.5 rounded-full text-[11px] font-extrabold ${
  darkMode ? 'bg-violet-500/20 text-violet-300 border border-violet-500/40' : 'bg-violet-100 text-violet-800 border border-violet-300'
  }`}>
- {activeAttemptNum}. / 3 vizsgaalkalom
+ {Math.max(1, (activeSubject.assessments || []).filter(a => a.category === 'ZH').length)}. / 3 vizsgaalkalom
  </span>
  </div>
  <p className={`text-2xl font-extrabold mt-1 ${textStrong}`}>
@@ -19110,7 +19107,7 @@ export default function App() {
  <span className={`text-xs ${textMuted}`}>2-es határ: 59,5 pont • Max: 100 pont • Max. 3 alkalom</span>
  </div>
 
- {examCourseAttempts.length === 0 ? (
+ {(activeSubject.assessments || []).filter(a => a.category === 'ZH').length === 0 ? (
  <div className={`p-4 rounded-xl border text-center space-y-2 ${bgSubCard}`}>
  <p className={`text-xs ${textMuted}`}>Még nincs rögzített vizsga tétel ehhez a kurzushoz.</p>
  <button
@@ -19133,8 +19130,8 @@ export default function App() {
  </div>
  ) : (
  <div className="space-y-2.5">
- {examCourseAttempts.map((item, idx) => renderItemRow(item, null, idx))}
- {examCourseAttempts.length >= 3 && st.hasExamScore && st.osszElert < 59.5 && (
+ {(activeSubject.assessments || []).filter(a => a.category === 'ZH').map((item, idx) => renderItemRow(item, null, idx))}
+ {(activeSubject.assessments || []).filter(a => a.category === 'ZH').length >= 3 && st.hasExamScore && st.osszElert < 59.5 && (
  <p className={`text-xs font-semibold px-3 py-2 rounded-xl border ${
  darkMode ? 'bg-rose-950/35 border-rose-500/40 text-rose-300' : 'bg-rose-50 border-rose-300 text-rose-800'
  }`}>
@@ -19145,8 +19142,6 @@ export default function App() {
  )}
  </div>
  </>
- );
- })()
  ) : detailTab === 'points' ? (
  <>
  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3 text-center">

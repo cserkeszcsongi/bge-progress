@@ -2789,6 +2789,302 @@ function normalizeDateToIso(rawDate) {
  return '';
 }
 
+function parseKeyboardAttendanceDate(rawInput) {
+ const str = String(rawInput || '').trim();
+ if (!str) return '';
+
+ const buildValidIso = (yearNum, monthNum, dayNum) => {
+  if (yearNum < 2000 || yearNum > 2099) return null;
+  if (monthNum < 1 || monthNum > 12) return null;
+  if (dayNum < 1 || dayNum > 31) return null;
+  const dt = new Date(Date.UTC(yearNum, monthNum - 1, dayNum));
+  if (
+   dt.getUTCFullYear() !== yearNum ||
+   dt.getUTCMonth() + 1 !== monthNum ||
+   dt.getUTCDate() !== dayNum
+  ) {
+   return null;
+  }
+  return `${yearNum}-${String(monthNum).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
+ };
+
+ // Compact 8 digits: 20260901
+ const compact8 = str.match(/^(\d{4})(\d{2})(\d{2})$/);
+ if (compact8) {
+  return buildValidIso(Number(compact8[1]), Number(compact8[2]), Number(compact8[3]));
+ }
+
+ // Full date with separators: 2026-09-01, 2026.09.01., 2026. 09. 01., 2026/9/1
+ const fullSep = str.match(/^(\d{4})[.\-/\s]+(\d{1,2})[.\-/\s]+(\d{1,2})\.?$/);
+ if (fullSep) {
+  return buildValidIso(Number(fullSep[1]), Number(fullSep[2]), Number(fullSep[3]));
+ }
+
+ // Short month+day without year: 09.01, 9.1., 09-01, 09/01 -> defaults to current year
+ const shortSep = str.match(/^(\d{1,2})[.\-/\s]+(\d{1,2})\.?$/);
+ if (shortSep) {
+  return buildValidIso(new Date().getFullYear(), Number(shortSep[1]), Number(shortSep[2]));
+ }
+
+ // Compact 4 digits: 0901 -> defaults to current year
+ const compact4 = str.match(/^(\d{2})(\d{2})$/);
+ if (compact4) {
+  return buildValidIso(new Date().getFullYear(), Number(compact4[1]), Number(compact4[2]));
+ }
+
+ return null;
+}
+
+function parseKeyboardAttendanceTime(rawInput) {
+ const str = String(rawInput || '').trim();
+ if (!str) return '';
+
+ const buildValidHHMM = (hh, mm) => {
+  if (hh < 0 || hh > 23 || mm < 0 || mm > 59) return null;
+  return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
+ };
+
+ // Separated: 8:20, 08:20, 8.20, 08-20, 8 20
+ const sepMatch = str.match(/^(\d{1,2})[:.\-\s]+(\d{1,2})$/);
+ if (sepMatch) {
+  return buildValidHHMM(Number(sepMatch[1]), Number(sepMatch[2]));
+ }
+
+ // Digits only: "8" -> 08:00, "14" -> 14:00, "820" -> 08:20, "0820" -> 08:20, "1430" -> 14:30
+ if (/^\d{1,4}$/.test(str)) {
+  if (str.length <= 2) {
+   return buildValidHHMM(Number(str), 0);
+  }
+  if (str.length === 3) {
+   return buildValidHHMM(Number(str.slice(0, 1)), Number(str.slice(1)));
+  }
+  return buildValidHHMM(Number(str.slice(0, 2)), Number(str.slice(2)));
+ }
+
+ return null;
+}
+
+function AttendanceDateInput({ value, onCommit, darkMode, inputStyle }) {
+ const [draft, setDraft] = useState(value || '');
+ const [isFocused, setIsFocused] = useState(false);
+ const [hasError, setHasError] = useState(false);
+ const nativePickerRef = useRef(null);
+
+ useEffect(() => {
+  if (!isFocused) {
+   setDraft(value || '');
+   setHasError(false);
+  }
+ }, [value, isFocused]);
+
+ const commitDraft = (rawText) => {
+  const trimmed = String(rawText ?? draft).trim();
+  if (!trimmed) {
+   setHasError(false);
+   setDraft('');
+   if ((value || '') !== '') {
+    onCommit('');
+   }
+   return;
+  }
+  const parsedIso = parseKeyboardAttendanceDate(trimmed);
+  if (!parsedIso) {
+   setHasError(true);
+   return;
+  }
+  setHasError(false);
+  setDraft(parsedIso);
+  if (parsedIso !== (value || '')) {
+   onCommit(parsedIso);
+  }
+ };
+
+ const openNativePicker = () => {
+  const el = nativePickerRef.current;
+  if (!el) return;
+  try {
+   if (typeof el.showPicker === 'function') {
+    el.showPicker();
+   } else {
+    el.focus();
+    el.click();
+   }
+  } catch {
+   el.focus();
+   el.click();
+  }
+ };
+
+ return (
+  <div className="relative inline-flex items-center">
+   <input
+    type="text"
+    inputMode="numeric"
+    autoComplete="off"
+    spellCheck={false}
+    value={draft}
+    placeholder="ÉÉÉÉ-HH-NN"
+    title="Dátum beírása billentyűzettel (pl. 2026-09-01, 2026.09.01, 09.01) vagy naptár ikon"
+    onFocus={() => setIsFocused(true)}
+    onChange={(e) => {
+     setDraft(e.target.value);
+     if (hasError) setHasError(false);
+    }}
+    onBlur={() => {
+     setIsFocused(false);
+     commitDraft(draft);
+    }}
+    onKeyDown={(e) => {
+     if (e.key === 'Enter') {
+      e.preventDefault();
+      e.stopPropagation();
+      commitDraft(draft);
+      e.currentTarget.blur();
+     } else if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      setDraft(value || '');
+      setHasError(false);
+      e.currentTarget.blur();
+     }
+    }}
+    className={`w-[126px] sm:w-[116px] border rounded-lg pl-2.5 pr-7 py-2 sm:py-1.5 text-sm sm:text-xs font-mono focus:outline-none transition ${inputStyle} ${
+     hasError ? '!border-rose-500 ring-2 ring-rose-500/25' : ''
+    }`}
+   />
+   <input
+    ref={nativePickerRef}
+    type="date"
+    tabIndex={-1}
+    aria-hidden="true"
+    value={/^\d{4}-\d{2}-\d{2}$/.test(draft) ? draft : (value || '')}
+    onChange={(e) => {
+     const nextVal = e.target.value || '';
+     setDraft(nextVal);
+     setHasError(false);
+     if (nextVal !== (value || '')) {
+      onCommit(nextVal);
+     }
+    }}
+    className="sr-only pointer-events-none"
+   />
+   <button
+    type="button"
+    data-no-glass="true"
+    tabIndex={-1}
+    onClick={openNativePicker}
+    title="Naptár megnyitása"
+    aria-label="Naptár megnyitása"
+    className={`absolute right-1.5 p-1 rounded transition cursor-pointer ${
+     darkMode ? 'text-slate-400 hover:text-amber-300' : 'text-slate-500 hover:text-amber-600'
+    }`}
+   >
+    <Calendar className="w-3.5 h-3.5" />
+   </button>
+  </div>
+ );
+}
+
+function AttendanceTimeInput({ value, onCommit, darkMode, inputStyle }) {
+ const [draft, setDraft] = useState(value || '');
+ const [isFocused, setIsFocused] = useState(false);
+ const [hasError, setHasError] = useState(false);
+
+ useEffect(() => {
+  if (!isFocused) {
+   setDraft(value || '');
+   setHasError(false);
+  }
+ }, [value, isFocused]);
+
+ const commitDraft = (rawText) => {
+  const trimmed = String(rawText ?? draft).trim();
+  if (!trimmed) {
+   setHasError(false);
+   setDraft('');
+   if ((value || '') !== '') {
+    onCommit('');
+   }
+   return;
+  }
+  const parsedTime = parseKeyboardAttendanceTime(trimmed);
+  if (!parsedTime) {
+   setHasError(true);
+   return;
+  }
+  setHasError(false);
+  setDraft(parsedTime);
+  if (parsedTime !== (value || '')) {
+   onCommit(parsedTime);
+  }
+ };
+
+ return (
+  <div className="relative inline-flex items-center">
+   <input
+    type="text"
+    inputMode="numeric"
+    autoComplete="off"
+    spellCheck={false}
+    maxLength={5}
+    value={draft}
+    placeholder="ÓÓ:PP"
+    title="Kezdési időpont billentyűzettel (pl. 08:20, 8:20, 8.20 vagy 820)"
+    onFocus={() => setIsFocused(true)}
+    onChange={(e) => {
+     setDraft(e.target.value);
+     if (hasError) setHasError(false);
+    }}
+    onBlur={() => {
+     setIsFocused(false);
+     commitDraft(draft);
+    }}
+    onKeyDown={(e) => {
+     if (e.key === 'Enter') {
+      e.preventDefault();
+      e.stopPropagation();
+      commitDraft(draft);
+      e.currentTarget.blur();
+     } else if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      setDraft(value || '');
+      setHasError(false);
+      e.currentTarget.blur();
+     }
+    }}
+    className={`w-[86px] sm:w-[78px] border rounded-lg pl-2.5 pr-6 py-2 sm:py-1.5 text-sm sm:text-xs font-mono focus:outline-none transition ${inputStyle} ${
+     hasError ? '!border-rose-500 ring-2 ring-rose-500/25' : ''
+    }`}
+   />
+   {draft ? (
+    <button
+     type="button"
+     data-no-glass="true"
+     tabIndex={-1}
+     onMouseDown={(e) => {
+      e.preventDefault();
+      setDraft('');
+      setHasError(false);
+      if ((value || '') !== '') {
+       onCommit('');
+      }
+     }}
+     title="Időpont törlése"
+     aria-label="Időpont törlése"
+     className={`absolute right-1 p-0.5 rounded transition cursor-pointer ${
+      darkMode ? 'text-slate-400 hover:text-rose-400' : 'text-slate-400 hover:text-rose-500'
+     }`}
+    >
+     <X className="w-3 h-3" />
+    </button>
+   ) : (
+    <Clock className={`pointer-events-none absolute right-2 w-3.5 h-3.5 ${darkMode ? 'text-slate-500' : 'text-slate-400'}`} />
+   )}
+  </div>
+ );
+}
+
 function DinoRunnerGame({ darkMode }) {
  const canvasRef = useRef(null);
  const [score, setScore] = useState(0);
@@ -18267,18 +18563,17 @@ export default function App() {
  }`}>
  {idx + 1}.
  </span>
- <input
- type="date"
+ <AttendanceDateInput
  value={sess.date || ''}
- onChange={(e) => handleUpdateSession(idx, { date: e.target.value })}
- className={`border rounded-lg px-2.5 py-2 sm:py-1.5 text-sm sm:text-xs focus:outline-none ${inputStyle}`}
+ onCommit={(nextDate) => handleUpdateSession(idx, { date: nextDate })}
+ darkMode={darkMode}
+ inputStyle={inputStyle}
  />
- <input
- type="time"
+ <AttendanceTimeInput
  value={sess.time || ''}
- onChange={(e) => handleUpdateSession(idx, { time: e.target.value })}
- title="Kezdési időpont (óra:perc)"
- className={`border rounded-lg px-2 py-2 sm:py-1.5 text-sm sm:text-xs focus:outline-none ${inputStyle}`}
+ onCommit={(nextTime) => handleUpdateSession(idx, { time: nextTime })}
+ darkMode={darkMode}
+ inputStyle={inputStyle}
  />
  </div>
 
@@ -18414,18 +18709,17 @@ export default function App() {
  }`}>
  {idx + 1}.
  </span>
- <input
- type="date"
+ <AttendanceDateInput
  value={sess.date || ''}
- onChange={(e) => handleUpdateLectureSession(idx, { date: e.target.value })}
- className={`border rounded-lg px-2.5 py-2 sm:py-1.5 text-sm sm:text-xs focus:outline-none ${inputStyle}`}
+ onCommit={(nextDate) => handleUpdateLectureSession(idx, { date: nextDate })}
+ darkMode={darkMode}
+ inputStyle={inputStyle}
  />
- <input
- type="time"
+ <AttendanceTimeInput
  value={sess.time || ''}
- onChange={(e) => handleUpdateLectureSession(idx, { time: e.target.value })}
- title="Kezdési időpont (óra:perc)"
- className={`border rounded-lg px-2 py-2 sm:py-1.5 text-sm sm:text-xs focus:outline-none ${inputStyle}`}
+ onCommit={(nextTime) => handleUpdateLectureSession(idx, { time: nextTime })}
+ darkMode={darkMode}
+ inputStyle={inputStyle}
  />
  </div>
 

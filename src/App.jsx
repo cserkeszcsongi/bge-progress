@@ -3382,6 +3382,8 @@ function AnimatedPresence({
  lastChildrenRef.current = children;
  }
 
+ const isReducedMotion = typeof document !== 'undefined' && document.documentElement?.dataset?.reduceAnimations === 'true';
+
  useEffect(() => {
  if (show) {
  setShouldRender(true);
@@ -3389,12 +3391,16 @@ function AnimatedPresence({
  return;
  }
  if (!shouldRender) return;
+ if (isReducedMotion) {
+ setShouldRender(false);
+ return;
+ }
  setStage('exit');
  const timer = setTimeout(() => {
  setShouldRender(false);
  }, duration);
  return () => clearTimeout(timer);
- }, [show, duration, shouldRender]);
+ }, [show, duration, shouldRender, isReducedMotion]);
 
  const content = show ? children : lastChildrenRef.current;
  if (!shouldRender || !content) return null;
@@ -3412,7 +3418,13 @@ function AnimatedPresence({
  );
 }
 
-function WavyLogoSplashScreen({ darkMode, targetProgress = 0.2, isDataReady = false, onComplete }) {
+function WavyLogoSplashScreen({ darkMode, targetProgress = 0.2, isDataReady = false, reduceAnimations = false, onComplete }) {
+ useEffect(() => {
+ if (reduceAnimations && isDataReady && onComplete) {
+ onComplete();
+ }
+ }, [reduceAnimations, isDataReady, onComplete]);
+
  const frontWaveRef = useRef(null);
  const backWaveRef = useRef(null);
  const [percent, setPercent] = useState(0);
@@ -3626,6 +3638,9 @@ export default function App() {
  const [darkMode, setDarkMode] = useState(() => localStorage.getItem('bge_theme') === 'dark');
  const [monochrome, setMonochrome] = useState(() => localStorage.getItem('bge_palette') === 'monochrome');
  const [simpleView, setSimpleView] = useState(() => localStorage.getItem('bge_card_view') === 'simple');
+ const [reduceAnimations, setReduceAnimations] = useState(() => localStorage.getItem('bge_reduce_animations') === 'true');
+ const [isNotifPromptVisible, setIsNotifPromptVisible] = useState(false);
+ const [isNotifPromptDismissedSession, setIsNotifPromptDismissedSession] = useState(false);
 
  const [isStatsModalOpen, setIsStatsModalOpen] = useState(false);
  const [appUsersStats, setAppUsersStats] = useState({ totalUsers: 0, activeUsers: 0, majorCounts: {}, unknownMajorCount: 0 });
@@ -3987,6 +4002,11 @@ export default function App() {
  collectorCloseTimerRef.current = null;
  }
  if (isCollectorMenuOpen) {
+ if (reduceAnimations) {
+ setIsCollectorMenuOpen(false);
+ setIsCollectorClosing(false);
+ return;
+ }
  setIsCollectorClosing(true);
  collectorCloseTimerRef.current = setTimeout(() => {
  setIsCollectorMenuOpen(false);
@@ -4007,6 +4027,12 @@ export default function App() {
  if (collectorCloseTimerRef.current) {
  clearTimeout(collectorCloseTimerRef.current);
  collectorCloseTimerRef.current = null;
+ }
+ if (reduceAnimations) {
+ setIsCollectorMenuOpen(false);
+ setIsCollectorClosing(false);
+ if (afterClose) afterClose();
+ return;
  }
  setIsCollectorClosing(true);
  collectorCloseTimerRef.current = setTimeout(() => {
@@ -4075,6 +4101,11 @@ export default function App() {
  homePlusCloseTimerRef.current = null;
  }
  if (isHomePlusMenuOpen) {
+ if (reduceAnimations) {
+ setIsHomePlusMenuOpen(false);
+ setIsHomePlusMenuClosing(false);
+ return;
+ }
  setIsHomePlusMenuClosing(true);
  homePlusCloseTimerRef.current = setTimeout(() => {
  setIsHomePlusMenuOpen(false);
@@ -4095,6 +4126,12 @@ export default function App() {
  if (homePlusCloseTimerRef.current) {
  clearTimeout(homePlusCloseTimerRef.current);
  homePlusCloseTimerRef.current = null;
+ }
+ if (reduceAnimations) {
+ setIsHomePlusMenuOpen(false);
+ setIsHomePlusMenuClosing(false);
+ if (afterClose) afterClose();
+ return;
  }
  setIsHomePlusMenuClosing(true);
  homePlusCloseTimerRef.current = setTimeout(() => {
@@ -4197,6 +4234,29 @@ export default function App() {
  useEffect(() => {
  localStorage.setItem('bge_card_view', simpleView ? 'simple' : 'detailed');
  }, [simpleView]);
+
+ useEffect(() => {
+ try {
+ localStorage.setItem('bge_reduce_animations', reduceAnimations ? 'true' : 'false');
+ } catch {
+ // ignore
+ }
+ if (typeof document !== 'undefined') {
+ document.documentElement.dataset.reduceAnimations = reduceAnimations ? 'true' : 'false';
+ }
+ }, [reduceAnimations]);
+
+ const handleToggleReduceAnimations = (nextVal) => {
+ const enabled = Boolean(nextVal);
+ setReduceAnimations(enabled);
+ if (user) {
+ setDoc(
+ doc(db, 'users', user.uid, 'settings', 'preferences'),
+ { reduceAnimations: enabled },
+ { merge: true }
+ ).catch(() => {});
+ }
+ };
 
  useEffect(() => {
  localStorage.setItem('bge_subject_sort_mode', sortMode);
@@ -4779,6 +4839,27 @@ export default function App() {
  const mustAcceptGdpr = Boolean(user && userDataLoaded && !hasAcceptedGdpr);
  const mustSelectMajor = Boolean(user && userDataLoaded && hasAcceptedGdpr && !userMajorId);
 
+ const canShowNotifPrompt = Boolean(
+ user &&
+ userDataLoaded &&
+ !mustAcceptGdpr &&
+ !mustSelectMajor &&
+ notifPermissionState !== 'unsupported' &&
+ !(notifEnabled && notifPermissionState === 'granted') &&
+ !isNotifPromptDismissedSession
+ );
+
+ useEffect(() => {
+ if (!canShowNotifPrompt) {
+ setIsNotifPromptVisible(false);
+ return;
+ }
+ const timer = setTimeout(() => {
+ setIsNotifPromptVisible(true);
+ }, 1400);
+ return () => clearTimeout(timer);
+ }, [canShowNotifPrompt]);
+
  const userMajorObj = useMemo(
  () => BGE_MAJORS.find(m => m.id === userMajorId) || null,
  [userMajorId]
@@ -5307,6 +5388,14 @@ export default function App() {
  if (typeof data.subjectSortMode === 'string') {
  setSortMode(data.subjectSortMode);
  localStorage.setItem('bge_subject_sort_mode', data.subjectSortMode);
+ }
+ if (typeof data.reduceAnimations === 'boolean') {
+ setReduceAnimations(data.reduceAnimations);
+ try {
+ localStorage.setItem('bge_reduce_animations', data.reduceAnimations ? 'true' : 'false');
+ } catch {
+ // ignore
+ }
  }
  if (typeof data.notificationsEnabled === 'boolean') {
   const permGranted = typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted';
@@ -9454,6 +9543,7 @@ export default function App() {
  darkMode={darkMode}
  targetProgress={loadingTargetProgress}
  isDataReady={isDataReady}
+ reduceAnimations={reduceAnimations}
  onComplete={() => setSplashHidden(true)}
  />
  );
@@ -10065,6 +10155,39 @@ export default function App() {
  </div>
  </div>
  </div>
+
+ <button
+ type="button"
+ role="switch"
+ aria-checked={reduceAnimations}
+ onClick={() => handleToggleReduceAnimations(!reduceAnimations)}
+ className={`w-full px-4 py-3.5 rounded-2xl text-xs sm:text-sm font-bold border flex items-center justify-between gap-3 text-left transition cursor-pointer ${
+ reduceAnimations
+ ? darkMode
+ ? 'bg-amber-400/15 hover:bg-amber-400/22 text-amber-200 border-amber-400/45'
+ : 'bg-amber-50/90 hover:bg-amber-100/85 text-slate-900 border-amber-300'
+ : darkMode
+ ? 'bg-slate-800/65 hover:bg-slate-800 text-slate-100 border-white/12'
+ : 'bg-white/65 hover:bg-amber-50/75 text-slate-800 border-slate-200/90'
+ }`}
+ >
+ <span className="flex items-center gap-2.5 min-w-0">
+ <FastForward className={`w-4 h-4 shrink-0 ${reduceAnimations ? 'text-amber-500' : 'text-sky-500'}`} />
+ <span className="min-w-0">
+ <span className="block font-extrabold">Reduce animations</span>
+ <span className={`block text-[11px] font-medium mt-0.5 ${textMuted}`}>
+ Letiltja az animációkat és átmeneteket a gyorsabb, gördülékenyebb működésért
+ </span>
+ </span>
+ </span>
+ <span className={`px-3 py-1 rounded-full text-[11px] font-extrabold shrink-0 ${
+ reduceAnimations
+ ? 'bg-amber-400 text-slate-950'
+ : darkMode ? 'bg-slate-700 text-slate-300' : 'bg-slate-200 text-slate-700'
+ }`}>
+ {reduceAnimations ? 'BE' : 'KI'}
+ </span>
+ </button>
  </div>
 
  {/* 3. TANULMÁNYI BEÁLLÍTÁSOK KÁRTYA */}
@@ -10255,9 +10378,10 @@ export default function App() {
 
  <div className="flex items-center justify-between gap-2 pt-0.5">
  <button
+ data-no-glass="true"
  type="button"
  onClick={handleOpenNotifSettingsModal}
- className={`text-xs font-bold inline-flex items-center gap-1.5 hover:underline cursor-pointer ${
+ className={`bg-transparent text-xs font-bold inline-flex items-center gap-1.5 hover:underline cursor-pointer ${
  darkMode ? 'text-amber-400' : 'text-amber-700'
  }`}
  >
@@ -10575,7 +10699,7 @@ export default function App() {
  isNewVersionAvailable && Date.now() - updateBannerDismissedAt > 60 * 1000;
 
  return (
- <div className={`bge-fluid-app relative z-0 min-h-screen pb-32 sm:pb-28 transition-colors duration-300 ${bgPage}`}>
+ <div className={`bge-fluid-app ${reduceAnimations ? 'bge-reduce-motion' : ''} relative z-0 min-h-screen pb-32 sm:pb-28 transition-colors duration-300 ${bgPage}`}>
  <style>{`
  html, body {
  overflow-x: clip;
@@ -11000,6 +11124,23 @@ export default function App() {
  animation: bgeStepMorph 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
  }
 
+ .bge-fluid-app.bge-reduce-motion,
+ .bge-fluid-app.bge-reduce-motion *,
+ .bge-fluid-app.bge-reduce-motion *::before,
+ .bge-fluid-app.bge-reduce-motion *::after {
+ animation: none !important;
+ animation-duration: 0.001ms !important;
+ animation-iteration-count: 1 !important;
+ transition: none !important;
+ transition-duration: 0.001ms !important;
+ scroll-behavior: auto !important;
+ }
+ .bge-fluid-app.bge-reduce-motion button:active,
+ .bge-fluid-app.bge-reduce-motion [role="button"]:active,
+ .bge-fluid-app.bge-reduce-motion a[href]:active {
+ transform: none !important;
+ }
+
  @media (prefers-reduced-motion: reduce) {
  .bge-fluid-app *,
  .bge-fluid-app *::before,
@@ -11239,6 +11380,85 @@ export default function App() {
  setIsInstallMiniDismissedSession(true);
  }}
  className={`text-[11px] font-semibold cursor-pointer ${textMuted} hover:underline`}
+ >
+ Később
+ </button>
+ </div>
+ </div>
+ </div>
+ </div>
+ )}
+ </AnimatedPresence>
+
+ {/* KICSI FELUGRÓ ABLAK ÉRTESÍTÉSEK BEKAPCSOLÁSÁHOZ */}
+ <AnimatedPresence
+ show={Boolean(
+ canShowNotifPrompt &&
+ isNotifPromptVisible &&
+ !isAnyModalOpen &&
+ !(canShowMobileInstall && isInstallMiniPopupVisible)
+ )}
+ variant="toast"
+ duration={220}
+ >
+ {canShowNotifPrompt &&
+ isNotifPromptVisible &&
+ !isAnyModalOpen &&
+ !(canShowMobileInstall && isInstallMiniPopupVisible) && (
+ <div
+ className={`fixed bottom-[154px] left-3 right-3 sm:bottom-28 sm:left-5 sm:right-auto sm:max-w-xs z-40 rounded-2xl border-2 border-amber-400 p-3 shadow-2xl backdrop-blur-md transition-all ${
+ darkMode
+ ? 'bg-slate-900/95 text-slate-100 shadow-black/60'
+ : 'bg-white/95 text-slate-900 shadow-slate-900/20'
+ }`}
+ >
+ <div className="flex items-start gap-2.5">
+ <div className="w-8 h-8 rounded-xl bg-amber-400 text-slate-950 flex items-center justify-center shrink-0 mt-0.5">
+ <BellRing className="w-4 h-4" />
+ </div>
+ <div className="min-w-0 flex-1">
+ <div className="flex items-start justify-between gap-1">
+ <p className="text-xs font-extrabold leading-tight text-amber-500">
+ Kapcsold be az értesítéseket!
+ </p>
+ <button
+ data-no-glass="true"
+ type="button"
+ onClick={() => {
+ setIsNotifPromptVisible(false);
+ setIsNotifPromptDismissedSession(true);
+ }}
+ title="Bezárás"
+ aria-label="Értesítés felugró bezárása"
+ className={`bg-transparent p-0.5 -mt-0.5 -mr-1 rounded-md cursor-pointer ${textMuted} hover:text-amber-500`}
+ >
+ <X className="w-3.5 h-3.5" />
+ </button>
+ </div>
+ <p className={`text-[11px] leading-snug mt-0.5 ${darkMode ? 'text-slate-300' : 'text-slate-600'}`}>
+ {notifPermissionState === 'denied'
+ ? 'Az értesítések jelenleg le vannak tiltva a böngésződben. Engedélyezd őket, hogy ne maradj le a faliújságról és az óráidról!'
+ : 'Kapj értesítést az új faliújság közleményekről és a ma esedékes óráidról, ZH-król!'}
+ </p>
+ <div className="flex items-center gap-2 mt-2">
+ <button
+ type="button"
+ disabled={isRequestingNotifPerm}
+ onClick={async () => {
+ await handleTogglePushNotifications();
+ }}
+ className="px-2.5 py-1 rounded-lg text-[11px] font-extrabold bg-amber-400 hover:bg-amber-300 text-slate-950 inline-flex items-center gap-1 transition cursor-pointer disabled:opacity-60"
+ >
+ <BellRing className="w-3 h-3" /> {isRequestingNotifPerm ? 'Bekapcsolás...' : 'Bekapcsolás'}
+ </button>
+ <button
+ data-no-glass="true"
+ type="button"
+ onClick={() => {
+ setIsNotifPromptVisible(false);
+ setIsNotifPromptDismissedSession(true);
+ }}
+ className={`bg-transparent text-[11px] font-semibold cursor-pointer ${textMuted} hover:underline`}
  >
  Később
  </button>

@@ -709,7 +709,8 @@ const APP_RELEASES = [
     changes: [
       'Dátum és kezdési időpont megadása Joker ZH-hoz és vizsgához is: a Joker ZH kiválasztásakor és pontbeírásakor megadható az újraírás dátuma és időpontja, valamint a vizsgáknál (mind a vizsgakurzusoknál, mind az automatikus vizsgáknál) is rögzíthető a pontos vizsgaidőpont — mindkettő automatikusan megjelenik a „Ma esedékes” ablakban',
       'Intelligens Excel-szerű sorozatkitöltés (auto-fill) a Jelenlét fülön: ha a gyakorlatoknál vagy az előadásoknál kézzel beírod az első két alkalom dátumát (és opcionálisan időpontját), a rendszer felismeri a két dátum közötti lépésközt (pl. heti 7 nap vagy kétheti 14 nap), és automatikusan kitölti az összes többi üres sort a megfelelő dátumokkal és kezdési időponttal',
-      'Automatikus összecsukás a „Ma esedékes” ablakban: amint a mai napra esedékes összes teendőt rögzítetted, az ablak automatikusan becsukódik (és bármikor újra lenyitható, ha visszanéznéd vagy módosítanád)'
+      'Automatikus összecsukás a „Ma esedékes” ablakban: amint a mai napra esedékes összes teendőt rögzítetted, az ablak automatikusan becsukódik (és bármikor újra lenyitható, ha visszanéznéd vagy módosítanád)',
+      'Duplikált sablon-tárgyfelvétel tiltása: a tárgyfelvétel ablak sablonlistája automatikusan ellenőrzi a már felvett tantárgyaidat (sablon-azonosító és tárgyév alapján), és nem engedi ugyanazt a sablont még egyszer felvenni'
     ]
   },
   {
@@ -7210,8 +7211,28 @@ export default function App() {
  showToast(`„${tplName}” sablon törölve.`);
  };
 
+ const isTemplateAlreadyTaken = (tpl) => {
+  if (!tpl) return false;
+  if (addedTemplateIds[tpl.id]) return true;
+  const tplNameKey = normalizeTemplateMatchKey(tpl.name);
+  const tplCourseKind = tpl.courseKind || 'regular';
+  return subjects.some(s => {
+   if (!s) return false;
+   if (!tpl.isWebScrapedMajor && s.templateId && s.templateId === tpl.id) return true;
+   return (
+    tplNameKey !== '' &&
+    normalizeTemplateMatchKey(s.name) === tplNameKey &&
+    (s.courseKind || 'regular') === tplCourseKind
+   );
+  });
+ };
+
  const handleCreateFromTemplate = async (tpl) => {
  if (!user || !tpl) return;
+ if (isTemplateAlreadyTaken(tpl)) {
+ showToast(`A(z) „${tpl.name}” tantárgy már fel van véve!`);
+ return;
+ }
  const now = Date.now();
  const rand = () => Math.random().toString(36).slice(2, 6);
  const newSubjId = `subj_${now}_${rand()}`;
@@ -9100,16 +9121,38 @@ export default function App() {
    idx === editedIdx ? { ...s, ...changes } : { ...s }
   );
 
-  const isDateOrTimeEdit =
-   Object.prototype.hasOwnProperty.call(changes, 'date') ||
-   Object.prototype.hasOwnProperty.call(changes, 'time');
-
-  if (!isDateOrTimeEdit || nextList.length < 3 || editedIdx > 1) {
+  // Csak akkor indul el, ha a felhasználó dátumot módosít (és pontosan 2 alkalom dátuma van kitöltve)
+  if (!Object.prototype.hasOwnProperty.call(changes, 'date')) {
    return { updated: nextList, autoFilledCount: 0 };
   }
 
-  const firstIso = normalizeDateToIso(nextList[0]?.date);
-  const secondIso = normalizeDateToIso(nextList[1]?.date);
+  const newDateIso = normalizeDateToIso(changes.date);
+  if (!newDateIso || nextList.length < 3) {
+   return { updated: nextList, autoFilledCount: 0 };
+  }
+
+  // Gyűjtsük ki az összes eddig dátummal kitöltött alkalmat sorrendben
+  const filledIndices = [];
+  for (let i = 0; i < nextList.length; i++) {
+   if (normalizeDateToIso(nextList[i]?.date)) {
+    filledIndices.push(i);
+   }
+  }
+
+  // Szigorúan megvárjuk, míg pontosan 2 alkalom dátuma van beírva
+  if (filledIndices.length !== 2) {
+   return { updated: nextList, autoFilledCount: 0 };
+  }
+
+  const idx1 = filledIndices[0];
+  const idx2 = filledIndices[1];
+  const indexGap = idx2 - idx1;
+  if (indexGap <= 0) {
+   return { updated: nextList, autoFilledCount: 0 };
+  }
+
+  const firstIso = normalizeDateToIso(nextList[idx1]?.date);
+  const secondIso = normalizeDateToIso(nextList[idx2]?.date);
   if (!firstIso || !secondIso) {
    return { updated: nextList, autoFilledCount: 0 };
   }
@@ -9118,40 +9161,32 @@ export default function App() {
   const [y2, m2, d2] = secondIso.split('-').map(Number);
   const utc1 = Date.UTC(y1, m1 - 1, d1);
   const utc2 = Date.UTC(y2, m2 - 1, d2);
-  const dayStepMs = utc2 - utc1;
-  if (dayStepMs <= 0) {
+  const diffMs = utc2 - utc1;
+  if (diffMs <= 0) {
    return { updated: nextList, autoFilledCount: 0 };
   }
 
-  const hasRemainingEmptyDates = nextList.slice(2).some(s => !normalizeDateToIso(s?.date));
-  if (!hasRemainingEmptyDates) {
-   return { updated: nextList, autoFilledCount: 0 };
-  }
-
-  const t1 = (nextList[0]?.time || '').trim();
-  const t2 = (nextList[1]?.time || '').trim();
-  const commonTime = t2 || t1 || '';
+  const stepMsPerSlot = diffMs / indexGap;
+  const t1 = (nextList[idx1]?.time || '').trim();
+  const t2 = (nextList[idx2]?.time || '').trim();
+  const commonTime = (editedIdx === idx2 ? t2 : t1) || t2 || t1 || '';
 
   let autoFilledCount = 0;
-  for (let i = 2; i < nextList.length; i++) {
-   const targetUtc = new Date(utc1 + i * dayStepMs);
-   const iso = `${targetUtc.getUTCFullYear()}-${String(targetUtc.getUTCMonth() + 1).padStart(2, '0')}-${String(targetUtc.getUTCDate()).padStart(2, '0')}`;
+  for (let i = 0; i < nextList.length; i++) {
+   if (i === idx1 || i === idx2) continue;
    const curDate = normalizeDateToIso(nextList[i]?.date);
+   if (curDate) continue;
+
+   const targetUtc = new Date(Math.round(utc1 + (i - idx1) * stepMsPerSlot));
+   const iso = `${targetUtc.getUTCFullYear()}-${String(targetUtc.getUTCMonth() + 1).padStart(2, '0')}-${String(targetUtc.getUTCDate()).padStart(2, '0')}`;
    const curTime = (nextList[i]?.time || '').trim();
 
-   if (!curDate) {
-    nextList[i] = {
-     ...nextList[i],
-     date: iso,
-     time: curTime || commonTime
-    };
-    autoFilledCount += 1;
-   } else if (!curTime && commonTime) {
-    nextList[i] = {
-     ...nextList[i],
-     time: commonTime
-    };
-   }
+   nextList[i] = {
+    ...nextList[i],
+    date: iso,
+    time: curTime || commonTime
+   };
+   autoFilledCount += 1;
   }
 
   return { updated: nextList, autoFilledCount };
@@ -20188,7 +20223,7 @@ export default function App() {
  <div className="space-y-2.5">
  {filteredTemplates.map(tpl => {
  const zhCount = (tpl.assessments || []).filter(a => a.category === 'ZH').length;
- const isAdded = Boolean(addedTemplateIds[tpl.id]);
+ const isAdded = isTemplateAlreadyTaken(tpl);
  const isTplElective = (tpl.courseType || 'mandatory') === 'elective';
  const semDisplay = tpl.sourceSemester
  ? formatSemesterLabel(tpl.sourceSemester)
@@ -20253,16 +20288,18 @@ export default function App() {
  )}
  <button
  type="button"
+ disabled={isAdded}
  onClick={() => handleCreateFromTemplate(tpl)}
- className={`px-3.5 py-2 sm:py-1.5 text-xs font-bold rounded-lg flex items-center gap-1 transition cursor-pointer ${
+ title={isAdded ? 'Ez a tantárgy már fel van véve a tárgyaid közé' : 'Tantárgy felvétele'}
+ className={`px-3.5 py-2 sm:py-1.5 text-xs font-bold rounded-lg flex items-center gap-1 transition ${
  isAdded
- ? 'bg-emerald-500 text-white'
- : 'bg-amber-400 hover:bg-amber-300 text-slate-950'
+ ? 'bg-emerald-500/85 text-white cursor-not-allowed opacity-90'
+ : 'bg-amber-400 hover:bg-amber-300 text-slate-950 cursor-pointer'
  }`}
  >
  {isAdded ? (
  <>
- <Check className="w-3.5 h-3.5" /> Hozzáadva
+ <Check className="w-3.5 h-3.5" /> Már felvéve
  </>
  ) : (
  <>

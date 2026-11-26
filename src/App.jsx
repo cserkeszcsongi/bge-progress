@@ -704,6 +704,15 @@ function buildTemplatesForMajor(majorId) {
 
 const APP_RELEASES = [
   {
+    version: 'v3.4.0',
+    date: '2026. 11. 26.',
+    changes: [
+      'Dátum és kezdési időpont megadása Joker ZH-hoz és vizsgához is: a Joker ZH kiválasztásakor és pontbeírásakor megadható az újraírás dátuma és időpontja, valamint a vizsgáknál (mind a vizsgakurzusoknál, mind az automatikus vizsgáknál) is rögzíthető a pontos vizsgaidőpont — mindkettő automatikusan megjelenik a „Ma esedékes” ablakban',
+      'Intelligens Excel-szerű sorozatkitöltés (auto-fill) a Jelenlét fülön: ha a gyakorlatoknál vagy az előadásoknál kézzel beírod az első két alkalom dátumát (és opcionálisan időpontját), a rendszer felismeri a két dátum közötti lépésközt (pl. heti 7 nap vagy kétheti 14 nap), és automatikusan kitölti az összes többi üres sort a megfelelő dátumokkal és kezdési időponttal',
+      'Automatikus összecsukás a „Ma esedékes” ablakban: amint a mai napra esedékes összes teendőt rögzítetted, az ablak automatikusan becsukódik (és bármikor újra lenyitható, ha visszanéznéd vagy módosítanád)'
+    ]
+  },
+  {
     version: 'v3.3.0',
     date: '2026. 11. 26.',
     changes: [
@@ -4484,6 +4493,8 @@ export default function App() {
  const [isJokerModalOpen, setIsJokerModalOpen] = useState(false);
  const [jokerSubjectId, setJokerSubjectId] = useState('');
  const [jokerAssessmentId, setJokerAssessmentId] = useState('');
+ const [jokerDate, setJokerDate] = useState('');
+ const [jokerTime, setJokerTime] = useState('');
  const [jokerNewScore, setJokerNewScore] = useState('');
  const [isSavingJoker, setIsSavingJoker] = useState(false);
  const [jokerPendingBySem, setJokerPendingBySem] = useState(() => {
@@ -8058,7 +8069,12 @@ export default function App() {
  if (!subj) return null;
  const zh = (subj.assessments || []).find(a => a.id === saved.assessmentId && a.category === 'ZH');
  if (!zh) return null;
- return { subject: subj, assessment: zh };
+ return {
+  subject: subj,
+  assessment: zh,
+  date: saved.date || zh.jokerDate || '',
+  time: saved.time || zh.jokerTime || ''
+ };
  }, [jokerPendingBySem, selectedSemester, semesterSubjects]);
 
  const persistJokerPendingForSemester = (semName, entryOrNull) => {
@@ -8306,11 +8322,15 @@ export default function App() {
  if (pendingJokerInfo) {
  setJokerSubjectId(pendingJokerInfo.subject.id);
  setJokerAssessmentId(pendingJokerInfo.assessment.id);
+ setJokerDate(pendingJokerInfo.date || '');
+ setJokerTime(pendingJokerInfo.time || '');
  setJokerNewScore('');
  setJokerModalStep('score');
  } else if (activeJokerInfo) {
  setJokerSubjectId(activeJokerInfo.subject.id);
  setJokerAssessmentId(activeJokerInfo.assessment.id);
+ setJokerDate(activeJokerInfo.assessment.jokerDate || '');
+ setJokerTime(activeJokerInfo.assessment.jokerTime || '');
  setJokerNewScore(
  activeJokerInfo.assessment.achieved !== null && activeJokerInfo.assessment.achieved !== undefined
  ? String(activeJokerInfo.assessment.achieved)
@@ -8325,31 +8345,108 @@ export default function App() {
  const firstZh = (firstSubjWithZh?.assessments || []).find(a => a.category === 'ZH');
  setJokerSubjectId(sId);
  setJokerAssessmentId(firstZh?.id || '');
+ setJokerDate('');
+ setJokerTime('');
  setJokerNewScore('');
  setJokerModalStep('select');
  }
  setIsJokerModalOpen(true);
  };
 
- const handleSelectJokerTarget = (e) => {
+ const handleSelectJokerTarget = async (e) => {
  if (e && e.preventDefault) e.preventDefault();
  if (!jokerSubjectId || !jokerAssessmentId) return;
  const targetSubj = semesterSubjects.find(s => s.id === jokerSubjectId);
  const targetZh = (targetSubj?.assessments || []).find(a => a.id === jokerAssessmentId && a.category === 'ZH');
  if (!targetSubj || !targetZh) return;
 
+ const normDate = normalizeDateToIso(jokerDate) || (jokerDate || '').trim();
+ const normTime = jokerTime ? (parseKeyboardAttendanceTime(jokerTime) || normalizeTimeHHMM(jokerTime, '')) : '';
+
  persistJokerPendingForSemester(selectedSemester, {
  subjectId: targetSubj.id,
  assessmentId: targetZh.id,
+ date: normDate,
+ time: normTime,
  savedAt: Date.now()
  });
+
+ if (user) {
+ const updatedAssessments = (targetSubj.assessments || []).map(a =>
+ a.id === targetZh.id
+ ? { ...a, jokerDate: normDate, jokerTime: normTime }
+ : a
+ );
+ updateDoc(doc(db, 'users', user.uid, 'subjects', targetSubj.id), {
+ assessments: updatedAssessments
+ }).catch(() => {});
+ }
+
+ setJokerDate(normDate);
+ setJokerTime(normTime);
  setJokerNewScore('');
  setJokerModalStep('score');
- showToast(`Joker ZH kijelölve: ${targetSubj.name} — ${targetZh.title}`);
+ showToast(
+ normDate
+ ? `Joker ZH kijelölve: ${targetSubj.name} — ${targetZh.title} (${normDate}${normTime ? ` ${normTime}` : ''})`
+ : `Joker ZH kijelölve: ${targetSubj.name} — ${targetZh.title}`
+ );
+ };
+
+ const handleUpdatePendingJokerSchedule = async () => {
+ if (!jokerSubjectId || !jokerAssessmentId) return;
+ const targetSubj = semesterSubjects.find(s => s.id === jokerSubjectId);
+ const targetZh = (targetSubj?.assessments || []).find(a => a.id === jokerAssessmentId && a.category === 'ZH');
+ if (!targetSubj || !targetZh) return;
+
+ const normDate = normalizeDateToIso(jokerDate) || (jokerDate || '').trim();
+ const normTime = jokerTime ? (parseKeyboardAttendanceTime(jokerTime) || normalizeTimeHHMM(jokerTime, '')) : '';
+
+ persistJokerPendingForSemester(selectedSemester, {
+ subjectId: targetSubj.id,
+ assessmentId: targetZh.id,
+ date: normDate,
+ time: normTime,
+ savedAt: Date.now()
+ });
+
+ if (user) {
+ const updatedAssessments = (targetSubj.assessments || []).map(a =>
+ a.id === targetZh.id
+ ? { ...a, jokerDate: normDate, jokerTime: normTime }
+ : a
+ );
+ await updateDoc(doc(db, 'users', user.uid, 'subjects', targetSubj.id), {
+ assessments: updatedAssessments
+ }).catch(() => {});
+ }
+
+ setJokerDate(normDate);
+ setJokerTime(normTime);
+ showToast(
+ normDate
+ ? `Joker ZH időpont mentve: ${normDate}${normTime ? ` • ${normTime}` : ''}`
+ : 'Joker ZH időpont törölve.'
+ );
  };
 
  const handleClearPendingJokerSelection = () => {
+ if (user && pendingJokerInfo) {
+ const targetSubj = semesterSubjects.find(s => s.id === pendingJokerInfo.subject.id);
+ if (targetSubj) {
+ const updatedAssessments = (targetSubj.assessments || []).map(a =>
+ a.id === pendingJokerInfo.assessment.id
+ ? { ...a, jokerDate: '', jokerTime: '' }
+ : a
+ );
+ updateDoc(doc(db, 'users', user.uid, 'subjects', targetSubj.id), {
+ assessments: updatedAssessments
+ }).catch(() => {});
+ }
+ }
  persistJokerPendingForSemester(selectedSemester, null);
+ setJokerDate('');
+ setJokerTime('');
  setJokerNewScore('');
  setJokerModalStep('select');
  showToast('Joker ZH kijelölés törölve.');
@@ -8367,6 +8464,9 @@ export default function App() {
  const parsedNew = Number(jokerNewScore);
  if (isNaN(parsedNew)) return;
 
+ const normDate = normalizeDateToIso(jokerDate) || (jokerDate || '').trim();
+ const normTime = jokerTime ? (parseKeyboardAttendanceTime(jokerTime) || normalizeTimeHHMM(jokerTime, '')) : '';
+
  setIsSavingJoker(true);
  try {
  const batch = writeBatch(db);
@@ -8377,7 +8477,7 @@ export default function App() {
  const prevSubj = activeJokerInfo.subject;
  const restoredPrevAssessments = (prevSubj.assessments || []).map(a => {
  if (a.id !== activeJokerInfo.assessment.id) return a;
- const { isJokerRewritten, jokerOriginalAchieved, ...rest } = a;
+ const { isJokerRewritten, jokerOriginalAchieved, jokerDate: _jd, jokerTime: _jt, ...rest } = a;
  return {
  ...rest,
  achieved: jokerOriginalAchieved !== undefined ? jokerOriginalAchieved : null
@@ -8390,7 +8490,7 @@ export default function App() {
 
  const updatedTargetAssessments = (targetSubj.assessments || []).map(a => {
  if (isSwitchingFromAnotherZh && activeJokerInfo.subject.id === targetSubj.id && a.id === activeJokerInfo.assessment.id) {
- const { isJokerRewritten, jokerOriginalAchieved, ...rest } = a;
+ const { isJokerRewritten, jokerOriginalAchieved, jokerDate: _jd, jokerTime: _jt, ...rest } = a;
  return {
  ...rest,
  achieved: jokerOriginalAchieved !== undefined ? jokerOriginalAchieved : null
@@ -8405,7 +8505,9 @@ export default function App() {
  ...a,
  achieved: parsedNew,
  isJokerRewritten: true,
- jokerOriginalAchieved: origVal
+ jokerOriginalAchieved: origVal,
+ jokerDate: normDate,
+ jokerTime: normTime
  };
  }
  return a;
@@ -8442,7 +8544,7 @@ export default function App() {
  try {
  const updatedAssessments = (subj.assessments || []).map(a => {
  if (a.id !== assessmentId) return a;
- const { isJokerRewritten, jokerOriginalAchieved, ...rest } = a;
+ const { isJokerRewritten, jokerOriginalAchieved, jokerDate: _jd, jokerTime: _jt, ...rest } = a;
  return {
  ...rest,
  achieved: jokerOriginalAchieved !== undefined ? jokerOriginalAchieved : null
@@ -8993,18 +9095,81 @@ export default function App() {
  }
  };
 
+ const applyExcelSeriesAutoFill = (sessionsList, editedIdx, changes) => {
+  const nextList = sessionsList.map((s, idx) =>
+   idx === editedIdx ? { ...s, ...changes } : { ...s }
+  );
+
+  const isDateOrTimeEdit =
+   Object.prototype.hasOwnProperty.call(changes, 'date') ||
+   Object.prototype.hasOwnProperty.call(changes, 'time');
+
+  if (!isDateOrTimeEdit || nextList.length < 3 || editedIdx > 1) {
+   return { updated: nextList, autoFilledCount: 0 };
+  }
+
+  const firstIso = normalizeDateToIso(nextList[0]?.date);
+  const secondIso = normalizeDateToIso(nextList[1]?.date);
+  if (!firstIso || !secondIso) {
+   return { updated: nextList, autoFilledCount: 0 };
+  }
+
+  const [y1, m1, d1] = firstIso.split('-').map(Number);
+  const [y2, m2, d2] = secondIso.split('-').map(Number);
+  const utc1 = Date.UTC(y1, m1 - 1, d1);
+  const utc2 = Date.UTC(y2, m2 - 1, d2);
+  const dayStepMs = utc2 - utc1;
+  if (dayStepMs <= 0) {
+   return { updated: nextList, autoFilledCount: 0 };
+  }
+
+  const hasRemainingEmptyDates = nextList.slice(2).some(s => !normalizeDateToIso(s?.date));
+  if (!hasRemainingEmptyDates) {
+   return { updated: nextList, autoFilledCount: 0 };
+  }
+
+  const t1 = (nextList[0]?.time || '').trim();
+  const t2 = (nextList[1]?.time || '').trim();
+  const commonTime = t2 || t1 || '';
+
+  let autoFilledCount = 0;
+  for (let i = 2; i < nextList.length; i++) {
+   const targetUtc = new Date(utc1 + i * dayStepMs);
+   const iso = `${targetUtc.getUTCFullYear()}-${String(targetUtc.getUTCMonth() + 1).padStart(2, '0')}-${String(targetUtc.getUTCDate()).padStart(2, '0')}`;
+   const curDate = normalizeDateToIso(nextList[i]?.date);
+   const curTime = (nextList[i]?.time || '').trim();
+
+   if (!curDate) {
+    nextList[i] = {
+     ...nextList[i],
+     date: iso,
+     time: curTime || commonTime
+    };
+    autoFilledCount += 1;
+   } else if (!curTime && commonTime) {
+    nextList[i] = {
+     ...nextList[i],
+     time: commonTime
+    };
+   }
+  }
+
+  return { updated: nextList, autoFilledCount };
+ };
+
  const handleUpdateSession = async (sessionIdx, changes) => {
  if (!activeSubject) return;
  const baseSessions = createDefaultSessions(
  activeSubject.totalClasses ?? (activeSubject.attendanceSessions || []).length,
  activeSubject.attendanceSessions || []
  );
- const updated = baseSessions.map((s, idx) =>
- idx === sessionIdx ? { ...s, ...changes } : s
- );
+ const { updated, autoFilledCount } = applyExcelSeriesAutoFill(baseSessions, sessionIdx, changes);
  await updateDoc(doc(db, 'users', user.uid, 'subjects', activeSubject.id), {
  attendanceSessions: updated
  });
+ if (autoFilledCount > 0) {
+ showToast(`Automatikus sorozatkitöltés: ${autoFilledCount} további gyakorlati alkalom dátuma kitöltve!`);
+ }
  };
 
  const handleUpdateLectureSession = async (sessionIdx, changes) => {
@@ -9017,12 +9182,13 @@ export default function App() {
  ),
  activeSubject.lectureAttendanceSessions || []
  );
- const updated = baseLectureSessions.map((s, idx) =>
- idx === sessionIdx ? { ...s, ...changes } : s
- );
+ const { updated, autoFilledCount } = applyExcelSeriesAutoFill(baseLectureSessions, sessionIdx, changes);
  await updateDoc(doc(db, 'users', user.uid, 'subjects', activeSubject.id), {
  lectureAttendanceSessions: updated
  });
+ if (autoFilledCount > 0) {
+ showToast(`Automatikus sorozatkitöltés: ${autoFilledCount} további előadás dátuma kitöltve!`);
+ }
  };
 
  const subjectsMissingAttendanceDates = useMemo(() => {
@@ -9615,6 +9781,20 @@ export default function App() {
   [todayDueItems]
  );
 
+ const prevTodayAllCompletedRef = useRef(false);
+ useEffect(() => {
+  const totalToday = todayDueItems.length;
+  const allCompleted = totalToday > 0 && todayCompletedCount === totalToday;
+
+  if (allCompleted && !prevTodayAllCompletedRef.current) {
+   setIsTodayBoxCollapsed(true);
+  } else if (!allCompleted && prevTodayAllCompletedRef.current) {
+   setIsTodayBoxCollapsed(false);
+  }
+
+  prevTodayAllCompletedRef.current = allCompleted;
+ }, [todayDueItems.length, todayCompletedCount]);
+
  // Sync today's reminder schedule to Firestore (so Firebase Cloud Functions can also send background web-push when the app is closed)
  useEffect(() => {
   if (!user || !userDataLoaded) return;
@@ -9835,7 +10015,9 @@ export default function App() {
          isJokerRewritten: true,
          jokerOriginalAchieved: a.isJokerRewritten
           ? (a.jokerOriginalAchieved ?? null)
-          : (a.achieved !== undefined && a.achieved !== '' ? a.achieved : null)
+          : (a.achieved !== undefined && a.achieved !== '' ? a.achieved : null),
+         jokerDate: pendingForSubjSem?.date || a.jokerDate || '',
+         jokerTime: pendingForSubjSem?.time || a.jokerTime || ''
         }
       : {})
     };
@@ -12858,10 +13040,14 @@ export default function App() {
           data-no-glass="true"
           type="button"
           onClick={() => {
-           setActiveSubjectId(item.subjectId);
-           setDetailTab('points');
+           if (item.kind === 'joker_zh') {
+            handleOpenJokerModal();
+           } else {
+            setActiveSubjectId(item.subjectId);
+            setDetailTab('points');
+           }
           }}
-          title="Tantárgy részleteinek megnyitása"
+          title={item.kind === 'joker_zh' ? 'Joker ZH ablak megnyitása' : 'Tantárgy részleteinek megnyitása'}
           className="flex items-center gap-2 min-w-0 text-left cursor-pointer group bg-transparent"
          >
           <span className={`px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase border shrink-0 max-w-[110px] truncate ${toneClasses}`}>
@@ -17132,6 +17318,79 @@ export default function App() {
  : 'nincs még rögzítve'}
  </strong>
  </p>
+ {(jokerDate || jokerTime) && (
+ <p className={`text-xs flex items-center gap-1.5 font-semibold ${darkMode ? 'text-amber-300' : 'text-violet-800'}`}>
+ <Clock className="w-3.5 h-3.5 shrink-0" />
+ <span>Megírás időpontja: {jokerDate || ''}{jokerDate && jokerTime ? ' • ' : ''}{jokerTime || ''}</span>
+ </p>
+ )}
+ </div>
+
+ <div className={`p-3 rounded-xl border space-y-2.5 ${bgSubCard}`}>
+ <div className="flex items-center justify-between gap-2">
+ <span className={`text-[11px] font-bold uppercase tracking-wide ${textMuted}`}>
+ Joker ZH dátuma és időpontja (opcionális)
+ </span>
+ {pendingJokerInfo && (
+ <button
+ type="button"
+ disabled={isSavingJoker}
+ onClick={handleUpdatePendingJokerSchedule}
+ className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-violet-600/20 hover:bg-violet-600/30 text-violet-400 border border-violet-500/35 transition cursor-pointer"
+ >
+ Időpont mentése
+ </button>
+ )}
+ </div>
+ <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+ <div>
+ <label className={`block text-[11px] font-semibold mb-1 ${textMuted}`}>Dátum</label>
+ <input
+ type="date"
+ value={jokerDate || ''}
+ onChange={e => setJokerDate(e.target.value)}
+ className={`w-full border rounded-lg px-3 py-2 text-xs font-semibold focus:outline-none focus:border-violet-500 ${inputStyle}`}
+ />
+ </div>
+ <div>
+ <label className={`block text-[11px] font-semibold mb-1 ${textMuted}`}>Időpont (óra:perc)</label>
+ <div className="relative flex items-center">
+ <input
+ type="text"
+ inputMode="numeric"
+ autoComplete="off"
+ spellCheck={false}
+ maxLength={5}
+ placeholder="ÓÓ:PP (pl. 10:00)"
+ value={jokerTime || ''}
+ onChange={e => setJokerTime(e.target.value)}
+ onBlur={e => {
+ const raw = String(e.target.value || '').trim();
+ if (!raw) return;
+ const parsed = parseKeyboardAttendanceTime(raw);
+ if (parsed) setJokerTime(parsed);
+ }}
+ className={`w-full border rounded-lg pl-3 pr-8 py-2 text-xs font-mono focus:outline-none focus:border-violet-500 ${inputStyle}`}
+ />
+ {jokerTime ? (
+ <button
+ type="button"
+ data-no-glass="true"
+ tabIndex={-1}
+ onClick={() => setJokerTime('')}
+ title="Időpont törlése"
+ className={`absolute right-2 p-0.5 rounded transition cursor-pointer ${
+ darkMode ? 'text-slate-400 hover:text-rose-400' : 'text-slate-400 hover:text-rose-500'
+ }`}
+ >
+ <X className="w-3.5 h-3.5" />
+ </button>
+ ) : (
+ <Clock className={`pointer-events-none absolute right-2.5 w-3.5 h-3.5 ${darkMode ? 'text-slate-500' : 'text-slate-400'}`} />
+ )}
+ </div>
+ </div>
+ </div>
  </div>
 
  <div>
@@ -17420,6 +17679,61 @@ export default function App() {
  })}
  </select>
  )}
+ </div>
+ </div>
+
+ <div className={`pt-2.5 border-t ${darkMode ? 'border-white/10' : 'border-slate-200/80'} space-y-2`}>
+ <p className={`text-[11px] font-semibold ${textMuted}`}>
+ 3. Joker ZH dátuma és időpontja (opcionális — ha megadod, aznap megjelenik a „Ma esedékes” ablakban)
+ </p>
+ <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+ <div>
+ <label className={`block text-[11px] font-semibold mb-1 ${textMuted}`}>Dátum</label>
+ <input
+ type="date"
+ value={jokerDate || ''}
+ onChange={e => setJokerDate(e.target.value)}
+ className={`w-full border rounded-xl px-3 py-2 font-semibold focus:outline-none focus:border-violet-500 ${inputStyle}`}
+ />
+ </div>
+ <div>
+ <label className={`block text-[11px] font-semibold mb-1 ${textMuted}`}>Időpont (óra:perc)</label>
+ <div className="relative flex items-center">
+ <input
+ type="text"
+ inputMode="numeric"
+ autoComplete="off"
+ spellCheck={false}
+ maxLength={5}
+ placeholder="ÓÓ:PP (pl. 10:00)"
+ value={jokerTime || ''}
+ onChange={e => setJokerTime(e.target.value)}
+ onBlur={e => {
+ const raw = String(e.target.value || '').trim();
+ if (!raw) return;
+ const parsed = parseKeyboardAttendanceTime(raw);
+ if (parsed) setJokerTime(parsed);
+ }}
+ className={`w-full border rounded-xl pl-3 pr-8 py-2 font-mono focus:outline-none focus:border-violet-500 ${inputStyle}`}
+ />
+ {jokerTime ? (
+ <button
+ type="button"
+ data-no-glass="true"
+ tabIndex={-1}
+ onClick={() => setJokerTime('')}
+ title="Időpont törlése"
+ className={`absolute right-2 p-0.5 rounded transition cursor-pointer ${
+ darkMode ? 'text-slate-400 hover:text-rose-400' : 'text-slate-400 hover:text-rose-500'
+ }`}
+ >
+ <X className="w-3.5 h-3.5" />
+ </button>
+ ) : (
+ <Clock className={`pointer-events-none absolute right-2.5 w-3.5 h-3.5 ${darkMode ? 'text-slate-500' : 'text-slate-400'}`} />
+ )}
+ </div>
+ </div>
  </div>
  </div>
  </div>
@@ -18252,6 +18566,12 @@ export default function App() {
  <span className="text-xs sm:text-sm font-extrabold">
  {st.pendingJokerZhTitle} eredményre vár
  </span>
+ {(pendingJokerInfo?.date || pendingJokerInfo?.time) && (
+ <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-violet-600/25 text-violet-300 border border-violet-500/40">
+ <Clock className="w-3 h-3 shrink-0" />
+ {pendingJokerInfo.date || ''}{pendingJokerInfo.date && pendingJokerInfo.time ? ' • ' : ''}{pendingJokerInfo.time || ''}
+ </span>
+ )}
  </div>
  <button
  type="button"
@@ -18833,6 +19153,18 @@ export default function App() {
  </p>
  ) : (
  <div className="space-y-2.5">
+ {sessions.length >= 3 && (
+ <div className={`px-3 py-2 rounded-xl border text-[11px] flex items-center gap-2 ${
+ darkMode
+ ? 'bg-amber-400/10 border-amber-400/30 text-amber-200/90'
+ : 'bg-amber-50/90 border-amber-300/80 text-amber-950'
+ }`}>
+ <Sparkles className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+ <span>
+ <strong>Tipp (Excel-szerű kitöltés):</strong> Írd be az <strong>1. és 2. gyakorlat</strong> dátumát (és opcionálisan időpontját), és a rendszer a két dátum közötti lépésköz alapján automatikusan kitölti a többi sort is!
+ </span>
+ </div>
+ )}
  {sessions.map((sess, idx) => (
  <div
  key={sess.id || idx}
@@ -18979,6 +19311,18 @@ export default function App() {
  </div>
  ) : (
  <div className="space-y-2.5">
+ {lectureSessions.length >= 3 && (
+ <div className={`px-3 py-2 rounded-xl border text-[11px] flex items-center gap-2 ${
+ darkMode
+ ? 'bg-sky-500/10 border-sky-500/30 text-sky-200/90'
+ : 'bg-sky-50/90 border-sky-300/80 text-sky-950'
+ }`}>
+ <Sparkles className="w-3.5 h-3.5 text-sky-500 shrink-0" />
+ <span>
+ <strong>Tipp (Excel-szerű kitöltés):</strong> Írd be az <strong>1. és 2. előadás</strong> dátumát (és opcionálisan időpontját), és a rendszer a két dátum közötti lépésköz alapján automatikusan kitölti a többi sort is!
+ </span>
+ </div>
+ )}
  {lectureSessions.map((sess, idx) => (
  <div
  key={sess.id || idx}

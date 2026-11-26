@@ -704,6 +704,15 @@ function buildTemplatesForMajor(majorId) {
 
 const APP_RELEASES = [
   {
+    version: 'v3.6.0',
+    date: '2026. 11. 27.',
+    changes: [
+      'Vizsga és vizsgakurzus újraírása („Újraírom” gomb): ha egy vizsgakurzus vagy automatikus vizsgaeredmény sikertelen (< 59,5 pont), a tétel mellett megjelenik az „Újraírom” gomb (kizárólag vizsgáknál, ZH-knál nem)',
+      'BGE vizsgaszabályzat szerinti maximum 3 vizsgaalkalom (1. vizsga + legfeljebb 2 javítóvizsga): az „Újraírom” gombra kattintva az előző sikertelen eredmény elszürkül és megmarad előzményként, a tárgy pedig azonnal várakozó vizsga módba kerül, felette pedig megjelenik a következő vizsgaalkalom 100 pontos tételsora, ahol újra rögzíthető a dátum és az időpont is',
+      'A 3. sikertelen vizsgaalkalom után az alkalmazás több újraírást nem engedélyez, és a tárgy véglegesen bukott állapotba kerül'
+    ]
+  },
+  {
     version: 'v3.5.0',
     date: '2026. 11. 26.',
     changes: [
@@ -7609,6 +7618,8 @@ export default function App() {
  (!megajanlottZHOk || !megajanlottPontOk)
  );
 
+ const autoExamHistory = Array.isArray(subj.autoExamHistory) ? subj.autoExamHistory : [];
+ const autoExamAttemptCount = needsAutoExam ? (autoExamHistory.length + 1) : 0;
  const autoExamRaw = needsAutoExam
  ? getEffectiveScore({ id: `auto_exam_${subj.id}`, achieved: subj.autoExamScore })
  : null;
@@ -7619,8 +7630,17 @@ export default function App() {
  autoExamRaw !== '' &&
  !isNaN(Number(autoExamRaw));
  const autoExamScoreNum = hasAutoExamScore ? Number(autoExamRaw) : 0;
+ const canRewriteAutoExam = Boolean(
+ needsAutoExam &&
+ hasAutoExamScore &&
+ autoExamScoreNum < 59.5 &&
+ autoExamAttemptCount < 3
+ );
 
- const examItem = isExamCourse ? (zhAssessments[0] || assessments[0] || null) : null;
+ // For exam courses ('vizsgakurzus'), newest attempt is at the top (index 0) and older rewritten attempts are stored below
+ const examAttemptsAll = isExamCourse ? (zhAssessments.length > 0 ? zhAssessments : assessments) : [];
+ const examAttemptCount = isExamCourse ? examAttemptsAll.length : 0;
+ const examItem = isExamCourse ? (examAttemptsAll[0] || null) : null;
  const examItemRaw = examItem ? getEffectiveScore(examItem) : null;
  const hasExamScore =
  isExamCourse &&
@@ -7629,6 +7649,20 @@ export default function App() {
  examItemRaw !== '' &&
  !isNaN(Number(examItemRaw));
  const examScoreNum = hasExamScore ? Number(examItemRaw) : 0;
+ const canRewriteExamCourse = Boolean(
+ isExamCourse &&
+ examItem &&
+ hasExamScore &&
+ examScoreNum < 59.5 &&
+ examAttemptCount < 3
+ );
+
+ const isExamAwaitingRewrite = Boolean(
+ !disablePointCalc &&
+ !hasManualGrade &&
+ ((isExamCourse && examAttemptCount > 1 && !hasExamScore) ||
+ (needsAutoExam && autoExamAttemptCount > 1 && !hasAutoExamScore))
+ );
 
  const osszElert = isExamCourse
  ? +examScoreNum.toFixed(2)
@@ -7659,10 +7693,11 @@ export default function App() {
 
  const isManualGradeOne = hasManualGrade && parseInt(effectiveManualGrade, 10) === 1;
  const isFailed =
- ((!isSim && Boolean(subj.isFailed)) && !passedByExam) ||
+ !isExamAwaitingRewrite &&
+ (((!isSim && Boolean(subj.isFailed)) && !passedByExam) ||
  isManualGradeOne ||
  autoFailedByNoSignature ||
- autoFailedByExam;
+ autoFailedByExam);
  const isGradeOnlyCard = disablePointCalc || (!isFailed && hasManualGrade) || (isFailed && isManualGradeOne);
 
  let progressLabel = null;
@@ -7686,6 +7721,9 @@ export default function App() {
  projectedGrade = getGradeFromScore(examScoreNum);
  progressLabel = `Vizsgajegy: ${projectedGrade}`;
  progressStage = 'offered';
+ } else if (examAttemptCount > 1) {
+ progressLabel = `${examAttemptCount}. vizsga (várakozik)`;
+ progressStage = 'exam';
  } else {
  progressLabel = null;
  progressStage = 'pending';
@@ -7695,6 +7733,9 @@ export default function App() {
  projectedGrade = getGradeFromScore(autoExamScoreNum);
  progressLabel = `Vizsgajegy: ${projectedGrade}`;
  progressStage = 'offered';
+ } else if (autoExamAttemptCount > 1) {
+ progressLabel = `${autoExamAttemptCount}. vizsga (várakozik)`;
+ progressStage = 'exam';
  } else {
  progressLabel = 'Vizsga';
  progressStage = 'exam';
@@ -7725,6 +7766,12 @@ export default function App() {
  needsAutoExam,
  hasAutoExamScore,
  hasExamScore,
+ autoExamHistory,
+ autoExamAttemptCount,
+ canRewriteAutoExam,
+ examAttemptCount,
+ canRewriteExamCourse,
+ isExamAwaitingRewrite,
  isFailed,
  isSimulatedGrade,
  zhElert: +zhElert.toFixed(2), zhMax,
@@ -8750,7 +8797,10 @@ export default function App() {
  ...(editingSubject.templateId ? { templateId: editingSubject.templateId } : {}),
  ...(editingSubject.templateSyncedAtMs ? { templateSyncedAtMs: editingSubject.templateSyncedAtMs } : {}),
  ...(editingSubject.assessmentSortConfig ? { assessmentSortConfig: editingSubject.assessmentSortConfig } : {}),
- ...(editingSubject.autoExamScore !== undefined ? { autoExamScore: editingSubject.autoExamScore } : {})
+ ...(editingSubject.autoExamScore !== undefined ? { autoExamScore: editingSubject.autoExamScore } : {}),
+ ...(editingSubject.autoExamDate !== undefined ? { autoExamDate: editingSubject.autoExamDate } : {}),
+ ...(editingSubject.autoExamTime !== undefined ? { autoExamTime: editingSubject.autoExamTime } : {}),
+ ...(Array.isArray(editingSubject.autoExamHistory) ? { autoExamHistory: editingSubject.autoExamHistory } : {})
  };
 
  await setDoc(doc(db, 'users', user.uid, 'subjects', id), payload);
@@ -9176,6 +9226,108 @@ export default function App() {
  setItemModal(null);
  showToast('Tétel törölve.');
  }
+ };
+
+ const handleRewriteExam = async (subj) => {
+ if (!user || !subj) return;
+ const st = subjectStatsMap[subj.id] || calcStats(subj);
+ const now = Date.now();
+ const rand = () => Math.random().toString(36).slice(2, 6);
+
+ if (subj.courseKind === 'exam') {
+  const existing = toArraySafe(subj.assessments);
+  const currentActive = existing[0] || null;
+  if (!currentActive) return;
+  if (existing.length >= 3) {
+   showToast('A BGE szabályzata szerint maximum 3 alkalommal lehet vizsgázni.');
+   return;
+  }
+
+  const effScore = getEffectiveScore(currentActive);
+  const hasScore = effScore !== null && effScore !== undefined && effScore !== '' && !isNaN(Number(effScore));
+  if (!hasScore || Number(effScore) >= 59.5) return;
+
+  const nextAttemptNum = existing.length + 1;
+  const archivedCurrent = {
+   ...currentActive,
+   achieved: Number(effScore),
+   isRewrittenExamAttempt: true,
+   attemptNumber: existing.length === 1 ? 1 : (currentActive.attemptNumber || 1)
+  };
+
+  const newExamAttempt = {
+   id: `exam_${now}_${rand()}`,
+   category: 'ZH',
+   title: `${nextAttemptNum}. vizsga`,
+   date: '',
+   time: '',
+   max: 100,
+   achieved: null,
+   attemptNumber: nextAttemptNum
+  };
+
+  const updatedAssessments = [newExamAttempt, archivedCurrent, ...existing.slice(1)];
+
+  if (isSim) {
+   setSimScores(prev => {
+    const next = { ...prev };
+    delete next[currentActive.id];
+    delete next[newExamAttempt.id];
+    return next;
+   });
+   showToast('Szimulátor módban a vizsga újraírása csak valós adatbázis-mentéssel rögzíthető.');
+   return;
+  }
+
+  await updateDoc(doc(db, 'users', user.uid, 'subjects', subj.id), {
+   assessments: updatedAssessments,
+   isFailed: false
+  });
+
+  showToast(`${nextAttemptNum}. vizsgaalkalom létrehozva! Add meg az új vizsga dátumát és időpontját.`);
+  return;
+ }
+
+ // Automatic exam mode ('needsAutoExam') on regular courses
+ if (!st.needsAutoExam || !st.canRewriteAutoExam) return;
+ const history = Array.isArray(subj.autoExamHistory) ? subj.autoExamHistory : [];
+ if (history.length >= 2) {
+  showToast('A BGE szabályzata szerint maximum 3 alkalommal lehet vizsgázni.');
+  return;
+ }
+
+ const currentAttemptNum = history.length + 1;
+ const nextAttemptNum = currentAttemptNum + 1;
+ const effAutoScore = getEffectiveScore({ id: `auto_exam_${subj.id}`, achieved: subj.autoExamScore });
+ const archivedEntry = {
+  id: `auto_exam_hist_${now}_${rand()}`,
+  attemptNumber: currentAttemptNum,
+  title: `${currentAttemptNum}. vizsga`,
+  achieved: Number(effAutoScore),
+  max: 100,
+  date: subj.autoExamDate || '',
+  time: subj.autoExamTime || ''
+ };
+
+ const updatedHistory = [archivedEntry, ...history];
+
+ if (isSim) {
+  setSimScores(prev => {
+   const next = { ...prev };
+   delete next[`auto_exam_${subj.id}`];
+   return next;
+  });
+ }
+
+ await updateDoc(doc(db, 'users', user.uid, 'subjects', subj.id), {
+  autoExamHistory: updatedHistory,
+  autoExamScore: null,
+  autoExamDate: '',
+  autoExamTime: '',
+  isFailed: false
+ });
+
+ showToast(`${nextAttemptNum}. vizsgaalkalom létrehozva! Válaszd ki az új vizsga dátumát és időpontját.`);
  };
 
  const detectAttendanceSeriesProposal = (sessionsList) => {
@@ -9878,8 +10030,9 @@ export default function App() {
    const bucketTitleMap = new Map(customBuckets.map(b => [b.id, b.title]));
 
    if (!disablePointCalc) {
-    toArraySafe(subj.assessments).forEach((a) => {
+    toArraySafe(subj.assessments).forEach((a, aIdx) => {
      if (!a || normalizeDateToIso(a.date) !== todayIso) return;
+     if (isExamCourse && (aIdx > 0 || a.isRewrittenExamAttempt)) return;
      const eff = getEffectiveScore(a);
      const hasValue = eff !== null && eff !== undefined && eff !== '' && !isNaN(Number(eff));
      const isExamItem = isExamCourse;
@@ -18445,7 +18598,7 @@ export default function App() {
   );
  };
 
- const renderItemRow = (item, capMeta = null) => {
+ const renderItemRow = (item, capMeta = null, rowIdx = 0) => {
  const eff = getEffectiveScore(item);
  const hasScore = eff !== null && eff !== undefined && eff !== '' && !isNaN(Number(eff));
  const hasMax = item.max !== null && item.max !== undefined && item.max !== '' && Number(item.max) > 0;
@@ -18454,8 +18607,15 @@ export default function App() {
  : 0;
  const totalItemScore = hasScore ? Number(eff) + bonusVal : null;
  const itemPct = hasMax ? formatPct(totalItemScore, item.max) : null;
- const isDimmed = capMeta?.isExceedingCap;
+ const isRewrittenExamAttempt = Boolean(st.isExamCourse && (rowIdx > 0 || item.isRewrittenExamAttempt));
+ const isDimmed = Boolean(capMeta?.isExceedingCap || isRewrittenExamAttempt);
  const isPartial = capMeta?.isPartialCap;
+ const showRewriteExamCourseBtn = Boolean(
+ st.isExamCourse &&
+ rowIdx === 0 &&
+ !isRewrittenExamAttempt &&
+ st.canRewriteExamCourse
+ );
 
  let rowBorderBg = '';
  if (isDimmed) {
@@ -18487,13 +18647,19 @@ export default function App() {
  +{formatHu(bonusVal)} p többletpont
  </span>
  )}
- {isDimmed && (
+ {isRewrittenExamAttempt ? (
+ <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
+ darkMode ? 'bg-slate-800 text-slate-400 border border-slate-700' : 'bg-slate-200 text-slate-600'
+ }`}>
+ Korábbi sikertelen vizsga (újraírva)
+ </span>
+ ) : isDimmed && capMeta ? (
  <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
  darkMode ? 'bg-slate-800 text-slate-400 border border-slate-700' : 'bg-slate-200 text-slate-600'
  }`}>
  Nem beszámítható ({formatHu(capMeta.cap)} p limit)
  </span>
- )}
+ ) : null}
  {isPartial && (
  <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${
  darkMode ? 'bg-amber-400/20 text-amber-300 border border-amber-400/30' : 'bg-amber-100 text-amber-800'
@@ -18578,7 +18744,21 @@ export default function App() {
  </span>
  </div>
 
- <div className="flex items-center ml-auto sm:ml-0">
+ <div className="flex items-center gap-2 ml-auto sm:ml-0">
+ {showRewriteExamCourseBtn && (
+ <button
+ type="button"
+ onClick={(e) => {
+ e.stopPropagation();
+ handleRewriteExam(activeSubject);
+ }}
+ title={`Vizsga újraírása (${st.examAttemptCount + 1}. / 3 alkalom)`}
+ className="px-3 py-2 sm:px-3 sm:py-1.5 rounded-lg text-xs font-extrabold bg-amber-400 hover:bg-amber-300 text-slate-950 shadow-xs inline-flex items-center gap-1.5 transition cursor-pointer shrink-0"
+ >
+ <RotateCcw className="w-3.5 h-3.5 shrink-0" />
+ <span>Újraírom</span>
+ </button>
+ )}
  <button
  type="button"
  onClick={() => setItemModal({
@@ -18882,11 +19062,21 @@ export default function App() {
  </div>
  </div>
  </div>
- ) : st.isExamCourse ? (
+ ) : st.isExamCourse ? (() => {
+ const examCourseAttempts = (activeSubject.assessments || []).filter(a => a.category === 'ZH');
+ const activeAttemptNum = Math.max(1, examCourseAttempts.length);
+ return (
  <>
  <div className="grid grid-cols-1 gap-3 text-center">
  <div className={`p-4 rounded-xl border-2 ${darkMode ? 'bg-slate-800 border-amber-400/50' : 'bg-amber-50/60 border-amber-400'}`}>
+ <div className="flex items-center justify-center gap-2 flex-wrap">
  <p className={`text-xs font-semibold uppercase ${textMuted}`}>Vizsgakurzus összpontszám</p>
+ <span className={`px-2 py-0.5 rounded-full text-[11px] font-extrabold ${
+ darkMode ? 'bg-violet-500/20 text-violet-300 border border-violet-500/40' : 'bg-violet-100 text-violet-800 border border-violet-300'
+ }`}>
+ {activeAttemptNum}. / 3 vizsgaalkalom
+ </span>
+ </div>
  <p className={`text-2xl font-extrabold mt-1 ${textStrong}`}>
  {st.hasExamScore ? formatHu(st.osszElert) : '?'}
  <span className={`text-sm font-normal ${textMuted}`}> / 100 p</span>
@@ -18898,12 +19088,12 @@ export default function App() {
  </div>
 
  <div>
- <div className="flex items-center justify-between gap-2 mb-3">
+ <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
  <h3 className={`font-bold text-sm sm:text-base ${textStrong}`}>Vizsgaeredmény</h3>
- <span className={`text-xs ${textMuted}`}>2-es határ: 59,5 pont • Max: 100 pont</span>
+ <span className={`text-xs ${textMuted}`}>2-es határ: 59,5 pont • Max: 100 pont • Max. 3 alkalom</span>
  </div>
 
- {zhItems.length === 0 ? (
+ {examCourseAttempts.length === 0 ? (
  <div className={`p-4 rounded-xl border text-center space-y-2 ${bgSubCard}`}>
  <p className={`text-xs ${textMuted}`}>Még nincs rögzített vizsga tétel ehhez a kurzushoz.</p>
  <button
@@ -18926,11 +19116,20 @@ export default function App() {
  </div>
  ) : (
  <div className="space-y-2.5">
- {zhItems.map(item => renderItemRow(item, null))}
+ {examCourseAttempts.map((item, idx) => renderItemRow(item, null, idx))}
+ {examCourseAttempts.length >= 3 && st.hasExamScore && st.osszElert < 59.5 && (
+ <p className={`text-xs font-semibold px-3 py-2 rounded-xl border ${
+ darkMode ? 'bg-rose-950/35 border-rose-500/40 text-rose-300' : 'bg-rose-50 border-rose-300 text-rose-800'
+ }`}>
+ Elérted a BGE vizsgaszabályzat szerinti maximum 3 vizsgalehetőséget ebben a félévben, így ez a vizsga már nem írható újra.
+ </p>
+ )}
  </div>
  )}
  </div>
  </>
+ );
+ })()
  ) : detailTab === 'points' ? (
  <>
  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3 text-center">
@@ -19087,12 +19286,17 @@ export default function App() {
  : 'bg-amber-100/85 border-amber-600/80 text-amber-950'
  }`}>
  <div className="flex flex-wrap items-center justify-between gap-2">
- <div className="flex items-center gap-2">
+ <div className="flex items-center gap-2 flex-wrap">
  <span className="px-2.5 py-0.5 rounded-md text-xs font-extrabold uppercase tracking-wider bg-amber-700 text-white">
  VIZSGA
  </span>
  <span className="text-xs sm:text-sm font-extrabold">
  Automatikus vizsga mód (Max: 100 p)
+ </span>
+ <span className={`px-2 py-0.5 rounded-full text-[11px] font-extrabold ${
+ darkMode ? 'bg-amber-500/25 text-amber-200 border border-amber-400/40' : 'bg-amber-200 text-amber-950 border border-amber-500/50'
+ }`}>
+ {st.autoExamAttemptCount}. / 3 alkalom
  </span>
  </div>
  <span className="text-xs font-bold">
@@ -19103,7 +19307,7 @@ export default function App() {
  <p className={`text-xs leading-relaxed ${
  darkMode ? 'text-amber-200/90' : 'text-amber-950/90'
  }`}>
- Minden ZH eredményed rögzítve lett, de a ZH minimum vagy a megajánlott jegy ponthatára nem teljesült (félévközi összpont: <strong>{formatHu(st.regularOsszElert)} p</strong>). Írd be a vizsgán elért pontszámodat a ceruza ikonra kattintva:
+ Minden ZH eredményed rögzítve lett, de a ZH minimum vagy a megajánlott jegy ponthatára nem teljesült (félévközi összpont: <strong>{formatHu(st.regularOsszElert)} p</strong>). Írd be a vizsgán elért pontszámodat (és opcionálisan a dátumot/időpontot) a ceruza ikonra kattintva:
  </p>
 
  <div className={`flex flex-wrap items-center justify-between gap-3 p-3 rounded-xl border ${
@@ -19113,7 +19317,9 @@ export default function App() {
  }`}>
  <div>
  <div className="flex items-center gap-2 flex-wrap">
- <p className={`text-sm font-extrabold ${textStrong}`}>Vizsgaeredmény</p>
+ <p className={`text-sm font-extrabold ${textStrong}`}>
+ {st.autoExamAttemptCount > 1 ? `${st.autoExamAttemptCount}. vizsga (aktuális)` : 'Vizsgaeredmény'}
+ </p>
  {(activeSubject.autoExamDate || activeSubject.autoExamTime) && (
  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-amber-500/15 text-amber-500 border border-amber-500/30">
  <Clock className="w-3 h-3 shrink-0" />
@@ -19127,11 +19333,11 @@ export default function App() {
  )}
  </div>
  <p className={`text-[11px] ${textMuted}`}>
- 59,5 ponttól 2-es, 69,5-től 3-as, 79,5-től 4-es, 89,5-től 5-ös • 59,5 pont alatt „Megbuktam☹️”
+ 59,5 ponttól 2-es, 69,5-től 3-as, 79,5-től 4-es, 89,5-től 5-ös • 59,5 pont alatt „Megbuktam☹️” (max. 3 vizsgaalkalom)
  </p>
  </div>
 
- <div className="flex items-center gap-2 ml-auto">
+ <div className="flex items-center gap-2 ml-auto flex-wrap justify-end">
  <span className={`min-w-[4.75rem] text-right border rounded-lg px-2.5 py-1.5 text-xs sm:text-sm font-extrabold ${
  darkMode
  ? 'bg-slate-800 border-amber-500/60 text-white'
@@ -19153,6 +19359,18 @@ export default function App() {
  {st.hasAutoExamScore ? `${formatHu(st.osszElert)}%` : '—'}
  </span>
 
+ {st.canRewriteAutoExam && (
+ <button
+ type="button"
+ onClick={() => handleRewriteExam(activeSubject)}
+ title={`Vizsga újraírása (${st.autoExamAttemptCount + 1}. / 3 alkalom)`}
+ className="px-3 py-2 sm:px-3 sm:py-1.5 rounded-lg text-xs font-extrabold bg-amber-400 hover:bg-amber-300 text-slate-950 shadow-xs inline-flex items-center gap-1.5 transition cursor-pointer"
+ >
+ <RotateCcw className="w-3.5 h-3.5 shrink-0" />
+ <span>Újraírom</span>
+ </button>
+ )}
+
  <button
  type="button"
  onClick={() => setItemModal({
@@ -19160,14 +19378,14 @@ export default function App() {
  isAutoExam: true,
  category: 'ZH',
  bucketId: '',
- title: 'Vizsga',
+ title: st.autoExamAttemptCount > 1 ? `${st.autoExamAttemptCount}. vizsga` : 'Vizsga',
  date: activeSubject.autoExamDate || '',
  time: activeSubject.autoExamTime || '',
  max: 100,
  achieved: st.hasAutoExamScore ? st.osszElert : '',
  bonusPoints: ''
  })}
- title="Vizsgapontszám szerkesztése"
+ title="Vizsgapontszám és időpont szerkesztése"
  className={`p-2 sm:p-1.5 rounded-lg border transition cursor-pointer ${
  darkMode
  ? 'bg-slate-800 border-slate-700 text-amber-400 hover:bg-slate-700'
@@ -19178,6 +19396,64 @@ export default function App() {
  </button>
  </div>
  </div>
+
+ {st.autoExamHistory.length > 0 && (
+ <div className="space-y-2 pt-1">
+ {st.autoExamHistory.map((prevAttempt, idx) => {
+ const attemptNum = prevAttempt.attemptNumber || (st.autoExamHistory.length - idx);
+ const prevPct = formatPct(prevAttempt.achieved, prevAttempt.max || 100);
+ return (
+ <div
+ key={prevAttempt.id || `prev_auto_exam_${idx}`}
+ className={`flex flex-wrap items-center justify-between gap-2.5 p-2.5 rounded-xl border opacity-55 grayscale ${
+ darkMode
+ ? 'bg-slate-900/55 border-slate-700/70'
+ : 'bg-white/60 border-slate-300/80'
+ }`}
+ >
+ <div className="min-w-0">
+ <div className="flex items-center gap-2 flex-wrap">
+ <p className={`text-xs sm:text-sm font-semibold ${textMuted}`}>
+ {prevAttempt.title || `${attemptNum}. vizsga`}
+ </p>
+ <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+ darkMode ? 'bg-slate-800 text-slate-400 border border-slate-700' : 'bg-slate-200 text-slate-600'
+ }`}>
+ Korábbi sikertelen vizsga (újraírva)
+ </span>
+ </div>
+ {(prevAttempt.date || prevAttempt.time) && (
+ <p className={`text-[11px] mt-0.5 flex items-center gap-1 ${textMuted}`}>
+ {prevAttempt.date || ''}{prevAttempt.date && prevAttempt.time ? ' • ' : ''}{prevAttempt.time || ''}
+ </p>
+ )}
+ </div>
+
+ <div className="flex items-center gap-2 ml-auto">
+ <span className={`min-w-[4.5rem] text-right border rounded-lg px-2 py-1 text-xs font-bold ${
+ darkMode ? 'bg-slate-900 border-slate-700 text-slate-300' : 'bg-slate-100 border-slate-200 text-slate-700'
+ }`}>
+ {formatHu(prevAttempt.achieved)} <span className="font-normal">/ {formatHu(prevAttempt.max || 100)} p</span>
+ </span>
+ <span className={`min-w-[3.25rem] px-2 text-center text-xs font-bold py-1 rounded-lg ${
+ darkMode ? 'bg-slate-800 text-slate-400' : 'bg-slate-200 text-slate-600'
+ }`}>
+ {prevPct !== null ? `${formatHu(prevPct)}%` : '—'}
+ </span>
+ </div>
+ </div>
+ );
+ })}
+ </div>
+ )}
+
+ {st.autoExamAttemptCount >= 3 && st.hasAutoExamScore && st.osszElert < 59.5 && (
+ <p className={`text-xs font-semibold px-3 py-2 rounded-xl border ${
+ darkMode ? 'bg-rose-950/40 border-rose-500/45 text-rose-300' : 'bg-rose-50 border-rose-300 text-rose-800'
+ }`}>
+ Elérted a BGE vizsgaszabályzat szerinti maximum 3 vizsgalehetőséget ebben a félévben, így ez a vizsga már nem írható újra.
+ </p>
+ )}
  </div>
  )}
 

@@ -693,17 +693,11 @@ function buildTemplatesForMajor(majorId) {
  minAttendanceMegajanlott,
  minAttendanceMegajanlottPct,
  attendanceSessions: [],
- hasLectures: true,
- totalLectures: totalClasses,
- lectureAttendanceSessions: [],
- customBuckets: [],
- assessments
- });
- });
- });
-
- return results;
-}
+ hasépernyőre.'
+ ],
+ tip: 'Ha a Hallgatói profilban megadsz egy becenevet, a főoldal személyes köszönése és a felső sáv is ezen fog szólítani!'
+ }
+];
 
 function readLocalCache(key, ttlMs) {
  try {

@@ -43,6 +43,12 @@ const RELEASES_CACHE_KEY = 'bge_releases_cache_v1';
 const RELEASES_CACHE_TTL_MS = 30 * 60 * 1000;
 const NOTICEBOARD_CACHE_KEY = 'bge_noticeboard_cache_v1';
 const NOTICEBOARD_CACHE_TTL_MS = 10 * 60 * 1000;
+const USER_SUBJECTS_CACHE_PREFIX = 'bge_cache_subjects_v1_';
+const USER_SEMESTERS_CACHE_PREFIX = 'bge_cache_semesters_v1_';
+const USER_PREFS_CACHE_PREFIX = 'bge_cache_prefs_v1_';
+const USER_DATA_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const STATS_CACHE_KEY = 'bge_cache_app_stats_v1';
+const STATS_CACHE_TTL_MS = 2 * 60 * 1000;
 const SEEN_NOTICES_STORAGE_KEY = 'bge_seen_notice_ids_v1';
 const UPDATE_CHECK_THROTTLE_MS = 30 * 1000;
 const GDPR_POLICY_VERSION = 'v2.3.0';
@@ -1350,9 +1356,51 @@ function readLocalCache(key, ttlMs) {
  }
 }
 
+function readLocalCacheAny(key, ttlMs) {
+ try {
+ const raw = localStorage.getItem(key);
+ if (!raw) return null;
+ const parsed = JSON.parse(raw);
+ if (!parsed || typeof parsed.ts !== 'number' || !('data' in parsed)) return null;
+ if (typeof ttlMs === 'number' && Date.now() - parsed.ts > ttlMs) return null;
+ return parsed.data;
+ } catch {
+ return null;
+ }
+}
+
 function writeLocalCache(key, data) {
  try {
  localStorage.setItem(key, JSON.stringify({ ts: Date.now(), data }));
+ } catch {
+ try {
+ localStorage.removeItem(TEMPLATES_CACHE_KEY);
+ localStorage.removeItem(RELEASES_CACHE_KEY);
+ localStorage.removeItem(NOTICEBOARD_CACHE_KEY);
+ localStorage.removeItem(STATS_CACHE_KEY);
+ localStorage.setItem(key, JSON.stringify({ ts: Date.now(), data }));
+ } catch {
+ // ignore
+ }
+ }
+}
+
+function clearLocalCachesByPrefix(prefix = 'bge_cache_') {
+ try {
+ const keysToRemove = [];
+ for (let i = 0; i < localStorage.length; i++) {
+ const key = localStorage.key(i);
+ if (key && key.startsWith(prefix)) {
+ keysToRemove.push(key);
+ }
+ }
+ keysToRemove.forEach((key) => {
+ try {
+ localStorage.removeItem(key);
+ } catch {
+ // ignore
+ }
+ });
  } catch {
  // ignore
  }
@@ -4201,7 +4249,18 @@ export default function App() {
  useEffect(() => {
  if (!user || !isStatsModalOpen) return;
 
+ const cachedStats = readLocalCacheAny(STATS_CACHE_KEY, STATS_CACHE_TTL_MS);
+ const hasFreshStatsCache = Boolean(
+ cachedStats &&
+ typeof cachedStats === 'object' &&
+ typeof cachedStats.totalUsers === 'number'
+ );
+ if (hasFreshStatsCache) {
+ setAppUsersStats(cachedStats);
+ setStatsLoading(false);
+ } else {
  setStatsLoading(true);
+ }
  const ACTIVE_WINDOW_MS = 3 * 60 * 1000;
  let cancelled = false;
 
@@ -4281,17 +4340,20 @@ export default function App() {
  }
  });
 
- setAppUsersStats({
+ const nextStatsPayload = {
  totalUsers: uniqueTotalIds.size,
  activeUsers: uniqueActiveIds.size,
  majorCounts,
  unknownMajorCount
- });
+ };
+ setAppUsersStats(nextStatsPayload);
+ writeLocalCache(STATS_CACHE_KEY, nextStatsPayload);
  setStatsLoading(false);
  };
 
  // Read previously saved majors from users/{uid}/settings/preferences (and root users collection if any)
  (async () => {
+ if (hasFreshStatsCache) return;
  try {
  const settingsGroupSnap = await getDocs(collectionGroup(db, 'settings'));
  settingsGroupSnap.forEach((prefSnap) => {
@@ -4686,7 +4748,14 @@ export default function App() {
  return;
  }
 
- setUserDataLoaded(false);
+ const subjCacheKey = `${USER_SUBJECTS_CACHE_PREFIX}${user.uid}`;
+ const semCacheKey = `${USER_SEMESTERS_CACHE_PREFIX}${user.uid}`;
+ const prefsCacheKey = `${USER_PREFS_CACHE_PREFIX}${user.uid}`;
+
+ const cachedSubjects = readLocalCache(subjCacheKey, USER_DATA_CACHE_TTL_MS);
+ const cachedSemesters = readLocalCache(semCacheKey, USER_DATA_CACHE_TTL_MS);
+ const cachedPrefs = readLocalCacheAny(prefsCacheKey, USER_DATA_CACHE_TTL_MS);
+
  let subjReady = false;
  let semReady = false;
  let prefsReady = false;
@@ -4696,9 +4765,40 @@ export default function App() {
  }
  };
 
+ if (Array.isArray(cachedSubjects)) {
+ setSubjects(cachedSubjects);
+ subjReady = true;
+ }
+ if (Array.isArray(cachedSemesters)) {
+ setSavedSemesterDocs(cachedSemesters);
+ semReady = true;
+ }
+ if (cachedPrefs && typeof cachedPrefs === 'object') {
+ if (typeof cachedPrefs.isGazdinfo === 'boolean') {
+ setHasServerGazdinfoPref(true);
+ }
+ if (typeof cachedPrefs.majorId === 'string' && BGE_MAJORS.some(m => m.id === cachedPrefs.majorId)) {
+ setUserMajorId(cachedPrefs.majorId);
+ }
+ if (typeof cachedPrefs.nickname === 'string') {
+ setUserNickname(cachedPrefs.nickname.trim());
+ }
+ if (cachedPrefs.gdprAcceptedVersion === GDPR_POLICY_VERSION) {
+ setHasAcceptedGdpr(true);
+ }
+ prefsReady = true;
+ }
+
+ if (subjReady && semReady && prefsReady) {
+ setUserDataLoaded(true);
+ } else {
+ setUserDataLoaded(false);
+ }
+
  const unsubSubj = onSnapshot(collection(db, 'users', user.uid, 'subjects'), (snapshot) => {
  const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
  setSubjects(list);
+ writeLocalCache(subjCacheKey, list);
  subjReady = true;
  checkAllReady();
  });
@@ -4708,6 +4808,7 @@ export default function App() {
  .map(d => ({ id: d.id, name: d.data().name }))
  .filter(item => Boolean(item.name));
  setSavedSemesterDocs(list);
+ writeLocalCache(semCacheKey, list);
  semReady = true;
  checkAllReady();
  });
@@ -4717,6 +4818,12 @@ export default function App() {
  (snap) => {
  if (snap.exists()) {
  const data = snap.data();
+ writeLocalCache(prefsCacheKey, {
+ isGazdinfo: data.isGazdinfo,
+ majorId: data.majorId,
+ nickname: data.nickname,
+ gdprAcceptedVersion: data.gdprAcceptedVersion
+ });
  const val = Number(data.reclassificationThreshold);
  if (!isNaN(val) && val >= 1 && val <= 5) {
  setReclassificationThreshold(val);
@@ -6014,6 +6121,12 @@ export default function App() {
  }
  };
 
+ const handleLogout = async () => {
+ setIsEditingNickname(false);
+ clearLocalCachesByPrefix('bge_cache_');
+ await signOut(auth);
+ };
+
  const handleAddSemester = async (e) => {
  e.preventDefault();
  if (!user || !generatedSemesterPreview || isGeneratedSemesterDuplicate) return;
@@ -6714,8 +6827,18 @@ export default function App() {
  return map;
  }, [subjects, isSim, simScores, simManualGrades, jokerPendingBySem]);
 
+ const subjectsBySemesterMap = useMemo(() => {
+ const map = new Map();
+ subjects.forEach(subj => {
+ const key = subj.semester || '';
+ if (!map.has(key)) map.set(key, []);
+ map.get(key).push(subj);
+ });
+ return map;
+ }, [subjects]);
+
  const calcSemesterSummary = (semName) => {
- const list = subjects.filter(s => s.semester === semName);
+ const list = subjectsBySemesterMap.get(semName || '') || [];
  let alairtDb = 0, felvettKredit = 0, teljesitettKredit = 0, sulyozottOsszeg = 0;
  let fElert = 0, fMax = 0;
 
@@ -6852,7 +6975,7 @@ export default function App() {
  neededSecondSemesterAvg
  };
  });
- }, [semesters, subjects, subjectStatsMap, semesterOrdinalMap, reclassificationThreshold]);
+ }, [semesters, subjectsBySemesterMap, subjectStatsMap, semesterOrdinalMap, reclassificationThreshold]);
 
  const semesterSubjects = useMemo(() => {
  const rawList = subjects.filter(s => s.semester === selectedSemester);
@@ -7208,7 +7331,7 @@ export default function App() {
 
  const kpis = useMemo(
  () => calcSemesterSummary(selectedSemester),
- [subjects, selectedSemester, subjectStatsMap]
+ [subjectsBySemesterMap, selectedSemester, subjectStatsMap]
  );
 
  const activeMajorObject = useMemo(
@@ -8831,7 +8954,7 @@ export default function App() {
  <button
  data-no-glass="true"
  type="button"
- onClick={() => signOut(auth)}
+ onClick={handleLogout}
  className="text-rose-500 hover:underline font-semibold cursor-pointer"
  >
  Kijelentkezés
@@ -9644,10 +9767,7 @@ export default function App() {
  <div className={`bge-menu-card bge-menu-card-5 rounded-2xl border p-4 sm:p-5 ${bgCard}`}>
  <button
  type="button"
- onClick={() => {
- setIsEditingNickname(false);
- signOut(auth);
- }}
+ onClick={handleLogout}
  className="w-full px-4 py-3 rounded-xl text-xs sm:text-sm font-extrabold bg-rose-600 hover:bg-rose-500 text-white flex items-center justify-center gap-2 shadow-md shadow-rose-600/20 transition cursor-pointer"
  >
  <LogOut className="w-4 h-4" /> Kijelentkezés
@@ -14443,7 +14563,7 @@ export default function App() {
  <button
  type="button"
  disabled={isSavingGdpr}
- onClick={() => signOut(auth)}
+ onClick={handleLogout}
  className={`px-4 py-2.5 rounded-xl text-xs font-bold border transition cursor-pointer disabled:opacity-50 ${
  darkMode
  ? 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'

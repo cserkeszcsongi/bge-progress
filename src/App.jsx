@@ -14,7 +14,7 @@ import {
  Menu, Palette, ChevronDown, SlidersHorizontal, RefreshCw, Lightbulb, CheckCircle2,
  LayoutList, ArrowUpDown, GripVertical, ArrowUp, ArrowDown, Calculator,
  BarChart3, Users, FastForward, FileSpreadsheet, HelpCircle, Upload,
- Download, Smartphone, Share, ShieldCheck, Lock, Database, Bell, Wrench, Home
+ Download, Smartphone, Share, ShieldCheck, Lock, Database, Bell, Wrench, Home, Clock
 } from 'lucide-react';
 import { auth, googleProvider, db } from './firebase';
 
@@ -642,6 +642,15 @@ function buildTemplatesForMajor(majorId) {
 }
 
 const APP_RELEASES = [
+  {
+    version: 'v3.2.0',
+    date: '2026. 11. 26.',
+    changes: [
+      'Automatikus „Órarend import” felugró gomb a féléves dashboard bal alsó sarkában: automatikusan megjelenik, amint bármelyik tárgynál hiányzik a jelenléti alkalmak dátuma, és eltűnik, amint minden alkalom ki van töltve',
+      'Neptun naptár Excel (.xlsx / .xls) órarend-importáló ablak beépített lépésről lépésre útmutatóval (Menü → Naptár → Naptár kezelése → Naptár exportálása → Excel): elemzi az exportált órarendet, kinyeri a kezdési dátumot és időpontot (év, hónap, nap, óra, perc), majd automatikusan párosítja és beírja minden tárgy előadásaihoz és gyakorlataihoz a meglévő jelenlétek megőrzésével',
+      'Kezdési időpont (óra:perc) mező hozzáadása a Jelenlét fül gyakorlat és előadás soraihoz, valamint az időpontok megjelenítése és időrendi rendezése a „Ma esedékes” ablakban'
+    ]
+  },
   {
     version: 'v3.1.0',
     date: '2026. 11. 26.',
@@ -1452,6 +1461,248 @@ async function parseNeptunExcelWorkbook(arrayBuffer) {
  return parsedItems;
 }
 
+const HU_MONTH_MAP = {
+ január: 1, januar: 1, jan: 1,
+ február: 2, februar: 2, feb: 2,
+ március: 3, marcius: 3, mar: 3, márc: 3, marc: 3,
+ április: 4, aprilis: 4, apr: 4, ápr: 4,
+ május: 5, majus: 5, maj: 5, máj: 5,
+ június: 6, junius: 6, jun: 6, jún: 6,
+ július: 7, julius: 7, jul: 7, júl: 7,
+ augusztus: 8, aug: 8,
+ szeptember: 9, szep: 9, szept: 9, sep: 9, sept: 9,
+ október: 10, oktober: 10, okt: 10, oct: 10,
+ november: 11, nov: 11,
+ december: 12, dec: 12,
+ january: 1, february: 2, march: 3, april: 4, may: 5, june: 6,
+ july: 7, august: 8, september: 9, october: 10
+};
+
+function normalizeCourseNameForTimetable(str) {
+ return String(str || '')
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .toLowerCase()
+  .replace(/[^a-z0-9]+/g, ' ')
+  .trim();
+}
+
+function stripParentheticalsForTimetable(str) {
+ return normalizeCourseNameForTimetable(String(str || '').replace(/\([^)]*\)/g, ' '));
+}
+
+function parseNeptunTimetableStart(rawVal) {
+ if (rawVal === null || rawVal === undefined || rawVal === '') return null;
+
+ // Excel serial date number fallback
+ if (typeof rawVal === 'number' && !isNaN(rawVal) && rawVal > 20000) {
+  const utcDays = Math.floor(rawVal - 25569);
+  const fracDay = rawVal - Math.floor(rawVal);
+  const dt = new Date(utcDays * 86400 * 1000);
+  const y = dt.getUTCFullYear();
+  const m = String(dt.getUTCMonth() + 1).padStart(2, '0');
+  const d = String(dt.getUTCDate()).padStart(2, '0');
+  const totalMinutes = Math.round(fracDay * 24 * 60);
+  const hh = String(Math.floor(totalMinutes / 60) % 24).padStart(2, '0');
+  const mm = String(totalMinutes % 60).padStart(2, '0');
+  return {
+   date: `${y}-${m}-${d}`,
+   time: `${hh}:${mm}`,
+   sortKey: `${y}-${m}-${d} ${hh}:${mm}`
+  };
+ }
+
+ const str = String(rawVal).trim();
+ if (!str) return null;
+
+ // Pattern 1: "2026. szeptember 1. 8:20" or "2026. szept. 01. 08:20"
+ const huMatch = str.match(
+  /(\d{4})\.?\s*([a-zA-ZáéíóöőúüűÁÉÍÓÖŐÚÜŰ]+)\.?\s+(\d{1,2})\.?(?:\s+(\d{1,2})[:.](\d{2}))?/i
+ );
+ if (huMatch) {
+  const year = huMatch[1];
+  const monthWord = huMatch[2].toLowerCase().replace(/\.$/, '');
+  const monthNum = HU_MONTH_MAP[monthWord];
+  const dayNum = parseInt(huMatch[3], 10);
+  if (monthNum && dayNum >= 1 && dayNum <= 31) {
+   const dateStr = `${year}-${String(monthNum).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
+   const timeStr = (huMatch[4] !== undefined && huMatch[5] !== undefined)
+    ? `${String(parseInt(huMatch[4], 10)).padStart(2, '0')}:${String(parseInt(huMatch[5], 10)).padStart(2, '0')}`
+    : '';
+   return {
+    date: dateStr,
+    time: timeStr,
+    sortKey: `${dateStr} ${timeStr || '00:00'}`
+   };
+  }
+ }
+
+ // Pattern 2: "2026.09.01. 8:20" or "2026-09-01 08:20" or "2026/09/01 8:20"
+ const numMatch = str.match(
+  /(\d{4})[.\-/\s]+(\d{1,2})[.\-/\s]+(\d{1,2})\.?(?:[T\s]+(\d{1,2})[:.](\d{2}))?/
+ );
+ if (numMatch) {
+  const year = numMatch[1];
+  const monthNum = parseInt(numMatch[2], 10);
+  const dayNum = parseInt(numMatch[3], 10);
+  if (monthNum >= 1 && monthNum <= 12 && dayNum >= 1 && dayNum <= 31) {
+   const dateStr = `${year}-${String(monthNum).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
+   const timeStr = (numMatch[4] !== undefined && numMatch[5] !== undefined)
+    ? `${String(parseInt(numMatch[4], 10)).padStart(2, '0')}:${String(parseInt(numMatch[5], 10)).padStart(2, '0')}`
+    : '';
+   return {
+    date: dateStr,
+    time: timeStr,
+    sortKey: `${dateStr} ${timeStr || '00:00'}`
+   };
+  }
+ }
+
+ return null;
+}
+
+function classifyTimetableCourseType(rawType) {
+ const norm = normalizeCourseNameForTimetable(rawType);
+ if (!norm) return 'practice';
+ if (
+  norm.includes('elmelet') ||
+  norm.includes('eloadas') ||
+  norm.includes('lecture') ||
+  norm === 'ea'
+ ) {
+  return 'lecture';
+ }
+ if (
+  norm.includes('gyakorlat') ||
+  norm.includes('labor') ||
+  norm.includes('szeminarium') ||
+  norm.includes('practice') ||
+  norm.includes('gyak')
+ ) {
+  return 'practice';
+ }
+ return 'practice';
+}
+
+async function parseNeptunTimetableWorkbook(arrayBuffer) {
+ const XLSX = await getXlsxLib();
+ const wb = XLSX.read(arrayBuffer, { type: 'array' });
+ const courseMap = new Map();
+ let totalEvents = 0;
+
+ wb.SheetNames.forEach((sheetName) => {
+  const sheet = wb.Sheets[sheetName];
+  if (!sheet) return;
+  const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+  if (!Array.isArray(rows) || rows.length === 0) return;
+
+  let headerRowIdx = -1;
+  let colStart = -1;
+  let colName = -1;
+  let colType = -1;
+
+  for (let r = 0; r < Math.min(rows.length, 25); r++) {
+   const row = Array.isArray(rows[r]) ? rows[r] : [];
+   const normCells = row.map(c => normalizeCourseNameForTimetable(c));
+   const foundStart = normCells.findIndex(c => c === 'kezdes' || c.includes('kezdes') || c === 'start');
+   const foundName = normCells.findIndex(c => c === 'nev' || c.includes('targynev') || c === 'name' || c.includes('tantargy'));
+   if (foundStart !== -1 && foundName !== -1) {
+    headerRowIdx = r;
+    colStart = foundStart;
+    colName = foundName;
+    colType = normCells.findIndex(c => c.includes('kurzus tipus') || c.includes('tipus') || c.includes('type'));
+    break;
+   }
+  }
+
+  if (headerRowIdx === -1) return;
+
+  for (let r = headerRowIdx + 1; r < rows.length; r++) {
+   const row = Array.isArray(rows[r]) ? rows[r] : [];
+   const rawStart = row[colStart];
+   const rawName = String(row[colName] || '').trim();
+   const rawType = colType !== -1 ? String(row[colType] || '').trim() : '';
+
+   if (!rawName) continue;
+   const parsedStart = parseNeptunTimetableStart(rawStart);
+   if (!parsedStart) continue;
+
+   const normName = normalizeCourseNameForTimetable(rawName);
+   if (!normName) continue;
+
+   const kind = classifyTimetableCourseType(rawType);
+   if (!courseMap.has(normName)) {
+    courseMap.set(normName, {
+     name: rawName,
+     normalizedName: normName,
+     strippedName: stripParentheticalsForTimetable(rawName),
+     practice: [],
+     lecture: []
+    });
+   }
+
+   const entry = courseMap.get(normName);
+   const list = kind === 'lecture' ? entry.lecture : entry.practice;
+   if (!list.some(it => it.date === parsedStart.date && it.time === parsedStart.time)) {
+    list.push({
+     date: parsedStart.date,
+     time: parsedStart.time,
+     sortKey: parsedStart.sortKey
+    });
+    totalEvents += 1;
+   }
+  }
+ });
+
+ const courses = Array.from(courseMap.values()).map(c => ({
+  ...c,
+  practice: [...c.practice].sort((a, b) => a.sortKey.localeCompare(b.sortKey)),
+  lecture: [...c.lecture].sort((a, b) => a.sortKey.localeCompare(b.sortKey))
+ }));
+
+ return { courses, totalEvents };
+}
+
+function matchTimetableToSemesterSubjects(parsedTimetable, semSubjects) {
+ const courses = parsedTimetable?.courses || [];
+ const matched = [];
+ const usedCourseKeys = new Set();
+
+ (semSubjects || []).forEach((subj) => {
+  if (!subj || subj.courseKind === 'exam' || subj.disablePointCalc) return;
+  const subjNorm = normalizeCourseNameForTimetable(subj.name);
+  const subjStripped = stripParentheticalsForTimetable(subj.name);
+  if (!subjNorm) return;
+
+  let bestCourse = courses.find(c => c.normalizedName === subjNorm);
+  if (!bestCourse && subjStripped) {
+   bestCourse = courses.find(c => c.strippedName === subjStripped || c.normalizedName === subjStripped);
+  }
+  if (!bestCourse && subjStripped.length >= 4) {
+   bestCourse = courses.find(c =>
+    c.normalizedName.includes(subjStripped) ||
+    subjStripped.includes(c.strippedName) ||
+    (c.strippedName.length >= 4 && subjNorm.includes(c.strippedName))
+   );
+  }
+
+  if (bestCourse) {
+   usedCourseKeys.add(bestCourse.normalizedName);
+   matched.push({
+    subjectId: subj.id,
+    subjectName: subj.name,
+    excelCourseName: bestCourse.name,
+    practice: bestCourse.practice,
+    lecture: bestCourse.lecture,
+    hasLectures: subj.hasLectures !== false
+   });
+  }
+ });
+
+ const unmatchedExcelCourses = courses.filter(c => !usedCourseKeys.has(c.normalizedName));
+ return { matched, unmatchedExcelCourses };
+}
+
 function buildSemesterFromStartInput(yearInput, season) {
  const year = parseInt(yearInput, 10);
  if (isNaN(year) || year < 2000 || year > 2099) {
@@ -1984,12 +2235,13 @@ function createDefaultSessions(count, existing = []) {
  const n = Math.max(0, Number(count) || 0);
  return Array.from({ length: n }, (_, idx) => {
  if (existing[idx]) {
- return { ...existing[idx], index: idx + 1 };
+ return { ...existing[idx], index: idx + 1, time: existing[idx].time || '' };
  }
  return {
  id: `att_${idx + 1}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
  index: idx + 1,
  date: '',
+ time: '',
  status: null
  };
  });
@@ -2314,10 +2566,12 @@ function mergeSubjectWithTemplate(subj, tpl, tplUpdatedMs) {
  : Array.from({ length: finalTotalClasses }, (_, idx) => {
  const ex = existingSessions[idx];
  const tplDate = tpl.attendanceSessions?.[idx]?.date || '';
+ const tplTime = tpl.attendanceSessions?.[idx]?.time || '';
  return {
  id: ex?.id || `att_${idx + 1}_${now}_${rand()}`,
  index: idx + 1,
  date: (ex?.date && String(ex.date).trim() !== '') ? ex.date : tplDate,
+ time: (ex?.time && String(ex.time).trim() !== '') ? ex.time : tplTime,
  status: ex?.status ?? null
  };
  });
@@ -2335,10 +2589,12 @@ function mergeSubjectWithTemplate(subj, tpl, tplUpdatedMs) {
  ? Array.from({ length: finalTotalLectures }, (_, idx) => {
  const ex = existingLecSessions[idx];
  const tplDate = tpl.lectureAttendanceSessions?.[idx]?.date || '';
+ const tplTime = tpl.lectureAttendanceSessions?.[idx]?.time || '';
  return {
  id: ex?.id || `lec_${idx + 1}_${now}_${rand()}`,
  index: idx + 1,
  date: (ex?.date && String(ex.date).trim() !== '') ? ex.date : tplDate,
+ time: (ex?.time && String(ex.time).trim() !== '') ? ex.time : tplTime,
  status: ex?.status ?? null
  };
  })
@@ -3710,6 +3966,13 @@ export default function App() {
  const [excelImportError, setExcelImportError] = useState('');
  const [isParsingExcel, setIsParsingExcel] = useState(false);
  const neptunExcelInputRef = useRef(null);
+
+ const [isTimetableImportModalOpen, setIsTimetableImportModalOpen] = useState(false);
+ const [timetableImportError, setTimetableImportError] = useState('');
+ const [isParsingTimetableExcel, setIsParsingTimetableExcel] = useState(false);
+ const [isSavingTimetableImport, setIsSavingTimetableImport] = useState(false);
+ const [timetableImportPreview, setTimetableImportPreview] = useState(null);
+ const timetableExcelInputRef = useRef(null);
 
  const [isSemesterModalOpen, setIsSemesterModalOpen] = useState(false);
  const [newSemesterStartYear, setNewSemesterStartYear] = useState(() => String(new Date().getFullYear()));
@@ -5889,6 +6152,7 @@ export default function App() {
  id: `att_${idx + 1}`,
  index: idx + 1,
  date: subj.attendanceSessions?.[idx]?.date || '',
+ time: subj.attendanceSessions?.[idx]?.time || '',
  status: null
  }));
 
@@ -5899,6 +6163,7 @@ export default function App() {
  id: `lec_${idx + 1}`,
  index: idx + 1,
  date: subj.lectureAttendanceSessions?.[idx]?.date || '',
+ time: subj.lectureAttendanceSessions?.[idx]?.time || '',
  status: null
  }))
  : [];
@@ -7360,6 +7625,7 @@ export default function App() {
  isSemesterModalOpen ||
  isPastSemestersWizardOpen ||
  excelImportTargetSemCode ||
+ isTimetableImportModalOpen ||
  editingSemesterOldName ||
  isSubjectModalOpen ||
  isDegreeCreditsModalOpen ||
@@ -7403,6 +7669,10 @@ export default function App() {
  if (isGdprModalOpen) { setIsGdprModalOpen(false); return; }
  if (excelImportTargetSemCode && !isParsingExcel) {
  setExcelImportTargetSemCode(null);
+ return;
+ }
+ if (isTimetableImportModalOpen && !isParsingTimetableExcel && !isSavingTimetableImport) {
+ setIsTimetableImportModalOpen(false);
  return;
  }
  if (itemCustomSortModal) { setItemCustomSortModal(null); return; }
@@ -7760,7 +8030,11 @@ export default function App() {
  const handleUpdateLectureSession = async (sessionIdx, changes) => {
  if (!activeSubject) return;
  const baseLectureSessions = createDefaultSessions(
- activeSubject.totalClasses ?? (activeSubject.attendanceSessions || []).length,
+ Math.max(
+  Number(activeSubject.totalClasses) || 0,
+  Number(activeSubject.totalLectures) || 0,
+  (activeSubject.lectureAttendanceSessions || []).length
+ ),
  activeSubject.lectureAttendanceSessions || []
  );
  const updated = baseLectureSessions.map((s, idx) =>
@@ -7770,6 +8044,175 @@ export default function App() {
  lectureAttendanceSessions: updated
  });
  };
+
+ const subjectsMissingAttendanceDates = useMemo(() => {
+  return semesterSubjects.filter((subj) => {
+   if (!subj || subj.courseKind === 'exam' || subj.disablePointCalc) return false;
+   const pracTotal = Math.max(Number(subj.totalClasses) || 0, toArraySafe(subj.attendanceSessions).length);
+   const pracSessions = createDefaultSessions(pracTotal, toArraySafe(subj.attendanceSessions));
+   const missingPractice = pracTotal > 0 && pracSessions.some(s => !s?.date || !String(s.date).trim());
+
+   const hasLec = subj.hasLectures !== false;
+   const lecTotal = hasLec ? Math.max(Number(subj.totalLectures) || 0, pracTotal, toArraySafe(subj.lectureAttendanceSessions).length) : 0;
+   const lecSessions = hasLec ? createDefaultSessions(lecTotal, toArraySafe(subj.lectureAttendanceSessions)) : [];
+   const missingLecture = hasLec && lecTotal > 0 && lecSessions.some(s => !s?.date || !String(s.date).trim());
+
+   return missingPractice || missingLecture;
+  });
+ }, [semesterSubjects]);
+
+ const hasMissingAttendanceDates = subjectsMissingAttendanceDates.length > 0;
+
+ const handleOpenTimetableImportModal = () => {
+  setTimetableImportError('');
+  setTimetableImportPreview(null);
+  setIsTimetableImportModalOpen(true);
+ };
+
+ const handleTimetableExcelFileSelected = async (e) => {
+  const file = e.target?.files?.[0];
+  if (e.target) {
+   e.target.value = '';
+  }
+  if (!file) return;
+
+  setIsParsingTimetableExcel(true);
+  setTimetableImportError('');
+  setTimetableImportPreview(null);
+
+  try {
+   const buffer = await file.arrayBuffer();
+   const parsed = await parseNeptunTimetableWorkbook(buffer);
+
+   if (!parsed || parsed.totalEvents === 0 || parsed.courses.length === 0) {
+    setTimetableImportError(
+     'Nem találtunk feldolgozható órarendi alkalmakat a fájlban. Ellenőrizd, hogy a Neptun Naptár → Naptár kezelése → Naptár exportálása (Excel) fájlt választottad-e ki!'
+    );
+    return;
+   }
+
+   const matchResult = matchTimetableToSemesterSubjects(parsed, semesterSubjects);
+   if (matchResult.matched.length === 0) {
+    setTimetableImportError(
+     'Az órarendet sikeresen beolvastuk, de egyetlen tárgynév sem egyezett a jelenlegi féléved tárgyaival. Ellenőrizd, hogy a megfelelő félév dashboardján vagy-e!'
+    );
+    return;
+   }
+
+   setTimetableImportPreview({
+    fileName: file.name,
+    totalEvents: parsed.totalEvents,
+    matched: matchResult.matched,
+    unmatchedExcelCourses: matchResult.unmatchedExcelCourses
+   });
+  } catch (err) {
+   console.error('Órarend Excel feldolgozási hiba:', err);
+   setTimetableImportError(
+    'Hiba történt az órarend Excel fájl beolvasása közben. Kérjük, tölts fel érvényes .xlsx vagy .xls fájlt!'
+   );
+  } finally {
+   setIsParsingTimetableExcel(false);
+  }
+ };
+
+ const handleApplyTimetableImport = async () => {
+  if (!user || !timetableImportPreview || isSavingTimetableImport) return;
+  const matchedItems = timetableImportPreview.matched || [];
+  if (matchedItems.length === 0) return;
+
+  setIsSavingTimetableImport(true);
+  try {
+   const batch = writeBatch(db);
+   const now = Date.now();
+   let updatedSubjectsCount = 0;
+   let totalFilledSessions = 0;
+
+   const mergeTimetableIntoSessions = (existingRaw, importedEvents, targetCount, prefix) => {
+    const existing = toArraySafe(existingRaw);
+    const finalCount = Math.max(targetCount, importedEvents.length);
+    const statusByDate = new Map();
+    existing.forEach((s) => {
+     if (s && s.date && s.status) {
+      const iso = normalizeDateToIso(s.date);
+      if (iso && !statusByDate.has(iso)) {
+       statusByDate.set(iso, s.status);
+      }
+     }
+    });
+
+    return Array.from({ length: finalCount }, (_, idx) => {
+     const ex = existing[idx];
+     const imp = importedEvents[idx];
+     if (imp) {
+      const preservedStatus = statusByDate.get(imp.date) ?? (ex && !ex.date ? (ex.status ?? null) : (ex?.status ?? null));
+      return {
+       id: ex?.id || `${prefix}_${idx + 1}_${now}_${Math.random().toString(36).slice(2, 6)}`,
+       index: idx + 1,
+       date: imp.date,
+       time: imp.time || '',
+       status: preservedStatus
+      };
+     }
+     return {
+      id: ex?.id || `${prefix}_${idx + 1}_${now}_${Math.random().toString(36).slice(2, 6)}`,
+      index: idx + 1,
+      date: ex?.date || '',
+      time: ex?.time || '',
+      status: ex?.status ?? null
+     };
+    });
+   };
+
+   matchedItems.forEach((m) => {
+    const subj = semesterSubjects.find(s => s.id === m.subjectId);
+    if (!subj) return;
+
+    const updatePayload = {};
+    let changed = false;
+
+    if (m.practice.length > 0) {
+     const basePracCount = Math.max(Number(subj.totalClasses) || 0, toArraySafe(subj.attendanceSessions).length);
+     const mergedPrac = mergeTimetableIntoSessions(subj.attendanceSessions, m.practice, basePracCount, 'att');
+     updatePayload.attendanceSessions = mergedPrac;
+     if (mergedPrac.length > (Number(subj.totalClasses) || 0)) {
+      updatePayload.totalClasses = mergedPrac.length;
+     }
+     totalFilledSessions += m.practice.length;
+     changed = true;
+    }
+
+    if (m.lecture.length > 0) {
+     const baseLecCount = Math.max(
+      Number(subj.totalLectures) || 0,
+      Number(subj.totalClasses) || 0,
+      toArraySafe(subj.lectureAttendanceSessions).length
+     );
+     const mergedLec = mergeTimetableIntoSessions(subj.lectureAttendanceSessions, m.lecture, baseLecCount, 'lec');
+     updatePayload.hasLectures = true;
+     updatePayload.lectureAttendanceSessions = mergedLec;
+     updatePayload.totalLectures = mergedLec.length;
+     totalFilledSessions += m.lecture.length;
+     changed = true;
+    }
+
+    if (changed) {
+     batch.update(doc(db, 'users', user.uid, 'subjects', subj.id), updatePayload);
+     updatedSubjectsCount += 1;
+    }
+   });
+
+   await batch.commit();
+   setIsTimetableImportModalOpen(false);
+   setTimetableImportPreview(null);
+   setTimetableImportError('');
+   showToast(`Órarend importálva: ${updatedSubjectsCount} tárgynál összesen ${totalFilledSessions} időpont beírva!`);
+  } catch (err) {
+   alert('Hiba az órarend mentésekor: ' + err.message);
+  } finally {
+   setIsSavingTimetableImport(false);
+  }
+ };
+
 
  const semesterAttendanceSummary = useMemo(() => {
  let totalPracticePresent = 0;
@@ -8009,6 +8452,7 @@ export default function App() {
       sessionIdx: idx,
       sessionNumber: sess.index || idx + 1,
       title: `${sess.index || idx + 1}. gyakorlat`,
+      time: sess.time || '',
       badgeLabel: 'Gyakorlat',
       badgeTone: 'amber',
       status,
@@ -8029,6 +8473,7 @@ export default function App() {
        sessionIdx: idx,
        sessionNumber: sess.index || idx + 1,
        title: `${sess.index || idx + 1}. előadás`,
+       time: sess.time || '',
        badgeLabel: 'Előadás',
        badgeTone: 'sky',
        status,
@@ -8041,6 +8486,9 @@ export default function App() {
 
   items.sort((a, b) => {
    if (a.priority !== b.priority) return a.priority - b.priority;
+   if (a.time && b.time && a.time !== b.time) return a.time.localeCompare(b.time);
+   if (a.time && !b.time) return -1;
+   if (!a.time && b.time) return 1;
    const subjCmp = (a.subjectName || '').localeCompare(b.subjectName || '', 'hu');
    if (subjCmp !== 0) return subjCmp;
    return (a.title || '').localeCompare(b.title || '', 'hu', { numeric: true });
@@ -9702,6 +10150,14 @@ export default function App() {
  className="hidden"
  />
 
+ <input
+ ref={timetableExcelInputRef}
+ type="file"
+ accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+ onChange={handleTimetableExcelFileSelected}
+ className="hidden"
+ />
+
  <AnimatedPresence show={Boolean(showUpdateBanner)} variant="toast" duration={220}>
  {showUpdateBanner && (
  <div className={`fixed top-3 left-3 right-3 sm:left-1/2 sm:-translate-x-1/2 sm:max-w-lg z-[70] rounded-2xl border-2 border-amber-400 backdrop-blur-2xl shadow-2xl px-4 py-3 flex items-center justify-between gap-3 ${
@@ -10866,8 +11322,13 @@ export default function App() {
             <p className={`text-xs sm:text-sm font-bold truncate group-hover:text-amber-500 transition ${textStrong}`}>
              {item.subjectName}
             </p>
-            <p className={`text-[11px] truncate ${textMuted}`}>
-             {item.title}
+            <p className={`text-[11px] truncate flex items-center gap-1.5 ${textMuted}`}>
+             <span>{item.title}</span>
+             {item.time && (
+              <span className="inline-flex items-center gap-0.5 font-bold text-amber-500">
+               • <Clock className="w-3 h-3 shrink-0" /> {item.time}
+              </span>
+             )}
             </p>
            </div>
           </button>
@@ -12036,6 +12497,29 @@ export default function App() {
  </button>
  </div>
  ) : activeView === 'semester' ? (
+ <>
+ {hasMissingAttendanceDates && (
+ <div className="fixed bottom-[82px] left-4 sm:bottom-[86px] sm:left-7 z-30">
+ <button
+ type="button"
+ onClick={handleOpenTimetableImportModal}
+ title="Neptun órarend Excel importálása a hiányzó jelenléti dátumok és időpontok kitöltéséhez"
+ className={`bge-fluid-reveal px-3.5 py-2.5 sm:px-4 sm:py-3 rounded-full border-2 font-extrabold text-xs sm:text-sm flex items-center gap-2 shadow-2xl transition transform hover:scale-105 active:scale-95 cursor-pointer relative ${
+ darkMode
+ ? 'bg-slate-900/78 hover:bg-slate-800/90 text-amber-300 border-amber-400/80 shadow-[0_0_24px_rgba(251,191,36,0.35)]'
+ : 'bg-white/85 hover:bg-amber-50 text-slate-900 border-amber-400 shadow-[0_0_24px_rgba(251,191,36,0.45)]'
+ }`}
+ >
+ <span className="w-7 h-7 rounded-full bg-amber-400 text-slate-950 flex items-center justify-center shrink-0">
+ <FileSpreadsheet className="w-4 h-4" />
+ </span>
+ <span className="whitespace-nowrap">Órarend import</span>
+ <span className="px-1.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-500 text-white leading-none">
+ {subjectsMissingAttendanceDates.length}
+ </span>
+ </button>
+ </div>
+ )}
  <div data-collector-menu="true" className="fixed bottom-[82px] right-4 sm:bottom-[86px] sm:right-7 z-30 flex flex-col items-end gap-3">
  {(isCollectorMenuOpen || isCollectorClosing) && (() => {
  const selectedJokerForCapsule = pendingJokerInfo || activeJokerInfo;
@@ -12146,6 +12630,7 @@ export default function App() {
  )}
  </button>
  </div>
+ </>
  ) : null}
 
  {/* MÚLTBÉLI FÉLÉVEK FELTÖLTÉSE VARÁZSLÓ MODAL */}
@@ -12739,6 +13224,207 @@ export default function App() {
  </div>
  </div>
  );
+ })()}
+ </AnimatedPresence>
+
+ {/* NEPTUN ÓRAREND EXCEL IMPORTÁLÁS PÁRBESZÉDABLAK */}
+ <AnimatedPresence show={Boolean(isTimetableImportModalOpen)} variant="modal" duration={240}>
+ {isTimetableImportModalOpen && (() => {
+  const timetableExportSteps = [
+   'Lépj be a Neptunba, majd nyomd meg a Menü gombot.',
+   'Kattints a Naptár fülre.',
+   'Nyomd meg a Naptár kezelése gombot.',
+   'Kattints a Naptár exportálása gombra, és exportáld ki az órarendet Excel (.xlsx) formátumban!'
+  ];
+
+  return (
+  <div
+   data-top-modal="true"
+   onClick={() => !isParsingTimetableExcel && !isSavingTimetableImport && setIsTimetableImportModalOpen(false)}
+   className={`fixed inset-0 ${modalBackdrop} z-[60] flex items-center justify-center p-2.5 sm:p-4 overscroll-none`}
+  >
+   <div
+    onClick={(e) => e.stopPropagation()}
+    className={`rounded-2xl max-w-lg w-full max-h-[92dvh] flex flex-col shadow-2xl overflow-hidden border-2 border-amber-400 ${modalCard}`}
+   >
+    <div className={`px-4 sm:px-6 py-3.5 sm:py-4 flex justify-between items-center shrink-0 ${modalHeader}`}>
+     <div className="flex items-center gap-2.5 min-w-0">
+      <div className="w-9 h-9 rounded-xl bg-amber-400 text-slate-950 flex items-center justify-center shrink-0">
+       <FileSpreadsheet className="w-5 h-5" />
+      </div>
+      <div className="min-w-0">
+       <h2 className="font-extrabold text-sm sm:text-base leading-tight truncate">
+        Neptun órarend importálása (Excel)
+       </h2>
+       <p className={`text-[11px] font-semibold truncate ${modalHeaderAmber}`}>
+        Aktuális félév: {formatSemesterLabel(selectedSemester)}
+       </p>
+      </div>
+     </div>
+     <button
+      data-no-glass="true"
+      type="button"
+      disabled={isParsingTimetableExcel || isSavingTimetableImport}
+      onClick={() => setIsTimetableImportModalOpen(false)}
+      className={`p-1.5 cursor-pointer shrink-0 disabled:opacity-50 ${modalCloseBtn}`}
+     >
+      <X className="w-5 h-5" />
+     </button>
+    </div>
+
+    <div className="p-4 sm:p-6 overflow-y-auto overscroll-contain space-y-4 flex-1 min-h-0">
+     <div className={`p-3.5 sm:p-4 rounded-2xl border space-y-3 ${
+      darkMode
+       ? 'bg-amber-400/10 border-amber-400/35 text-amber-100'
+       : 'bg-amber-50/90 border-amber-300 text-slate-800'
+     }`}>
+      <div className="flex items-center gap-2">
+       <HelpCircle className="w-4 h-4 text-amber-500 shrink-0" />
+       <p className="text-xs sm:text-sm font-extrabold text-amber-500">
+        Hogyan exportáld ki az órarendet a Neptunból?
+       </p>
+      </div>
+
+      <div className={`px-3 py-2 rounded-xl border text-[11px] sm:text-xs font-extrabold leading-relaxed ${
+       darkMode
+        ? 'bg-slate-900/90 border-slate-700 text-amber-300'
+        : 'bg-white border-amber-300 text-slate-900'
+      }`}>
+       Neptun belépés &gt; Menü &gt; Naptár &gt; Naptár kezelése &gt; Naptár exportálása &gt; Excel (.xlsx)
+      </div>
+
+      <ol className="space-y-2 pt-0.5">
+       {timetableExportSteps.map((stepTxt, idx) => (
+        <li key={idx} className="flex items-start gap-2.5 text-xs leading-relaxed">
+         <span className="w-5 h-5 rounded-full bg-amber-400 text-slate-950 font-extrabold text-[11px] flex items-center justify-center shrink-0 mt-0.5">
+          {idx + 1}
+         </span>
+         <span className={darkMode ? 'text-slate-200' : 'text-slate-700'}>{stepTxt}</span>
+        </li>
+       ))}
+      </ol>
+     </div>
+
+     <div className={`p-3.5 rounded-xl border space-y-1.5 text-xs ${bgSubCard}`}>
+      <p className={`font-bold ${textStrong}`}>Mit olvas be és ír be automatikusan az alkalmazás?</p>
+      <p className={textMuted}>
+       Az exportált Excelből kinyerjük a tantárgyak <strong>kezdési dátumát és időpontját</strong> (év, hónap, nap, óra, perc), majd a <em>Kurzus típus</em> alapján az <strong>Elmélet / Előadás</strong> alkalmakat az <strong>Előadásokhoz</strong>, a <strong>Gyakorlat</strong> alkalmakat pedig a <strong>Gyakorlatokhoz</strong> írjuk be — a korábban rögzített jelenléteid megőrzésével.
+      </p>
+     </div>
+
+     {timetableImportError && (
+      <div className={`p-3 rounded-xl border text-xs font-semibold flex items-start gap-2 ${
+       darkMode
+        ? 'bg-rose-950/40 border-rose-500/60 text-rose-200'
+        : 'bg-rose-50 border-rose-300 text-rose-800'
+      }`}>
+       <AlertTriangle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
+       <span>{timetableImportError}</span>
+      </div>
+     )}
+
+     <button
+      type="button"
+      disabled={isParsingTimetableExcel || isSavingTimetableImport}
+      onClick={() => timetableExcelInputRef.current?.click()}
+      className="w-full py-3.5 px-4 rounded-2xl text-xs sm:text-sm font-extrabold bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-white shadow-lg flex items-center justify-center gap-2 transition cursor-pointer"
+     >
+      <Upload className="w-5 h-5" />
+      <span>
+       {isParsingTimetableExcel
+        ? 'Órarend elemzése...'
+        : timetableImportPreview
+         ? 'Másik Excel fájl kiválasztása'
+         : 'Neptun órarend Excel (.xlsx) kiválasztása'}
+      </span>
+     </button>
+
+     {timetableImportPreview && (
+      <div className={`bge-fluid-reveal p-3.5 sm:p-4 rounded-2xl border space-y-3 ${
+       darkMode
+        ? 'bg-emerald-950/25 border-emerald-500/45'
+        : 'bg-emerald-50/75 border-emerald-300'
+      }`}>
+       <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="flex items-center gap-2 min-w-0">
+         <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+         <p className={`text-xs sm:text-sm font-extrabold truncate ${textStrong}`}>
+          Párosított tárgyak ({timetableImportPreview.matched.length} db)
+         </p>
+        </div>
+        <span className={`text-[11px] font-semibold truncate max-w-[180px] ${textMuted}`}>
+         {timetableImportPreview.fileName}
+        </span>
+       </div>
+
+       <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+        {timetableImportPreview.matched.map((m) => (
+         <div
+          key={m.subjectId}
+          className={`p-2.5 rounded-xl border flex flex-col gap-1 text-xs ${bgSubCard}`}
+         >
+          <p className={`font-bold truncate ${textStrong}`}>{m.subjectName}</p>
+          <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+           {m.practice.length > 0 && (
+            <span className={`px-2 py-0.5 rounded-md font-bold ${
+             darkMode ? 'bg-amber-400/20 text-amber-300' : 'bg-amber-100 text-amber-900'
+            }`}>
+             Gyakorlat: {m.practice.length} alkalom ({m.practice[0].date}{m.practice[0].time ? ` ${m.practice[0].time}` : ''} – {m.practice[m.practice.length - 1].date})
+            </span>
+           )}
+           {m.lecture.length > 0 && (
+            <span className={`px-2 py-0.5 rounded-md font-bold ${
+             darkMode ? 'bg-sky-500/20 text-sky-300' : 'bg-sky-100 text-sky-900'
+            }`}>
+             Előadás: {m.lecture.length} alkalom ({m.lecture[0].date}{m.lecture[0].time ? ` ${m.lecture[0].time}` : ''} – {m.lecture[m.lecture.length - 1].date})
+            </span>
+           )}
+          </div>
+         </div>
+        ))}
+       </div>
+
+       {timetableImportPreview.unmatchedExcelCourses.length > 0 && (
+        <p className={`text-[11px] leading-snug ${textMuted}`}>
+         Kimaradt (nincs ilyen tárgyad ebben a félévben):{' '}
+         {timetableImportPreview.unmatchedExcelCourses.map(c => c.name).join(', ')}
+        </p>
+       )}
+      </div>
+     )}
+    </div>
+
+    <div className={`px-4 sm:px-6 py-3 border-t flex items-center justify-end gap-2 shrink-0 ${
+     darkMode ? 'border-slate-800 bg-slate-900/75' : 'border-slate-200 bg-slate-50'
+    }`}>
+     <button
+      data-no-glass="true"
+      type="button"
+      disabled={isParsingTimetableExcel || isSavingTimetableImport}
+      onClick={() => setIsTimetableImportModalOpen(false)}
+      className={`px-4 py-2 text-xs sm:text-sm font-semibold rounded-xl cursor-pointer ${textMuted}`}
+     >
+      Mégse
+     </button>
+     {timetableImportPreview && timetableImportPreview.matched.length > 0 && (
+      <button
+       type="button"
+       disabled={isSavingTimetableImport}
+       onClick={handleApplyTimetableImport}
+       className="px-4 py-2 text-xs sm:text-sm font-extrabold bg-amber-400 hover:bg-amber-300 disabled:opacity-50 text-slate-950 rounded-xl flex items-center gap-1.5 shadow-md transition cursor-pointer"
+      >
+       <Check className="w-4 h-4" />
+       <span>
+        {isSavingTimetableImport
+         ? 'Mentés...'
+         : `Időpontok beírása (${timetableImportPreview.matched.length} tárgy)`}
+       </span>
+      </button>
+     )}
+    </div>
+   </div>
+  </div>
+  );
  })()}
  </AnimatedPresence>
  {/* APP STATISZTIKA MODAL */}
@@ -16498,7 +17184,7 @@ export default function App() {
  : darkMode ? 'border-slate-800 bg-slate-800/40' : 'border-slate-200 bg-white'
  }`}
  >
- <div className="flex items-center gap-2.5 min-w-0">
+ <div className="flex items-center gap-2 min-w-0 flex-wrap sm:flex-nowrap">
  <span className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold shrink-0 ${
  darkMode ? 'bg-slate-800 text-slate-300' : 'bg-slate-100 text-slate-700'
  }`}>
@@ -16509,6 +17195,13 @@ export default function App() {
  value={sess.date || ''}
  onChange={(e) => handleUpdateSession(idx, { date: e.target.value })}
  className={`border rounded-lg px-2.5 py-2 sm:py-1.5 text-sm sm:text-xs focus:outline-none ${inputStyle}`}
+ />
+ <input
+ type="time"
+ value={sess.time || ''}
+ onChange={(e) => handleUpdateSession(idx, { time: e.target.value })}
+ title="Kezdési időpont (óra:perc)"
+ className={`border rounded-lg px-2 py-2 sm:py-1.5 text-sm sm:text-xs focus:outline-none ${inputStyle}`}
  />
  </div>
 
@@ -16638,7 +17331,7 @@ export default function App() {
  : darkMode ? 'border-slate-800 bg-slate-800/40' : 'border-slate-200 bg-white'
  }`}
  >
- <div className="flex items-center gap-2.5 min-w-0">
+ <div className="flex items-center gap-2 min-w-0 flex-wrap sm:flex-nowrap">
  <span className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold shrink-0 ${
  darkMode ? 'bg-slate-800 text-sky-300' : 'bg-sky-50 text-sky-700'
  }`}>
@@ -16649,6 +17342,13 @@ export default function App() {
  value={sess.date || ''}
  onChange={(e) => handleUpdateLectureSession(idx, { date: e.target.value })}
  className={`border rounded-lg px-2.5 py-2 sm:py-1.5 text-sm sm:text-xs focus:outline-none ${inputStyle}`}
+ />
+ <input
+ type="time"
+ value={sess.time || ''}
+ onChange={(e) => handleUpdateLectureSession(idx, { time: e.target.value })}
+ title="Kezdési időpont (óra:perc)"
+ className={`border rounded-lg px-2 py-2 sm:py-1.5 text-sm sm:text-xs focus:outline-none ${inputStyle}`}
  />
  </div>
 

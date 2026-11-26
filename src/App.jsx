@@ -710,7 +710,7 @@ const APP_RELEASES = [
       'Dátum és kezdési időpont megadása Joker ZH-hoz és vizsgához is: a Joker ZH kiválasztásakor és pontbeírásakor megadható az újraírás dátuma és időpontja, valamint a vizsgáknál (mind a vizsgakurzusoknál, mind az automatikus vizsgáknál) is rögzíthető a pontos vizsgaidőpont — mindkettő automatikusan megjelenik a „Ma esedékes” ablakban',
       'Intelligens Excel-szerű sorozatkitöltés (auto-fill) a Jelenlét fülön: ha a gyakorlatoknál vagy az előadásoknál kézzel beírod az első két alkalom dátumát (és opcionálisan időpontját), a rendszer felismeri a két dátum közötti lépésközt (pl. heti 7 nap vagy kétheti 14 nap), és automatikusan kitölti az összes többi üres sort a megfelelő dátumokkal és kezdési időponttal',
       'Automatikus összecsukás a „Ma esedékes” ablakban: amint a mai napra esedékes összes teendőt rögzítetted, az ablak automatikusan becsukódik (és bármikor újra lenyitható, ha visszanéznéd vagy módosítanád)',
-      'Duplikált sablon-tárgyfelvétel tiltása: a tárgyfelvétel ablak sablonlistája automatikusan ellenőrzi a már felvett tantárgyaidat (sablon-azonosító és tárgyév alapján), és nem engedi ugyanazt a sablont még egyszer felvenni'
+      'Félévszintű duplikált sablon-tárgyfelvétel tiltása: a tárgyfelvétel ablak sablonlistája az adott féléven belül ellenőrzi a már felvett tantárgyakat, így ugyanabban a félévben nem engedi kétszer felvenni ugyanazt a tárgyat, de egy másik félévben (pl. tárgyismétlésnél) szabadon felvehető'
     ]
   },
   {
@@ -7213,11 +7213,21 @@ export default function App() {
 
  const isTemplateAlreadyTaken = (tpl) => {
   if (!tpl) return false;
-  if (addedTemplateIds[tpl.id]) return true;
+  const targetSemester = editingSubject?.semester || selectedSemester || semesters[0] || getCurrentSemesterCode();
+  const targetCanonicalSem = getCanonicalSemesterCode(targetSemester);
+  const addedKey = `${targetCanonicalSem || targetSemester}__${tpl.id}`;
+  if (addedTemplateIds[addedKey]) return true;
+
   const tplNameKey = normalizeTemplateMatchKey(tpl.name);
   const tplCourseKind = tpl.courseKind || 'regular';
   return subjects.some(s => {
    if (!s) return false;
+   const subjCanonicalSem = getCanonicalSemesterCode(s.semester);
+   const isSameSemester = targetCanonicalSem && subjCanonicalSem
+    ? subjCanonicalSem === targetCanonicalSem
+    : (s.semester || '') === targetSemester;
+   if (!isSameSemester) return false;
+
    if (!tpl.isWebScrapedMajor && s.templateId && s.templateId === tpl.id) return true;
    return (
     tplNameKey !== '' &&
@@ -7230,7 +7240,7 @@ export default function App() {
  const handleCreateFromTemplate = async (tpl) => {
  if (!user || !tpl) return;
  if (isTemplateAlreadyTaken(tpl)) {
- showToast(`A(z) „${tpl.name}” tantárgy már fel van véve!`);
+ showToast(`A(z) „${tpl.name}” tantárgy ebben a félévben már fel van véve!`);
  return;
  }
  const now = Date.now();
@@ -7330,7 +7340,8 @@ export default function App() {
 
  await setDoc(doc(db, 'users', user.uid, 'subjects', newSubjId), payload);
  setSelectedSemester(targetSemester);
- setAddedTemplateIds(prev => ({ ...prev, [tpl.id]: true }));
+ const targetCanonicalSem = getCanonicalSemesterCode(targetSemester);
+ setAddedTemplateIds(prev => ({ ...prev, [`${targetCanonicalSem || targetSemester}__${tpl.id}`]: true }));
  };
 
  const handleToggleCourseType = async (subj) => {

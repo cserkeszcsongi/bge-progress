@@ -8734,18 +8734,31 @@ export default function App() {
 
  if (isExam) {
  finalBuckets = [];
- const existingExamItem = finalAssessments.find(a => a.category === 'ZH') || finalAssessments[0];
+ const existingExamItems = finalAssessments.filter(a => a.category === 'ZH');
+ if (existingExamItems.length > 0) {
+ finalAssessments = existingExamItems.map((exItem, idx) => ({
+ ...exItem,
+ category: 'ZH',
+ title: exItem.title || (existingExamItems.length > 1 ? `${existingExamItems.length - idx}. vizsga` : 'Vizsga'),
+ date: exItem.date || '',
+ time: exItem.time || '',
+ max: 100,
+ achieved: exItem.achieved !== undefined ? exItem.achieved : null
+ }));
+ } else {
+ const fallbackItem = finalAssessments[0];
  finalAssessments = [
  {
- id: existingExamItem?.id || `exam_${Date.now()}`,
+ id: fallbackItem?.id || `exam_${Date.now()}`,
  category: 'ZH',
  title: 'Vizsga',
- date: existingExamItem?.date || '',
- time: existingExamItem?.time || '',
+ date: fallbackItem?.date || '',
+ time: fallbackItem?.time || '',
  max: 100,
- achieved: existingExamItem?.achieved !== undefined ? existingExamItem.achieved : null
+ achieved: fallbackItem?.achieved !== undefined ? fallbackItem.achieved : null
  }
  ];
+ }
  }
 
  const payload = {
@@ -9165,6 +9178,8 @@ export default function App() {
  achieved: parsedAchieved,
  ...(itemModal.category === 'ZH' && activeSubject.courseKind !== 'exam' ? { bonusPoints: parsedBonus } : {}),
  ...(itemModal.category === 'Egyeb' ? { bucketId: itemModal.bucketId || null } : {}),
+ ...(prevItem?.isRewrittenExamAttempt ? { isRewrittenExamAttempt: true } : {}),
+ ...(prevItem?.attemptNumber !== undefined ? { attemptNumber: prevItem.attemptNumber } : {}),
  ...(isCompletingPendingJokerHere
  ? {
  isJokerRewritten: true,
@@ -10092,7 +10107,7 @@ export default function App() {
       subjectName: subj.name || 'Névtelen tárgy',
       assessmentId: autoExamId,
       category: 'ZH',
-      title: 'Vizsga',
+      title: stForToday.autoExamAttemptCount > 1 ? `${stForToday.autoExamAttemptCount}. vizsga` : 'Vizsga',
       time: subj.autoExamTime || '',
       badgeLabel: 'Vizsga',
       badgeTone: 'orange',
@@ -14170,7 +14185,7 @@ export default function App() {
  ? 'bg-violet-500/15 text-violet-300 border-violet-500/35'
  : 'bg-violet-50 text-violet-700 border-violet-300'
  }`}>
- Vizsgakurzus
+ Vizsgakurzus{st.examAttemptCount > 1 ? ` (${st.examAttemptCount}./3)` : ''}
  </span>
  )}
  </div>
@@ -14279,7 +14294,7 @@ export default function App() {
  ? 'bg-violet-500/15 text-violet-300 border-violet-500/35'
  : 'bg-violet-50 text-violet-700 border-violet-300'
  }`}>
- Vizsgakurzus
+ Vizsgakurzus{st.examAttemptCount > 1 ? ` (${st.examAttemptCount}./3)` : ''}
  </span>
  )}
  {hasJokerInSubject && !st.isGradeOnlyCard && (
@@ -14329,7 +14344,7 @@ export default function App() {
  }`}>
  <div className="flex items-center gap-2">
  <span className="px-2 py-0.5 rounded text-[11px] font-extrabold uppercase tracking-wider bg-amber-700 text-white">
- VIZSGA
+ VIZSGA{st.autoExamAttemptCount > 1 ? ` (${st.autoExamAttemptCount}./3)` : ''}
  </span>
  <span className="text-xs font-bold">
  Max: 100 p
@@ -18759,6 +18774,7 @@ export default function App() {
  <span>Újraírom</span>
  </button>
  )}
+ {!isRewrittenExamAttempt && (
  <button
  type="button"
  onClick={() => setItemModal({
@@ -18773,7 +18789,7 @@ export default function App() {
  bonusPoints: item.bonusPoints ?? '',
  confirmDelete: false
  })}
- title={st.isExamCourse ? 'Vizsgapontszám szerkesztése' : 'Tétel szerkesztése / törlése'}
+ title={st.isExamCourse ? 'Vizsgapontszám és időpont szerkesztése' : 'Tétel szerkesztése / törlése'}
  className={`px-3.5 py-2 sm:px-3 sm:py-1.5 rounded-lg border transition cursor-pointer inline-flex items-center justify-center gap-1.5 min-w-[4.5rem] ${
  darkMode
  ? 'bg-slate-800 border-slate-700 text-slate-200 hover:bg-slate-700 hover:border-amber-400/50'
@@ -18788,6 +18804,7 @@ export default function App() {
  </>
  )}
  </button>
+ )}
  </div>
  </div>
  </div>

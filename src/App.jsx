@@ -709,6 +709,7 @@ const APP_RELEASES = [
     changes: [
       'Vizsga és vizsgakurzus újraírása („Újraírom” gomb): ha egy vizsgakurzus vagy automatikus vizsgaeredmény sikertelen (< 59,5 pont), a tétel mellett megjelenik az „Újraírom” gomb (kizárólag vizsgáknál, ZH-knál nem)',
       'BGE vizsgaszabályzat szerinti maximum 3 vizsgaalkalom (1. vizsga + legfeljebb 2 javítóvizsga): az „Újraírom” gombra kattintva az előző sikertelen eredmény elszürkül és megmarad előzményként, a tárgy pedig azonnal várakozó vizsga módba kerül, felette pedig megjelenik a következő vizsgaalkalom 100 pontos tételsora, ahol újra rögzíthető a dátum és az időpont is',
+      'Újraírás visszavonása: amíg az új vizsgaalkalomhoz még nincs beírva pontszám, az „Újraírás visszavonása” gombbal bármikor visszaállítható az előző vizsgaállapot',
       'A 3. sikertelen vizsgaalkalom után az alkalmazás több újraírást nem engedélyez, és a tárgy véglegesen bukott állapotba kerül'
     ]
   },
@@ -7657,11 +7658,24 @@ export default function App() {
  examAttemptCount < 3
  );
 
- const isExamAwaitingRewrite = Boolean(
+ const canUndoExamCourseRewrite = Boolean(
  !disablePointCalc &&
  !hasManualGrade &&
- ((isExamCourse && examAttemptCount > 1 && !hasExamScore) ||
- (needsAutoExam && autoExamAttemptCount > 1 && !hasAutoExamScore))
+ isExamCourse &&
+ examAttemptCount > 1 &&
+ !hasExamScore
+ );
+
+ const canUndoAutoExamRewrite = Boolean(
+ !disablePointCalc &&
+ !hasManualGrade &&
+ needsAutoExam &&
+ autoExamAttemptCount > 1 &&
+ !hasAutoExamScore
+ );
+
+ const isExamAwaitingRewrite = Boolean(
+ canUndoExamCourseRewrite || canUndoAutoExamRewrite
  );
 
  const osszElert = isExamCourse
@@ -7769,8 +7783,10 @@ export default function App() {
  autoExamHistory,
  autoExamAttemptCount,
  canRewriteAutoExam,
+ canUndoAutoExamRewrite,
  examAttemptCount,
  canRewriteExamCourse,
+ canUndoExamCourseRewrite,
  isExamAwaitingRewrite,
  isFailed,
  isSimulatedGrade,
@@ -9343,6 +9359,76 @@ export default function App() {
  });
 
  showToast(`${nextAttemptNum}. vizsgaalkalom létrehozva! Válaszd ki az új vizsga dátumát és időpontját.`);
+ };
+
+ const handleUndoRewriteExam = async (subj) => {
+ if (!user || !subj) return;
+
+ if (subj.courseKind === 'exam') {
+  const existing = toArraySafe(subj.assessments);
+  if (existing.length <= 1) return;
+  const activeAttempt = existing[0];
+  const effScore = getEffectiveScore(activeAttempt);
+  const hasScore = effScore !== null && effScore !== undefined && effScore !== '' && !isNaN(Number(effScore));
+  if (hasScore) {
+   showToast('Csak akkor vonható vissza az újraírás, ha még nincs beírva az új eredmény.');
+   return;
+  }
+
+  const previousAttempt = existing[1];
+  const remainingOlder = existing.slice(2);
+  const restoredPrevious = {
+   ...previousAttempt,
+   title: remainingOlder.length === 0 ? 'Vizsga' : (previousAttempt.title || `${remainingOlder.length + 1}. vizsga`),
+   isRewrittenExamAttempt: false
+  };
+  const updatedAssessments = [restoredPrevious, ...remainingOlder];
+
+  if (isSim) {
+   setSimScores(prev => {
+    const next = { ...prev };
+    delete next[activeAttempt.id];
+    return next;
+   });
+  }
+
+  await updateDoc(doc(db, 'users', user.uid, 'subjects', subj.id), {
+   assessments: updatedAssessments,
+   isFailed: false
+  });
+
+  showToast('Vizsga újraírása visszavonva, az előző eredmény visszaállítva.');
+  return;
+ }
+
+ const history = Array.isArray(subj.autoExamHistory) ? subj.autoExamHistory : [];
+ if (history.length === 0) return;
+ const effAuto = getEffectiveScore({ id: `auto_exam_${subj.id}`, achieved: subj.autoExamScore });
+ const hasAutoVal = effAuto !== null && effAuto !== undefined && effAuto !== '' && !isNaN(Number(effAuto));
+ if (hasAutoVal) {
+  showToast('Csak akkor vonható vissza az újraírás, ha még nincs beírva az új eredmény.');
+  return;
+ }
+
+ const [latestArchived, ...olderHistory] = history;
+
+ if (isSim) {
+  setSimScores(prev => {
+   const next = { ...prev };
+   delete next[`auto_exam_${subj.id}`];
+   return next;
+  });
+ }
+
+ await updateDoc(doc(db, 'users', user.uid, 'subjects', subj.id), {
+  autoExamHistory: olderHistory,
+  autoExamScore: latestArchived.achieved !== undefined && latestArchived.achieved !== null ? Number(latestArchived.achieved) : null,
+  autoExamDate: latestArchived.date || '',
+  autoExamTime: latestArchived.time || '',
+  isFailed: false
+ });
+
+ showToast('Vizsga újraírása visszavonva, az előző eredmény visszaállítva.');
  };
 
  const detectAttendanceSeriesProposal = (sessionsList) => {
@@ -18631,6 +18717,12 @@ export default function App() {
  !isRewrittenExamAttempt &&
  st.canRewriteExamCourse
  );
+ const showUndoRewriteExamCourseBtn = Boolean(
+ st.isExamCourse &&
+ rowIdx === 0 &&
+ !isRewrittenExamAttempt &&
+ st.canUndoExamCourseRewrite
+ );
 
  let rowBorderBg = '';
  if (isDimmed) {
@@ -18772,6 +18864,24 @@ export default function App() {
  >
  <RotateCcw className="w-3.5 h-3.5 shrink-0" />
  <span>Újraírom</span>
+ </button>
+ )}
+ {showUndoRewriteExamCourseBtn && (
+ <button
+ type="button"
+ onClick={(e) => {
+ e.stopPropagation();
+ handleUndoRewriteExam(activeSubject);
+ }}
+ title="Vizsga újraírásának visszavonása"
+ className={`px-3 py-2 sm:px-3 sm:py-1.5 rounded-lg text-xs font-bold border inline-flex items-center gap-1.5 transition cursor-pointer shrink-0 ${
+ darkMode
+ ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-600'
+ : 'bg-slate-100 hover:bg-slate-200 text-slate-800 border-slate-300'
+ }`}
+ >
+ <X className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+ <span>Újraírás visszavonása</span>
  </button>
  )}
  {!isRewrittenExamAttempt && (
@@ -19380,6 +19490,22 @@ export default function App() {
  >
  <RotateCcw className="w-3.5 h-3.5 shrink-0" />
  <span>Újraírom</span>
+ </button>
+ )}
+
+ {st.canUndoAutoExamRewrite && (
+ <button
+ type="button"
+ onClick={() => handleUndoRewriteExam(activeSubject)}
+ title="Vizsga újraírásának visszavonása"
+ className={`px-3 py-2 sm:px-3 sm:py-1.5 rounded-lg text-xs font-bold border inline-flex items-center gap-1.5 transition cursor-pointer ${
+ darkMode
+ ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-600'
+ : 'bg-slate-100 hover:bg-slate-200 text-slate-800 border-slate-300'
+ }`}
+ >
+ <X className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+ <span>Újraírás visszavonása</span>
  </button>
  )}
 
